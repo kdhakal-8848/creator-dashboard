@@ -17,8 +17,8 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || "https://tbgkhbmsmdfpdcjnztvz.supabase.co";
+const supabaseKey = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiZ2toYm1zbWRmcGRjam56dHZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MTY3NDIsImV4cCI6MjA5OTk5Mjc0Mn0.159ex2E4xtfQXd_UN4kdjRCkSIhTMARwWvs7iBUrrR0";
 
 if (!supabaseUrl || !supabaseKey) {
     console.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY in .env");
@@ -39,6 +39,9 @@ app.post('/generate', async (req, res) => {
     if (!topic || !contentType) {
         return res.status(400).json({ error: "Missing topic or contentType" });
     }
+
+    // Acknowledge the request immediately to prevent timeout
+    res.status(202).json({ success: true, message: "Processing started" });
 
     try {
         console.log(`Generating [${contentType}] for topic: ${topic}`);
@@ -100,27 +103,14 @@ Do NOT include markdown formatting like \`\`\`json around the response. Return O
             ])
             .select();
 
-        let postData;
         if (error) {
-            console.error("Supabase Error (Fallback to Mock Data):", error);
-            postData = {
-                id: Date.now().toString(),
-                topic: `[${contentType}] ${topic}`,
-                text: text,
-                status: 'Draft',
-                image_url: generatedImageUrl,
-                updated_at: new Date().toISOString()
-            };
+            console.error("Supabase Error (Background insert failed):", error);
         } else {
-            postData = data[0];
-            console.log("Successfully generated and saved post:", postData.id);
+            console.log("Successfully generated and saved post:", data[0].id);
         }
 
-        res.status(200).json({ success: true, post: postData });
-
     } catch (err) {
-        console.error("Server Error:", err);
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("Server Error in background task:", err);
     }
 });
 
