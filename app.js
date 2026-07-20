@@ -795,9 +795,6 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
             btn.style.display = 'block';
             overlay.style.display = 'none';
             feedback.style.display = 'block';
-        }btn.innerHTML = originalBtnHtml;
-            btn.disabled = false;
-            feather.replace();
         }
     } else {
         // Mock mode timeout simulation (extended to show loader)
