@@ -46,11 +46,10 @@
             <ul class="nav-links">
                 <li><a href="#" data-target="home-view" class="active"><i data-feather="home"></i> Dashboard</a></li>
                 <li><a href="#" data-target="queue-view"><i data-feather="list"></i> Content Queue</a></li>
-                <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
-                <li><a href="#" data-target="intelligence-view"><i data-feather="cpu"></i> Intelligence</a></li>
+                <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Branding</a></li>
-                <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Settings</a></li>
+                <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Account Settings</a></li>
                 <li style="margin-top: auto;"><a href="#" id="logout-btn" style="color: var(--danger);"><i data-feather="log-out"></i> Logout</a></li>
             </ul>
         </nav>
@@ -173,7 +172,43 @@
                             <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
                         </label>
                     </div>
-                    <button class="btn-primary" id="save-branding">Save Branding</button>
+
+                    <h3 style="margin-top: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">Custom Template Designer</h3>
+                    <div id="custom-template-controls" style="background: rgba(0,0,0,0.02); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Title Size (%)</label>
+                            <input type="range" id="custom-title-size" min="50" max="200" value="100" class="full-width">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Title Y-Position (%)</label>
+                            <input type="range" id="custom-title-y" min="0" max="100" value="50" class="full-width">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Content Y-Position (%)</label>
+                            <input type="range" id="custom-content-y" min="0" max="100" value="70" class="full-width">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Background Overlay Opacity (%)</label>
+                            <input type="range" id="custom-bg-opacity" min="0" max="100" value="85" class="full-width">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>Overlay Color</label>
+                            <input type="color" id="custom-bg-color" value="#000000" style="height: 40px; width: 100%; border: none; border-radius: 8px;">
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">AI Engine Instructions</h3>
+                    <div class="setting-item" style="padding: 20px 0; box-shadow: none;">
+                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
+                            Use <code>${topic}</code> and <code>${contentType}</code> as variables. Ensure the prompt forces the AI to return exactly the JSON format required.
+                        </p>
+                        <textarea id="prompt-template-input" class="rich-textarea" style="height: 200px; font-family: monospace; font-size: 13px; width: 100%; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 15px;" spellcheck="false"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button class="btn-primary" id="save-branding"><i data-feather="save"></i> Save Settings</button>
+                        <button class="btn-secondary" id="reset-prompt-btn"><i data-feather="refresh-cw"></i> Reset Prompt</button>
+                    </div>
                     <p id="branding-feedback" class="feedback-msg"></p>
                 </div>
             </div>
@@ -249,6 +284,7 @@
                                 <option value="template-glass">Glassmorphism</option>
                                 <option value="template-bold">Bold Impact</option>
                                 <option value="template-visual">Visual Heavy (75% Image)</option>
+                                <option value="template-custom">Custom Advanced Template</option>
                             </select>
                         
                         <hr class="divider">
@@ -293,8 +329,15 @@
                     </label>
                     <input type="text" id="manual-topic" placeholder="e.g. Geography of Nepal - Rivers">
                 </div>
-                <button class="btn-primary" id="trigger-manual"><i data-feather="zap"></i> Generate Content</button>
+                <button class="btn-primary" id="trigger-manual" style="margin-top: 10px;"><i data-feather="zap"></i> Generate Content</button>
+                
                 <div id="manual-feedback" class="feedback-msg"></div>
+                
+                <div id="manual-loading-overlay" style="display: none; margin-top: 30px; background: rgba(0,0,0,0.03); padding: 30px; border-radius: 12px; text-align: center;">
+                    <i data-feather="loader" class="spin" style="width: 48px; height: 48px; color: var(--accent-blue); margin-bottom: 15px;"></i>
+                    <h3 style="margin-bottom: 10px;">Generating High-Quality Content...</h3>
+                    <p style="color: var(--text-muted); font-size: 14px;">The AI is thinking. This usually takes 10 to 30 seconds depending on the complexity of the topic.</p>
+                </div>
             </div>
 
             <div id="video-view" class="view">
@@ -335,23 +378,6 @@
                             <button class="btn-secondary margin-bottom" id="copy-video-prompts" style="margin-top: 10px;"><i data-feather="copy"></i> Copy</button>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <div id="intelligence-view" class="view">
-                <h2>Intelligence</h2>
-                <p>Customize the Master Prompt Template used to instruct the AI backend.</p>
-                <div class="content-card" style="padding: 24px; margin-top: 20px;">
-                    <label style="display:block; margin-bottom:10px; font-weight:600;">System Prompt Template</label>
-                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
-                        Use <code>${topic}</code> and <code>${contentType}</code> as variables. The backend will replace these with the actual inputs.<br>
-                        <strong>WARNING:</strong> You must instruct the AI to return ONLY valid JSON matching the required schema, otherwise the dashboard will fail to parse the content.
-                    </p>
-                    <textarea id="prompt-template-input" class="rich-textarea" style="height: 300px; font-family: monospace; font-size: 13px;" spellcheck="false"></textarea>
-                    
-                    <button class="btn-primary margin-bottom" id="save-prompt-btn" style="margin-top: 20px;"><i data-feather="save"></i> Save Prompt Template</button>
-                    <button class="btn-secondary margin-bottom" id="reset-prompt-btn" style="margin-top: 20px; margin-left: 10px;"><i data-feather="rotate-ccw"></i> Reset to Default</button>
-                    <span id="prompt-feedback" style="margin-left: 15px; font-size: 14px;"></span>
                 </div>
             </div>
 

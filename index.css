@@ -335,7 +335,7 @@ label {
     font-weight: 500;
 }
 
-input[type="text"], select, textarea {
+input[type="text"], input[type="password"], input[type="tel"], input[type="number"], select, textarea {
     width: 100%;
     padding: 14px 20px;
     background: var(--bg-surface);
@@ -439,9 +439,12 @@ input:focus, select:focus, textarea:focus {
 }
 
 .content-card {
-    background: var(--bg-surface);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: var(--border-radius-lg);
-    box-shadow: var(--shadow-soft);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -734,6 +737,41 @@ input:focus, select:focus, textarea:focus {
     right: 40px;
     border-top: none;
     color: rgba(255,255,255,0.6);
+}
+
+/* 5. Custom Builder */
+.template-custom .slide-bg-overlay {
+    background: var(--custom-bg-color, rgba(0,0,0,0.85));
+}
+.template-custom .slide-header {
+    border-bottom: none;
+    color: white;
+}
+.template-custom .slide-header img {
+    filter: brightness(0) invert(1);
+}
+.template-custom .slide-content {
+    position: absolute;
+    width: calc(100% - 160px);
+    top: var(--custom-content-y, 70%);
+    transform: translateY(-50%);
+}
+.template-custom .slide-content h1 {
+    position: absolute;
+    top: var(--custom-title-y, -200px);
+    font-size: var(--custom-title-size, 72px);
+    color: white;
+}
+.template-custom .slide-content p {
+    color: rgba(255,255,255,0.9);
+}
+.template-custom .slide-footer {
+    position: absolute;
+    bottom: 40px;
+    left: 80px;
+    width: calc(100% - 160px);
+    border-top: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.7);
 }
 
 

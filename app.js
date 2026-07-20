@@ -180,7 +180,12 @@ let currentBranding = JSON.parse(localStorage.getItem('loksewa_branding')) || {
     tiktokUrl: "https://tiktok.com",
     linkedinUrl: "https://linkedin.com",
     primaryColor: "#1e3c72",
-    secondaryColor: "#2a5298"
+    secondaryColor: "#2a5298",
+    customTitleSize: "100",
+    customTitleY: "50",
+    customContentY: "70",
+    customBgOpacity: "85",
+    customBgColor: "#000000"
 };
 
 function updateBrandVisuals() {
@@ -203,6 +208,21 @@ function updateBrandVisuals() {
     }
     if (currentBranding.secondaryColor) {
         document.documentElement.style.setProperty('--brand-secondary', currentBranding.secondaryColor);
+    }
+    
+    // Apply CSS Variables for custom template builder
+    if (currentBranding.customTitleSize) document.documentElement.style.setProperty('--custom-title-size', (currentBranding.customTitleSize * 0.72) + 'px');
+    if (currentBranding.customTitleY) document.documentElement.style.setProperty('--custom-title-y', -((100 - currentBranding.customTitleY) * 3) + 'px');
+    if (currentBranding.customContentY) document.documentElement.style.setProperty('--custom-content-y', currentBranding.customContentY + '%');
+    
+    // Convert hex to rgba for overlay
+    if (currentBranding.customBgColor && currentBranding.customBgOpacity) {
+        const hex = currentBranding.customBgColor.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16) || 0;
+        const g = parseInt(hex.substring(2, 4), 16) || 0;
+        const b = parseInt(hex.substring(4, 6), 16) || 0;
+        const a = currentBranding.customBgOpacity / 100;
+        document.documentElement.style.setProperty('--custom-bg-color', `rgba(${r}, ${g}, ${b}, ${a})`);
     }
 }
 
@@ -232,7 +252,6 @@ navLinks.forEach(link => {
         if(targetViewId === 'video-view') loadVideoQueue();
         if(targetViewId === 'settings-view') loadSettings();
         if(targetViewId === 'branding-view') loadBrandingView();
-        if(targetViewId === 'intelligence-view') loadIntelligenceView();
     });
 });
 
@@ -733,13 +752,10 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
     
     // UI Loading State
     const btn = document.getElementById('trigger-manual');
-    const originalBtnHtml = btn.innerHTML;
-    btn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating...`;
-    btn.disabled = true;
-    feather.replace();
-    
-    feedback.innerText = "Triggering n8n webhook...";
-    feedback.style.color = "var(--text-main)";
+    const overlay = document.getElementById('manual-loading-overlay');
+    btn.style.display = 'none';
+    feedback.style.display = 'none';
+    overlay.style.display = 'block';
     
     if (CONFIG.N8N_MANUAL_WEBHOOK_URL !== "YOUR_N8N_WEBHOOK_URL") {
         // Real mode: Trigger the backend webhook
@@ -767,15 +783,19 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
             
             feedback.innerText = "Content triggered successfully! Check the Content Queue shortly.";
             feedback.style.color = "var(--success)";
-            document.getElementById('manual-topic').value = "";
-            btn.innerHTML = originalBtnHtml;
-            btn.disabled = false;
-            feather.replace();
-            document.querySelector('[data-target="queue-view"]').click();
-        } catch (e) {
-            feedback.innerText = "Failed to trigger webhook: " + e.message;
+            btn.style.display = 'block';
+            overlay.style.display = 'none';
+            feedback.style.display = 'block';
+            
+        } catch(err) {
+            console.error(err);
+            feedback.innerText = "Error triggering generation: " + err.message;
             feedback.style.color = "var(--danger)";
-            btn.innerHTML = originalBtnHtml;
+            
+            btn.style.display = 'block';
+            overlay.style.display = 'none';
+            feedback.style.display = 'block';
+        }btn.innerHTML = originalBtnHtml;
             btn.disabled = false;
             feather.replace();
         }
@@ -889,10 +909,21 @@ function loadBrandingView() {
     document.getElementById('linkedin-url-input').value = currentBranding.linkedinUrl || "";
     document.getElementById('brand-primary-color-input').value = currentBranding.primaryColor || "#1e3c72";
     document.getElementById('brand-secondary-color-input').value = currentBranding.secondaryColor || "#2a5298";
+    
+    // Custom Template
+    document.getElementById('custom-title-size').value = currentBranding.customTitleSize || 100;
+    document.getElementById('custom-title-y').value = currentBranding.customTitleY || 50;
+    document.getElementById('custom-content-y').value = currentBranding.customContentY || 70;
+    document.getElementById('custom-bg-opacity').value = currentBranding.customBgOpacity || 85;
+    document.getElementById('custom-bg-color').value = currentBranding.customBgColor || "#000000";
+    
+    // Prompt
+    document.getElementById('prompt-template-input').value = currentPromptTemplate;
+    
     document.getElementById('branding-feedback').innerText = "";
 }
 
-// Branding Logo Upload
+// Branding Logo Upload (With Canvas Resizing to prevent localStorage limits)
 document.getElementById('brand-logo-upload').addEventListener('change', function(e) {
     try {
         if (e.target.files && e.target.files[0]) {
@@ -900,7 +931,20 @@ document.getElementById('brand-logo-upload').addEventListener('change', function
             if (!file.type.match('image.*')) throw new Error("Selected file is not an image.");
             let reader = new FileReader();
             reader.onload = function(ev) {
-                document.getElementById('brand-logo-preview').src = ev.target.result;
+                let img = new Image();
+                img.onload = function() {
+                    let canvas = document.createElement('canvas');
+                    let ctx = canvas.getContext('root' ? '2d' : '2d');
+                    // Resize to max 200px width/height
+                    let maxW = 200, maxH = 200;
+                    let ratio = Math.min(maxW / img.width, maxH / img.height);
+                    canvas.width = img.width * ratio;
+                    canvas.height = img.height * ratio;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    let dataUrl = canvas.toDataURL('image/png');
+                    document.getElementById('brand-logo-preview').src = dataUrl;
+                };
+                img.src = ev.target.result;
             };
             reader.readAsDataURL(file);
         }
@@ -921,30 +965,53 @@ document.getElementById('save-branding').addEventListener('click', function() {
     const primaryColor = document.getElementById('brand-primary-color-input').value;
     const secondaryColor = document.getElementById('brand-secondary-color-input').value;
     
-    currentBranding = { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor };
-    localStorage.setItem('loksewa_branding', JSON.stringify(currentBranding));
+    const customTitleSize = document.getElementById('custom-title-size').value;
+    const customTitleY = document.getElementById('custom-title-y').value;
+    const customContentY = document.getElementById('custom-content-y').value;
+    const customBgOpacity = document.getElementById('custom-bg-opacity').value;
+    const customBgColor = document.getElementById('custom-bg-color').value;
+    
+    currentBranding = { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor };
+    
+    try {
+        localStorage.setItem('loksewa_branding', JSON.stringify(currentBranding));
+    } catch (e) {
+        alert("Could not save branding! Your logo might be too large.");
+        return;
+    }
+    
+    // Save AI Prompt Template
+    const newVal = document.getElementById('prompt-template-input').value;
+    currentPromptTemplate = newVal;
+    localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
     
     updateBrandVisuals();
     
     const feedback = document.getElementById('branding-feedback');
-    feedback.innerText = "Branding saved successfully! Future slides will use these assets.";
+    feedback.innerText = "Settings saved successfully! Future content will use these rules.";
     feedback.style.color = "var(--success)";
     setTimeout(() => { feedback.innerText = ""; }, 3000);
 });
 
 // --- Intelligence Logic ---
-function loadIntelligenceView() {
-    document.getElementById('prompt-template-input').value = currentPromptTemplate;
-}
-
-document.getElementById('save-prompt-btn').addEventListener('click', () => {
-    const newVal = document.getElementById('prompt-template-input').value;
-    currentPromptTemplate = newVal;
-    localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
-    const feedback = document.getElementById('prompt-feedback');
-    feedback.innerText = "Prompt template saved!";
-    feedback.style.color = "var(--success)";
-    setTimeout(() => { feedback.innerText = ""; }, 3000);
+// Real-time custom template updates
+const customInputs = ['custom-title-size', 'custom-title-y', 'custom-content-y', 'custom-bg-opacity', 'custom-bg-color'];
+customInputs.forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        // Just update variables inline to preview, doesn't save to localStorage yet
+        const val = document.getElementById(id).value;
+        if (id === 'custom-title-size') document.documentElement.style.setProperty('--custom-title-size', (val * 0.72) + 'px');
+        if (id === 'custom-title-y') document.documentElement.style.setProperty('--custom-title-y', -((100 - val) * 3) + 'px');
+        if (id === 'custom-content-y') document.documentElement.style.setProperty('--custom-content-y', val + '%');
+        if (id === 'custom-bg-opacity' || id === 'custom-bg-color') {
+            const hex = document.getElementById('custom-bg-color').value.replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16) || 0;
+            const g = parseInt(hex.substring(2, 4), 16) || 0;
+            const b = parseInt(hex.substring(4, 6), 16) || 0;
+            const a = document.getElementById('custom-bg-opacity').value / 100;
+            document.documentElement.style.setProperty('--custom-bg-color', `rgba(${r}, ${g}, ${b}, ${a})`);
+        }
+    });
 });
 
 document.getElementById('reset-prompt-btn').addEventListener('click', () => {
