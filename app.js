@@ -38,6 +38,15 @@ function handleAuthChange(session) {
         currentUser = session.user;
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app-container').style.display = 'flex';
+        
+        // Extract initials from email
+        let nameParam = "AD";
+        if (currentUser && currentUser.email) {
+            const emailParts = currentUser.email.split('@')[0];
+            nameParam = emailParts.substring(0, 2).toUpperCase();
+        }
+        document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
+        
         loadDashboardStats(); // Refresh data now that we are authenticated
     } else {
         currentUser = null;
@@ -58,6 +67,11 @@ document.getElementById('login-btn').addEventListener('click', async () => {
             setTimeout(() => {
                 document.getElementById('login-container').style.display = 'none';
                 document.getElementById('app-container').style.display = 'flex';
+                
+                const emailParts = email.split('@')[0];
+                const nameParam = emailParts.substring(0, 2).toUpperCase();
+                document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
+                
                 loadDashboardStats();
             }, 500);
         } else {
