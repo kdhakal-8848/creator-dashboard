@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public Service Nepal Content Engine</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Styles -->
+    <link rel="stylesheet" href="index.css">
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <!-- Login Container -->
+    <div id="login-container" style="display: flex; height: 100vh; align-items: center; justify-content: center; background: var(--bg-page);">
+        <div class="content-card" style="width: 400px; padding: 40px; text-align: center;">
+            <i data-feather="lock" style="width: 48px; height: 48px; color: var(--brand-primary); margin-bottom: 20px;"></i>
+            <h2 style="margin-bottom: 20px;">Admin Login</h2>
+            <input type="email" id="login-email" class="full-width margin-bottom" placeholder="Email Address" style="padding: 12px;">
+            <input type="password" id="login-password" class="full-width margin-bottom" placeholder="Password" style="padding: 12px;">
+            <button class="btn-primary full-width" id="login-btn" style="padding: 12px; font-size: 16px;">Login</button>
+            <p id="login-feedback" style="margin-top: 15px; font-size: 14px;"></p>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-container" style="display: none;">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i data-feather="box" class="brand-icon"></i>
+                <h2>Public Service Nepal</h2>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" data-target="home-view" class="active"><i data-feather="home"></i> Dashboard</a></li>
+                <li><a href="#" data-target="queue-view"><i data-feather="list"></i> Content Queue</a></li>
+                <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
+                <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
+                <li><a href="#" data-target="intelligence-view"><i data-feather="cpu"></i> Intelligence</a></li>
+                <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Branding</a></li>
+                <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Settings</a></li>
+                <li style="margin-top: auto;"><a href="#" id="logout-btn" style="color: var(--danger);"><i data-feather="log-out"></i> Logout</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="topbar">
+                <h1>Dashboard</h1>
+                <div class="user-profile">
+                    <img src="https://ui-avatars.com/api/?name=Admin&background=random" alt="User">
+                </div>
+            </header>
+
+            <!-- Views -->
+            <div id="home-view" class="view active-view">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Drafts Pending</h3>
+                        <p class="stat-value" id="stat-drafts">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Approved</h3>
+                        <p class="stat-value" id="stat-approved">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Published</h3>
+                        <p class="stat-value" id="stat-published">0</p>
+                    </div>
+                    <div class="stat-card warning">
+                        <h3>Failed</h3>
+                        <p class="stat-value" id="stat-failed">0</p>
+                    </div>
+                </div>
+                
+                <h2 class="section-title">Recent Activity</h2>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Topic</th>
+                                <th>Status</th>
+                                <th>Last Updated</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-activity-table">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="queue-view" class="view">
+                <div class="view-header">
+                    <h2>Content Queue</h2>
+                    <select id="status-filter">
+                        <option value="All">All Statuses</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Queued">Queued</option>
+                        <option value="Published">Published</option>
+                        <option value="Failed">Failed</option>
+                    </select>
+                </div>
+                <div class="cards-grid" id="queue-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div id="branding-view" class="view">
+                <div class="view-header">
+                    <h2>Brand Identity</h2>
+                </div>
+                <div class="settings-list" style="max-width: 600px;">
+                    <div class="setting-item">
+                        <label>Brand Name</label>
+                        <input type="text" id="brand-name-input" placeholder="e.g. Public Service Nepal">
+                    </div>
+                    <div class="setting-item">
+                        <label>Brand Handle</label>
+                        <input type="text" id="brand-handle-input" placeholder="e.g. @PublicServiceNepal">
+                    </div>
+                    <div class="setting-item">
+                        <label>Facebook URL</label>
+                        <input type="url" id="facebook-url-input" placeholder="e.g. https://business.facebook.com">
+                    </div>
+                    <div class="setting-item">
+                        <label>Instagram URL</label>
+                        <input type="url" id="instagram-url-input" placeholder="e.g. https://instagram.com">
+                    </div>
+                    <div class="setting-item">
+                        <label>TikTok URL</label>
+                        <input type="url" id="tiktok-url-input" placeholder="e.g. https://tiktok.com">
+                    </div>
+                    <div class="setting-item">
+                        <label>LinkedIn URL</label>
+                        <input type="url" id="linkedin-url-input" placeholder="e.g. https://linkedin.com">
+                    </div>
+                    <div class="setting-item">
+                        <label>Primary Brand Color</label>
+                        <input type="color" id="brand-primary-color-input" style="height: 40px; width: 100%; border: none; border-radius: 8px;">
+                    </div>
+                    <div class="setting-item">
+                        <label>Secondary Brand Color</label>
+                        <input type="color" id="brand-secondary-color-input" style="height: 40px; width: 100%; border: none; border-radius: 8px;">
+                    </div>
+                    <div class="setting-item">
+                        <label>Brand Logo</label>
+                        <div class="image-preview" style="height: 100px; width: 100px; margin-bottom: 15px; background: transparent;">
+                            <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="object-fit: contain;">
+                        </div>
+                        <label class="btn-secondary text-center" style="display:inline-block; cursor:pointer;">
+                            <i data-feather="upload"></i> Upload Logo
+                            <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
+                        </label>
+                    </div>
+                    <button class="btn-primary" id="save-branding">Save Branding</button>
+                    <p id="branding-feedback" class="feedback-msg"></p>
+                </div>
+            </div>
+
+            <!-- Editor View -->
+            <div id="editor-view" class="view">
+                <button class="btn-secondary" id="back-to-queue"><i data-feather="arrow-left"></i> Back</button>
+                <div class="editor-container">
+                    <div class="editor-main">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 id="editor-topic">Editing: Topic Name</h2>
+                            <div>
+                                <button class="btn-secondary" id="download-slides"><i data-feather="download"></i> Download Slides</button>
+                                <button class="btn-primary" id="publish-facebook" style="margin-left: 8px;">🚀 Facebook</button>
+                                <button class="btn-primary" id="publish-instagram" style="margin-left: 8px; background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); border: none;">📸 Instagram</button>
+                                <button class="btn-primary" id="publish-tiktok" style="margin-left: 8px; background: #000; border: none;">🎵 TikTok</button>
+                                <button class="btn-primary" id="publish-linkedin" style="margin-left: 8px; background: #0077b5; border: none;">💼 LinkedIn</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Real-time Slide Preview (Instagram Square format) -->
+                        <div class="slide-preview-wrapper">
+                            <div class="slide-preview-stage" id="slide-stage">
+                                <div class="slide-card" id="slide-render-target">
+                                    <img id="slide-bg-img" src="" alt="Background" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:1;">
+                                    <div class="slide-bg-overlay"></div>
+                                    <div class="slide-header">
+                                        <img id="slide-brand-logo" src="assets/images/logo.png" alt="Brand Logo" style="height: 48px; margin-right: 16px;"> <span id="slide-brand-name">PUBLIC SERVICE NEPAL</span>
+                                    </div>
+                                    <div class="slide-content">
+                                        <h1 id="preview-title">Slide Title</h1>
+                                        <p id="preview-body">Slide content goes here...</p>
+                                    </div>
+                                    <div class="slide-footer">
+                                        <span id="slide-brand-handle">@PublicServiceNepal</span>
+                                        <span id="preview-pagination">1 / 2</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="preview-controls">
+                                <button class="btn-secondary" id="prev-slide"><i data-feather="chevron-left"></i></button>
+                                <span id="current-slide-indicator" style="font-weight: 500;">Slide 1</span>
+                                <button class="btn-secondary" id="next-slide"><i data-feather="chevron-right"></i></button>
+                            </div>
+                        </div>
+
+                        <hr class="divider">
+
+                        <!-- Forms for text editing -->
+                        <h3>Slide Content</h3>
+                        <div id="slides-form-container" style="margin-bottom: 20px;"></div>
+                        
+                        <h3>Social Media Caption</h3>
+                        <textarea id="caption-text" class="rich-textarea" rows="4"></textarea>
+                        <button class="btn-secondary margin-bottom" id="copy-caption" style="margin-top: 10px;"><i data-feather="copy"></i> Copy Caption</button>
+
+                    </div>
+                    <div class="editor-sidebar">
+                        <h3>Background Image</h3>
+                        <div class="image-preview" id="editor-image-container">
+                            <img id="editor-image" src="" alt="Preview">
+                        </div>
+                        <label class="btn-secondary full-width text-center" style="display:block; cursor:pointer;">
+                            <i data-feather="upload"></i> Set Background
+                            <input type="file" id="image-upload" style="display:none;" accept="image/*">
+                        </label>
+                        
+                        <hr class="divider">
+                        
+                        <h3>Template</h3>
+                            <select id="template-selector" class="margin-bottom" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-subtle);">
+                                <option value="template-classic">Classic Minimalist</option>
+                                <option value="template-glass">Glassmorphism</option>
+                                <option value="template-bold">Bold Impact</option>
+                                <option value="template-visual">Visual Heavy (75% Image)</option>
+                            </select>
+                        
+                        <hr class="divider">
+                        
+                        <h3>Status</h3>
+                        <select id="editor-status" class="full-width margin-bottom">
+                            <option value="Draft">Draft</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Queued">Queued</option>
+                            <option value="Published">Published</option>
+                            <option value="Failed">Failed</option>
+                        </select>
+                        <button class="btn-secondary full-width margin-bottom" id="refine-post" style="margin-bottom: 10px;"><i data-feather="edit-2"></i> Reject & Refine</button>
+                        <button class="btn-primary full-width" id="save-post">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="manual-view" class="view">
+                <h2>Generate Manual Content</h2>
+                <p>Trigger the LLM generation immediately for a specific topic.</p>
+                <div class="form-group">
+                    <label>Content Type</label>
+                    <select id="manual-content-type" class="full-width margin-bottom">
+                        <option value="Loksewa Exam Question">Loksewa Exam Question</option>
+                        <option value="Subjective Explanation">Subjective Conceptual Explanation</option>
+                        <option value="Current Affairs">Current Affairs Summary</option>
+                        <option value="Gamified Quiz">Gamified General Knowledge Quiz</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Language</label>
+                    <select id="manual-language" class="full-width margin-bottom">
+                        <option value="English">English</option>
+                        <option value="Nepali">Nepali</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        Topic / Syllabus Section
+                        <button class="btn-secondary" id="refresh-topic-btn" style="padding: 4px 8px; font-size: 0.8rem;"><i data-feather="refresh-cw" style="width: 12px; height: 12px;"></i> Suggest Topic</button>
+                    </label>
+                    <input type="text" id="manual-topic" placeholder="e.g. Geography of Nepal - Rivers">
+                </div>
+                <button class="btn-primary" id="trigger-manual"><i data-feather="zap"></i> Generate Content</button>
+                <div id="manual-feedback" class="feedback-msg"></div>
+            </div>
+
+            <div id="video-view" class="view">
+                <h2>Video Content Creator</h2>
+                <p>Generate video prompts scene-by-scene from your existing ideas.</p>
+                <div class="cards-grid" id="video-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Video Creator View -->
+            <div id="video-editor-view" class="view">
+                <button class="btn-secondary margin-bottom" id="back-to-video-queue"><i data-feather="arrow-left"></i> Back</button>
+                <div style="display: flex; gap: 30px;">
+                    <div style="flex: 1; background: #fff; padding: 24px; border-radius: 8px; box-shadow: var(--shadow-sm);">
+                        <h3 id="video-topic-title">Topic</h3>
+                        <div id="video-original-content" style="white-space: pre-wrap; color: var(--text-muted); font-size: 14px; max-height: 400px; overflow-y: auto; margin-bottom: 20px; padding: 10px; background: var(--bg-page); border-radius: 4px;"></div>
+                    </div>
+                    <div style="flex: 1; background: #fff; padding: 24px; border-radius: 8px; box-shadow: var(--shadow-sm);">
+                        <h3>Generate Prompts</h3>
+                        <div class="form-group">
+                            <label>Format</label>
+                            <select id="video-format" class="full-width margin-bottom">
+                                <option value="single">Single Continuous Prompt</option>
+                                <option value="multiple">Multiple Scene Prompts</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="video-splits-group" style="display: none;">
+                            <label>Number of Scenes (Splits)</label>
+                            <input type="number" id="video-splits" class="full-width margin-bottom" value="4" min="2" max="10">
+                        </div>
+                        <button class="btn-primary full-width" id="generate-video-btn"><i data-feather="film"></i> Generate Video Prompts</button>
+                        <p id="video-feedback" style="margin-top: 10px; font-size: 14px;"></p>
+                        
+                        <div id="video-prompts-result" style="margin-top: 20px; display: none;">
+                            <h4>Resulting Prompts</h4>
+                            <textarea id="video-prompts-text" class="rich-textarea" rows="10" readonly></textarea>
+                            <button class="btn-secondary margin-bottom" id="copy-video-prompts" style="margin-top: 10px;"><i data-feather="copy"></i> Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="intelligence-view" class="view">
+                <h2>Intelligence</h2>
+                <p>Customize the Master Prompt Template used to instruct the AI backend.</p>
+                <div class="content-card" style="padding: 24px; margin-top: 20px;">
+                    <label style="display:block; margin-bottom:10px; font-weight:600;">System Prompt Template</label>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
+                        Use <code>${topic}</code> and <code>${contentType}</code> as variables. The backend will replace these with the actual inputs.<br>
+                        <strong>WARNING:</strong> You must instruct the AI to return ONLY valid JSON matching the required schema, otherwise the dashboard will fail to parse the content.
+                    </p>
+                    <textarea id="prompt-template-input" class="rich-textarea" style="height: 300px; font-family: monospace; font-size: 13px;" spellcheck="false"></textarea>
+                    
+                    <button class="btn-primary margin-bottom" id="save-prompt-btn" style="margin-top: 20px;"><i data-feather="save"></i> Save Prompt Template</button>
+                    <button class="btn-secondary margin-bottom" id="reset-prompt-btn" style="margin-top: 20px; margin-left: 10px;"><i data-feather="rotate-ccw"></i> Reset to Default</button>
+                    <span id="prompt-feedback" style="margin-left: 15px; font-size: 14px;"></span>
+                </div>
+            </div>
+
+            <div id="settings-view" class="view">
+                <h2>Settings</h2>
+                <p>Coming soon...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Application Logic -->
+    <script type="module" src="app.js"></script>
+    <script>
+        feather.replace();
+    </script>
+</body>
+</html>
