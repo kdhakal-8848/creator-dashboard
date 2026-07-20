@@ -847,46 +847,11 @@ function suggestRandomTopic() {
 
 document.getElementById('refresh-topic-btn').addEventListener('click', suggestRandomTopic);
 
-// 5. Settings View
+// 5. Settings View (now handled directly in Account Settings HTML)
 async function loadSettings() {
-    const container = document.getElementById('settings-container');
-    container.innerHTML = '';
-    
-    let settings = isMockMode ? mockSettings : [];
-    
-    if (!isMockMode) {
-        const { data, error } = await supabase.from('system_settings').select('*');
-        if (!error) settings = data;
-    }
-    
-    settings.forEach(setting => {
-        const div = document.createElement('div');
-        div.className = 'form-group setting-item';
-        div.innerHTML = `
-            <label>${setting.key}</label>
-            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom: 8px;">${setting.description}</p>
-            ${setting.key === 'prompt_template' 
-                ? `<textarea id="setting-${setting.key}" rows="4">${setting.value}</textarea>`
-                : `<input type="text" id="setting-${setting.key}" value="${setting.value}">`
-            }
-        `;
-        container.appendChild(div);
-    });
+    // Account settings are now handled by the profile/security sections in HTML
+    // No dynamic settings-container needed
 }
-
-document.getElementById('save-settings').addEventListener('click', async () => {
-    if (isMockMode) {
-        mockSettings.forEach(s => {
-            const input = document.getElementById(`setting-${s.key}`);
-            if(input) s.value = input.value;
-        });
-        alert('Settings saved (Mock Mode)');
-        return;
-    }
-    
-    // In real mode, update each setting in DB... (Requires iteration or bulk upsert)
-    alert('Settings saved (Assuming Supabase implementation)');
-});
 
 
 // Init
@@ -1016,10 +981,12 @@ document.getElementById('reset-prompt-btn').addEventListener('click', () => {
         currentPromptTemplate = DEFAULT_PROMPT_TEMPLATE;
         document.getElementById('prompt-template-input').value = currentPromptTemplate;
         localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
-        const feedback = document.getElementById('prompt-feedback');
-        feedback.innerText = "Prompt reset to default.";
-        feedback.style.color = "var(--text-main)";
-        setTimeout(() => { feedback.innerText = ""; }, 3000);
+        const feedback = document.getElementById('branding-feedback');
+        if (feedback) {
+            feedback.innerText = "Prompt reset to default.";
+            feedback.style.color = "var(--color-fg-muted)";
+            setTimeout(() => { feedback.innerText = ""; }, 3000);
+        }
     }
 });
 

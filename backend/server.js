@@ -7,11 +7,11 @@ import WebSocket from 'ws';
 
 global.WebSocket = WebSocket;
 
-// Load environment variables from the parent directory's .env file
-dotenv.config({ path: '../.env' });
+// Load environment variables (from .env locally, from Render dashboard in production)
+dotenv.config();
 
 const app = express();
-const port = 5680; // Changed to 5680 to avoid collision with the old server process
+const port = process.env.PORT || 5680;
 
 app.use(cors());
 app.use(express.json());
@@ -33,15 +33,17 @@ if (!geminiApiKey || geminiApiKey === 'YOUR_GEMINI_API_KEY') {
 }
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 
+// Health check endpoint
+app.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Loksewa Backend is running' });
+});
+
 app.post('/generate', async (req, res) => {
     const { topic, contentType, promptTemplate } = req.body;
 
     if (!topic || !contentType) {
         return res.status(400).json({ error: "Missing topic or contentType" });
     }
-
-    // Acknowledge the request immediately to prevent timeout
-    res.status(202).json({ success: true, message: "Processing started" });
 
     try {
         console.log(`Generating [${contentType}] for topic: ${topic}`);
@@ -69,7 +71,6 @@ Format the output strictly as a JSON object with the following schema:
 Do NOT include markdown formatting like \`\`\`json around the response. Return ONLY valid JSON.`;
 
             if (promptTemplate) {
-                // Replace tokens if user provided a template
                 prompt = promptTemplate.replace(/\$\{topic\}/g, topic).replace(/\$\{contentType\}/g, contentType);
             }
 
@@ -104,13 +105,17 @@ Do NOT include markdown formatting like \`\`\`json around the response. Return O
             .select();
 
         if (error) {
-            console.error("Supabase Error (Background insert failed):", error);
-        } else {
-            console.log("Successfully generated and saved post:", data[0].id);
+            console.error("Supabase Error:", error);
+            // Still return generated content even if DB insert fails
+            return res.json({ success: true, text: text, image_url: generatedImageUrl, db_error: error.message });
         }
 
+        console.log("Successfully generated and saved post:", data[0].id);
+        res.json({ success: true, post: data[0] });
+
     } catch (err) {
-        console.error("Server Error in background task:", err);
+        console.error("Server Error:", err);
+        res.status(500).json({ error: "Internal server error: " + err.message });
     }
 });
 
@@ -184,6 +189,6 @@ ${originalResearch}
 });
 
 app.listen(port, () => {
-    console.log(`Loksewa Backend is running on http://localhost:${port}`);
+    console.log(`Loksewa Backend is running on port ${port}`);
     console.log(`Ready to generate content!`);
 });

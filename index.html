@@ -3,36 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Creator's Den Content Engine</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Creator's Den — Content Engine</title>
+    <meta name="description" content="Creator's Den multi-brand content creation and management platform">
     <!-- Feather Icons -->
     <script src="https://unpkg.com/feather-icons"></script>
     <!-- Styles -->
-    <link rel="stylesheet" href="index.css?v=3">
+    <link rel="stylesheet" href="index.css?v=20260720">
     <!-- html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
     <!-- Login Container -->
-    <div id="login-container" style="display: flex; height: 100vh; align-items: center; justify-content: center; background: url('assets/images/login_bg.png') center/cover no-repeat; position: relative;">
-        <!-- Glassmorphism overlay for extreme premium look -->
-        <div style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px);"></div>
-        
-        <div class="content-card" style="width: 420px; padding: 50px 40px; text-align: center; position: relative; z-index: 10; background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
-            <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--brand-primary), #a855f7); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px auto; box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.5);">
-                <i data-feather="cpu" style="width: 32px; height: 32px; color: white;"></i>
+    <div id="login-container" style="display: flex; height: 100vh; align-items: center; justify-content: center; background-color: #f6f8fa;">
+        <div style="width: 340px; padding: 24px; text-align: center; background: #fff; border: 1px solid #d0d7de; border-radius: 12px;">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background: #1f883d; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+                <i data-feather="cpu" style="width: 24px; height: 24px; color: white;"></i>
             </div>
-            <h2 style="margin-bottom: 8px; color: white; font-weight: 600; font-size: 24px;">Creator Engine</h2>
-            <p style="color: rgba(255,255,255,0.7); margin-bottom: 30px; font-size: 14px;">Sign in to orchestrate your content</p>
+            <h2 style="margin-bottom: 4px; font-size: 20px;">Sign in to Creator's Den</h2>
+            <p style="color: #656d76; margin-bottom: 20px; font-size: 14px;">Content Engine</p>
             
-            <input type="email" id="login-email" class="full-width margin-bottom" placeholder="Email Address" style="padding: 14px 16px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 8px;">
-            <input type="password" id="login-password" class="full-width margin-bottom" placeholder="Password" style="padding: 14px 16px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 8px;">
+            <div style="text-align: left;">
+                <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Email address</label>
+                <input type="email" id="login-email" style="width: 100%; padding: 5px 12px; margin-bottom: 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
+                
+                <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Password</label>
+                <input type="password" id="login-password" style="width: 100%; padding: 5px 12px; margin-bottom: 16px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
+            </div>
             
-            <button class="btn-primary full-width" id="login-btn" style="padding: 14px; font-size: 16px; font-weight: 600; margin-top: 10px; background: linear-gradient(135deg, var(--brand-primary), #a855f7); border: none;">Sign In</button>
-            <p id="login-feedback" style="margin-top: 20px; font-size: 14px; color: #ff8a8a;"></p>
+            <button id="login-btn" style="width: 100%; padding: 8px 16px; background: #1f883d; color: white; border: 1px solid rgba(27,31,36,0.15); border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Sign in</button>
+            <p id="login-feedback" style="margin-top: 12px; font-size: 14px; color: #d1242f;"></p>
         </div>
     </div>
 
@@ -40,7 +39,7 @@
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="sidebar-header">
-                <img id="sidebar-brand-logo" src="assets/images/logo.png" alt="Brand Logo" class="brand-icon" style="width: 24px; height: 24px; object-fit: contain; border-radius: 4px;">
+                <img id="sidebar-brand-logo" src="assets/images/logo.png" alt="Brand Logo" class="brand-icon" style="width: 28px; height: 28px; object-fit: contain; border-radius: 6px;">
                 <h2 id="sidebar-brand-name">Creator's Den</h2>
             </div>
             <ul class="nav-links">
@@ -50,7 +49,7 @@
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Branding</a></li>
                 <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Account Settings</a></li>
-                <li style="margin-top: auto;"><a href="#" id="logout-btn" style="color: var(--danger);"><i data-feather="log-out"></i> Logout</a></li>
+                <li style="margin-top: auto;"><a href="#" id="logout-btn" style="color: var(--color-danger-fg);"><i data-feather="log-out"></i> Logout</a></li>
             </ul>
         </nav>
 
@@ -59,7 +58,7 @@
             <!-- Header -->
             <header class="topbar">
                 <div style="display: flex; align-items: center;">
-                    <button id="mobile-menu-btn" style="background: none; border: none; color: var(--text-main); margin-right: 15px; cursor: pointer; display: none;">
+                    <button id="mobile-menu-btn" style="background: none; border: none; color: var(--color-fg-default); margin-right: 12px; cursor: pointer; display: none;">
                         <i data-feather="menu"></i>
                     </button>
                     <h1>Dashboard</h1>
@@ -129,7 +128,7 @@
                 <div class="view-header">
                     <h2>Brand Identity</h2>
                 </div>
-                <div class="settings-list" style="max-width: 600px;">
+                <div class="settings-list" style="max-width: 640px;">
                     <div class="setting-item">
                         <label>Brand Name</label>
                         <input type="text" id="brand-name-input" placeholder="e.g. Creator's Den">
@@ -138,43 +137,47 @@
                         <label>Brand Handle</label>
                         <input type="text" id="brand-handle-input" placeholder="e.g. @CreatorsDen">
                     </div>
-                    <div class="setting-item">
-                        <label>Facebook URL</label>
-                        <input type="url" id="facebook-url-input" placeholder="e.g. https://business.facebook.com">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="setting-item">
+                            <label>Facebook URL</label>
+                            <input type="url" id="facebook-url-input" placeholder="https://facebook.com/...">
+                        </div>
+                        <div class="setting-item">
+                            <label>Instagram URL</label>
+                            <input type="url" id="instagram-url-input" placeholder="https://instagram.com/...">
+                        </div>
+                        <div class="setting-item">
+                            <label>TikTok URL</label>
+                            <input type="url" id="tiktok-url-input" placeholder="https://tiktok.com/...">
+                        </div>
+                        <div class="setting-item">
+                            <label>LinkedIn URL</label>
+                            <input type="url" id="linkedin-url-input" placeholder="https://linkedin.com/...">
+                        </div>
                     </div>
-                    <div class="setting-item">
-                        <label>Instagram URL</label>
-                        <input type="url" id="instagram-url-input" placeholder="e.g. https://instagram.com">
-                    </div>
-                    <div class="setting-item">
-                        <label>TikTok URL</label>
-                        <input type="url" id="tiktok-url-input" placeholder="e.g. https://tiktok.com">
-                    </div>
-                    <div class="setting-item">
-                        <label>LinkedIn URL</label>
-                        <input type="url" id="linkedin-url-input" placeholder="e.g. https://linkedin.com">
-                    </div>
-                    <div class="setting-item">
-                        <label>Primary Brand Color</label>
-                        <input type="color" id="brand-primary-color-input" style="height: 40px; width: 100%; border: none; border-radius: 8px;">
-                    </div>
-                    <div class="setting-item">
-                        <label>Secondary Brand Color</label>
-                        <input type="color" id="brand-secondary-color-input" style="height: 40px; width: 100%; border: none; border-radius: 8px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="setting-item">
+                            <label>Primary Brand Color</label>
+                            <input type="color" id="brand-primary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                        </div>
+                        <div class="setting-item">
+                            <label>Secondary Brand Color</label>
+                            <input type="color" id="brand-secondary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                        </div>
                     </div>
                     <div class="setting-item">
                         <label>Brand Logo</label>
-                        <div class="image-preview" style="height: 100px; width: 100px; margin-bottom: 15px; background: transparent;">
-                            <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="object-fit: contain;">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="width: 64px; height: 64px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px;">
+                            <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
+                                <i data-feather="upload"></i> Upload Logo
+                                <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
+                            </label>
                         </div>
-                        <label class="btn-secondary text-center" style="display:inline-block; cursor:pointer;">
-                            <i data-feather="upload"></i> Upload Logo
-                            <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
-                        </label>
                     </div>
 
-                    <h3 style="margin-top: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">Custom Template Designer</h3>
-                    <div id="custom-template-controls" style="background: rgba(255,255,255,0.4); padding: 20px; border-radius: 12px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; border: 1px solid rgba(255,255,255,0.5); backdrop-filter: blur(10px);">
+                    <h3 style="margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">Custom Template Designer</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <div class="form-group">
                             <label>Title Size (%)</label>
                             <input type="range" id="custom-title-size" min="50" max="200" value="100" class="full-width">
@@ -193,19 +196,19 @@
                         </div>
                         <div class="form-group" style="grid-column: span 2;">
                             <label>Overlay Color</label>
-                            <input type="color" id="custom-bg-color" value="#000000" style="height: 40px; width: 100%; border: none; border-radius: 8px;">
+                            <input type="color" id="custom-bg-color" value="#000000" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
                         </div>
                     </div>
 
-                    <h3 style="margin-top: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">AI Engine Instructions</h3>
-                    <div class="setting-item" style="padding: 20px 0; box-shadow: none;">
-                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
-                            Use <code>${topic}</code> and <code>${contentType}</code> as variables. Ensure the prompt forces the AI to return exactly the JSON format required.
+                    <h3 style="margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">AI Engine Instructions</h3>
+                    <div style="padding: 12px 0;">
+                        <p style="font-size: 13px; color: #656d76; margin-bottom: 12px;">
+                            Use <code>${topic}</code> and <code>${contentType}</code> as variables.
                         </p>
-                        <textarea id="prompt-template-input" class="rich-textarea" style="height: 200px; font-family: monospace; font-size: 13px; width: 100%; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 15px;" spellcheck="false"></textarea>
+                        <textarea id="prompt-template-input" class="rich-textarea" style="min-height: 160px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size: 13px; width: 100;" spellcheck="false"></textarea>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
                         <button class="btn-primary" id="save-branding"><i data-feather="save"></i> Save Settings</button>
                         <button class="btn-secondary" id="reset-prompt-btn"><i data-feather="refresh-cw"></i> Reset Prompt</button>
                     </div>
@@ -218,18 +221,18 @@
                 <button class="btn-secondary" id="back-to-queue"><i data-feather="arrow-left"></i> Back</button>
                 <div class="editor-container">
                     <div class="editor-main">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
                             <h2 id="editor-topic">Editing: Topic Name</h2>
-                            <div>
-                                <button class="btn-secondary" id="download-slides"><i data-feather="download"></i> Download Slides</button>
-                                <button class="btn-primary" id="publish-facebook" style="margin-left: 8px;">🚀 Facebook</button>
-                                <button class="btn-primary" id="publish-instagram" style="margin-left: 8px; background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); border: none;">📸 Instagram</button>
-                                <button class="btn-primary" id="publish-tiktok" style="margin-left: 8px; background: #000; border: none;">🎵 TikTok</button>
-                                <button class="btn-primary" id="publish-linkedin" style="margin-left: 8px; background: #0077b5; border: none;">💼 LinkedIn</button>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button class="btn-secondary" id="download-slides"><i data-feather="download"></i> Download</button>
+                                <button class="btn-primary" id="publish-facebook">🚀 Facebook</button>
+                                <button class="btn-primary" id="publish-instagram" style="background: #E1306C; border-color: #E1306C;">📸 Instagram</button>
+                                <button class="btn-secondary" id="publish-tiktok">🎵 TikTok</button>
+                                <button class="btn-primary" id="publish-linkedin" style="background: #0A66C2; border-color: #0A66C2;">💼 LinkedIn</button>
                             </div>
                         </div>
                         
-                        <!-- Real-time Slide Preview (Instagram Square format) -->
+                        <!-- Real-time Slide Preview -->
                         <div class="slide-preview-wrapper">
                             <div class="slide-preview-stage" id="slide-stage">
                                 <div class="slide-card" id="slide-render-target">
@@ -257,15 +260,14 @@
 
                         <hr class="divider">
 
-                        <!-- Forms for text editing -->
                         <h3>Slide Content</h3>
-                        <div id="slides-form-container" style="margin-bottom: 20px;"></div>
+                        <div id="slides-form-container" style="margin-bottom: 16px;"></div>
                         
                         <h3>Social Media Caption</h3>
-                        <textarea id="caption-text" class="rich-textarea" rows="4"></textarea>
-                        <button class="btn-secondary margin-bottom" id="copy-caption" style="margin-top: 10px;"><i data-feather="copy"></i> Copy Caption</button>
-
+                        <textarea id="caption-text" class="rich-textarea" rows="4" style="min-height: 100px;"></textarea>
+                        <button class="btn-secondary margin-bottom" id="copy-caption" style="margin-top: 8px;"><i data-feather="copy"></i> Copy Caption</button>
                     </div>
+
                     <div class="editor-sidebar">
                         <h3>Background Image</h3>
                         <div class="image-preview" id="editor-image-container">
@@ -279,13 +281,13 @@
                         <hr class="divider">
                         
                         <h3>Template</h3>
-                            <select id="template-selector" class="margin-bottom" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-subtle);">
-                                <option value="template-classic">Classic Minimalist</option>
-                                <option value="template-glass">Glassmorphism</option>
-                                <option value="template-bold">Bold Impact</option>
-                                <option value="template-visual">Visual Heavy (75% Image)</option>
-                                <option value="template-custom">Custom Advanced Template</option>
-                            </select>
+                        <select id="template-selector" class="margin-bottom" style="width: 100%;">
+                            <option value="template-classic">Classic Minimalist</option>
+                            <option value="template-glass">Glassmorphism</option>
+                            <option value="template-bold">Bold Impact</option>
+                            <option value="template-visual">Visual Heavy (75% Image)</option>
+                            <option value="template-custom">Custom Advanced Template</option>
+                        </select>
                         
                         <hr class="divider">
                         
@@ -297,85 +299,87 @@
                             <option value="Published">Published</option>
                             <option value="Failed">Failed</option>
                         </select>
-                        <button class="btn-secondary full-width margin-bottom" id="refine-post" style="margin-bottom: 10px;"><i data-feather="edit-2"></i> Reject & Refine</button>
+                        <button class="btn-secondary full-width margin-bottom" id="refine-post"><i data-feather="edit-2"></i> Reject & Refine</button>
                         <button class="btn-primary full-width" id="save-post">Save Changes</button>
                     </div>
                 </div>
             </div>
 
             <div id="manual-view" class="view">
-                <h2>Generate Manual Content</h2>
-                <p>Trigger the LLM generation immediately for a specific topic.</p>
-                <div class="form-group">
-                    <label>Content Type</label>
-                    <select id="manual-content-type" class="full-width margin-bottom">
-                        <option value="Loksewa Exam Question">Loksewa Exam Question</option>
-                        <option value="Subjective Explanation">Subjective Conceptual Explanation</option>
-                        <option value="Current Affairs">Current Affairs Summary</option>
-                        <option value="Gamified Quiz">Gamified General Knowledge Quiz</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Language</label>
-                    <select id="manual-language" class="full-width margin-bottom">
-                        <option value="English">English</option>
-                        <option value="Nepali">Nepali</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        Topic / Syllabus Section
-                        <button class="btn-secondary" id="refresh-topic-btn" style="padding: 4px 8px; font-size: 0.8rem;"><i data-feather="refresh-cw" style="width: 12px; height: 12px;"></i> Suggest Topic</button>
-                    </label>
-                    <input type="text" id="manual-topic" placeholder="e.g. Geography of Nepal - Rivers">
-                </div>
-                <button class="btn-primary" id="trigger-manual" style="margin-top: 10px;"><i data-feather="zap"></i> Generate Content</button>
-                
-                <div id="manual-feedback" class="feedback-msg"></div>
-                
-                <div id="manual-loading-overlay" style="display: none; margin-top: 30px; background: rgba(0,0,0,0.03); padding: 30px; border-radius: 12px; text-align: center;">
-                    <i data-feather="loader" class="spin" style="width: 48px; height: 48px; color: var(--accent-blue); margin-bottom: 15px;"></i>
-                    <h3 style="margin-bottom: 10px;">Generating High-Quality Content...</h3>
-                    <p style="color: var(--text-muted); font-size: 14px;">The AI is thinking. This usually takes 10 to 30 seconds depending on the complexity of the topic.</p>
+                <h2 style="margin-bottom: 4px;">Generate Content</h2>
+                <p style="color: #656d76; margin-bottom: 20px;">Trigger AI generation for a specific topic.</p>
+                <div style="max-width: 560px;">
+                    <div class="form-group">
+                        <label>Content Type</label>
+                        <select id="manual-content-type" class="full-width">
+                            <option value="Loksewa Exam Question">Loksewa Exam Question</option>
+                            <option value="Subjective Explanation">Subjective Explanation</option>
+                            <option value="Current Affairs">Current Affairs Summary</option>
+                            <option value="Gamified Quiz">Gamified Quiz</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Language</label>
+                        <select id="manual-language" class="full-width">
+                            <option value="English">English</option>
+                            <option value="Nepali">Nepali</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            Topic / Syllabus Section
+                            <button class="btn-secondary" id="refresh-topic-btn" style="padding: 2px 8px; font-size: 12px;"><i data-feather="refresh-cw" style="width: 12px; height: 12px;"></i> Suggest</button>
+                        </label>
+                        <input type="text" id="manual-topic" placeholder="e.g. Geography of Nepal - Rivers">
+                    </div>
+                    <button class="btn-primary" id="trigger-manual"><i data-feather="zap"></i> Generate Content</button>
+                    
+                    <div id="manual-feedback" class="feedback-msg"></div>
+                    
+                    <div id="manual-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
+                        <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
+                        <h3 style="margin-bottom: 8px; font-size: 16px;">Generating Content...</h3>
+                        <p style="color: #656d76; font-size: 13px;">This usually takes 15–45 seconds.</p>
+                    </div>
                 </div>
             </div>
 
             <div id="video-view" class="view">
-                <h2>Video Content Creator</h2>
-                <p>Generate video prompts scene-by-scene from your existing ideas.</p>
+                <h2 style="margin-bottom: 4px;">Video Content Creator</h2>
+                <p style="color: #656d76; margin-bottom: 20px;">Generate video prompts from your existing content.</p>
                 <div class="cards-grid" id="video-grid">
                     <!-- Populated by JS -->
                 </div>
             </div>
 
-            <!-- Video Creator View -->
+            <!-- Video Editor View -->
             <div id="video-editor-view" class="view">
                 <button class="btn-secondary margin-bottom" id="back-to-video-queue"><i data-feather="arrow-left"></i> Back</button>
-                <div style="display: flex; gap: 30px;">
-                    <div style="flex: 1; background: #fff; padding: 24px; border-radius: 8px; box-shadow: var(--shadow-sm);">
+                <div style="display: flex; gap: 24px;">
+                    <div style="flex: 1; background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #d0d7de;">
                         <h3 id="video-topic-title">Topic</h3>
-                        <div id="video-original-content" style="white-space: pre-wrap; color: var(--text-muted); font-size: 14px; max-height: 400px; overflow-y: auto; margin-bottom: 20px; padding: 10px; background: var(--bg-page); border-radius: 4px;"></div>
+                        <div id="video-original-content" style="white-space: pre-wrap; color: #656d76; font-size: 14px; max-height: 400px; overflow-y: auto; margin-top: 12px; padding: 12px; background: #f6f8fa; border-radius: 6px; border: 1px solid #d0d7de;"></div>
                     </div>
-                    <div style="flex: 1; background: #fff; padding: 24px; border-radius: 8px; box-shadow: var(--shadow-sm);">
+                    <div style="flex: 1; background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #d0d7de;">
                         <h3>Generate Prompts</h3>
-                        <div class="form-group">
+                        <div class="form-group" style="margin-top: 12px;">
                             <label>Format</label>
-                            <select id="video-format" class="full-width margin-bottom">
+                            <select id="video-format" class="full-width">
                                 <option value="single">Single Continuous Prompt</option>
                                 <option value="multiple">Multiple Scene Prompts</option>
                             </select>
                         </div>
                         <div class="form-group" id="video-splits-group" style="display: none;">
-                            <label>Number of Scenes (Splits)</label>
-                            <input type="number" id="video-splits" class="full-width margin-bottom" value="4" min="2" max="10">
+                            <label>Number of Scenes</label>
+                            <input type="number" id="video-splits" class="full-width" value="4" min="2" max="10">
                         </div>
                         <button class="btn-primary full-width" id="generate-video-btn"><i data-feather="film"></i> Generate Video Prompts</button>
-                        <p id="video-feedback" style="margin-top: 10px; font-size: 14px;"></p>
+                        <p id="video-feedback" style="margin-top: 8px; font-size: 14px;"></p>
                         
-                        <div id="video-prompts-result" style="margin-top: 20px; display: none;">
+                        <div id="video-prompts-result" style="margin-top: 16px; display: none;">
                             <h4>Resulting Prompts</h4>
-                            <textarea id="video-prompts-text" class="rich-textarea" rows="10" readonly></textarea>
-                            <button class="btn-secondary margin-bottom" id="copy-video-prompts" style="margin-top: 10px;"><i data-feather="copy"></i> Copy</button>
+                            <textarea id="video-prompts-text" class="rich-textarea" rows="10" readonly style="min-height: 160px;"></textarea>
+                            <button class="btn-secondary" id="copy-video-prompts" style="margin-top: 8px;"><i data-feather="copy"></i> Copy</button>
                         </div>
                     </div>
                 </div>
@@ -386,25 +390,25 @@
                     <h2>Account Settings</h2>
                 </div>
                 
-                <div style="display: flex; flex-wrap: wrap; gap: 30px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 16px;">
                     <!-- General Settings -->
-                    <div class="content-card" style="flex: 1; min-width: 300px; padding: 24px;">
-                        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">General Profile</h3>
+                    <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #d0d7de;">
+                        <h3 style="margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">Profile</h3>
                         <div class="form-group">
                             <label>Display Name</label>
-                            <input type="text" id="setting-display-name" class="full-width margin-bottom" placeholder="e.g. John Doe">
+                            <input type="text" id="setting-display-name" class="full-width" placeholder="e.g. John Doe">
                         </div>
                         <div class="form-group">
                             <label>Phone Number</label>
-                            <input type="tel" id="setting-phone" class="full-width margin-bottom" placeholder="+1234567890">
+                            <input type="tel" id="setting-phone" class="full-width" placeholder="+1234567890">
                         </div>
                         <button class="btn-primary" id="save-profile-btn"><i data-feather="save"></i> Save Profile</button>
                         <p id="profile-feedback" class="feedback-msg"></p>
                     </div>
 
                     <!-- Security & MFA -->
-                    <div class="content-card" style="flex: 1; min-width: 300px; padding: 24px;">
-                        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">Security</h3>
+                    <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #d0d7de;">
+                        <h3 style="margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">Security</h3>
                         
                         <div class="form-group">
                             <label>Change Password</label>
@@ -413,20 +417,20 @@
                             <p id="password-feedback" class="feedback-msg"></p>
                         </div>
 
-                        <h4 style="margin-top: 30px; margin-bottom: 15px;">Multi-Factor Authentication (MFA)</h4>
-                        <div id="mfa-status-container" style="padding: 15px; background: rgba(0,0,0,0.05); border-radius: 8px; margin-bottom: 15px;">
-                            <p style="margin: 0; font-size: 14px; font-weight: 500;">Status: <span id="mfa-status-text" style="color: var(--danger);">Disabled</span></p>
+                        <h4 style="margin-top: 20px; margin-bottom: 12px;">Multi-Factor Authentication</h4>
+                        <div style="padding: 12px; background: #f6f8fa; border-radius: 6px; margin-bottom: 12px; border: 1px solid #d0d7de;">
+                            <p style="margin: 0; font-size: 14px; font-weight: 500;">Status: <span id="mfa-status-text" style="color: var(--color-danger-fg);">Disabled</span></p>
                         </div>
                         
                         <button class="btn-primary" id="enroll-mfa-btn"><i data-feather="shield"></i> Enroll in MFA</button>
                         
-                        <!-- MFA Enrollment Flow (Hidden initially) -->
-                        <div id="mfa-enrollment-flow" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-subtle);">
-                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">1. Scan this QR Code with your Authenticator App (Google Authenticator, Authy, etc).</p>
-                            <img id="mfa-qr-code" src="" alt="MFA QR Code" style="width: 150px; height: 150px; margin-bottom: 15px; border-radius: 8px;">
+                        <!-- MFA Enrollment Flow -->
+                        <div id="mfa-enrollment-flow" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #d0d7de;">
+                            <p style="font-size: 13px; color: #656d76; margin-bottom: 12px;">1. Scan this QR Code with your Authenticator App.</p>
+                            <img id="mfa-qr-code" src="" alt="MFA QR Code" style="width: 120px; height: 120px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #d0d7de;">
                             
-                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">2. Enter the 6-digit PIN from your app to verify.</p>
-                            <input type="text" id="mfa-verify-code" class="full-width margin-bottom" placeholder="123456" maxlength="6" style="letter-spacing: 2px; font-size: 18px; text-align: center;">
+                            <p style="font-size: 13px; color: #656d76; margin-bottom: 8px;">2. Enter the 6-digit PIN from your app.</p>
+                            <input type="text" id="mfa-verify-code" class="full-width margin-bottom" placeholder="123456" maxlength="6" style="letter-spacing: 4px; font-size: 18px; text-align: center;">
                             <button class="btn-primary full-width" id="verify-mfa-btn">Verify & Enable</button>
                             <p id="mfa-feedback" class="feedback-msg"></p>
                         </div>
@@ -437,7 +441,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="app.js?v=3"></script>
+    <script type="module" src="app.js?v=20260720"></script>
     <script>
         feather.replace();
     </script>
