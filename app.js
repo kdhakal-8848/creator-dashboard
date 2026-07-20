@@ -977,15 +977,15 @@ document.getElementById('save-branding').addEventListener('click', function() {
         return;
     }
     
-    // Save AI Prompt Template
-    const newVal = document.getElementById('prompt-template-input').value;
-    currentPromptTemplate = newVal;
-    localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
-    
+    // Apply visuals immediately without requiring a page refresh
     updateBrandVisuals();
     
+    // Save AI Prompt Template
+    currentPromptTemplate = document.getElementById('prompt-template-input').value;
+    localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
+    
     const feedback = document.getElementById('branding-feedback');
-    feedback.innerText = "Settings saved successfully! Future content will use these rules.";
+    feedback.innerText = "Settings saved successfully! Branding updated instantly.";
     feedback.style.color = "var(--success)";
     setTimeout(() => { feedback.innerText = ""; }, 3000);
 });
