@@ -6,9 +6,9 @@
 
 export const CONFIG = {
     // 1. Supabase Database
-    SUPABASE_URL: "YOUR_SUPABASE_URL",
-    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE",
+    SUPABASE_URL: "https://tbgkhbmsmdfpdcjnztvz.supabase.co",
+    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiZ2toYm1zbWRmcGRjam56dHZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0MTY3NDIsImV4cCI6MjA5OTk5Mjc0Mn0.159ex2E4xtfQXd_UN4kdjRCkSIhTMARwWvs7iBUrrR0",
     
     // 2. Custom Backend (Replacing n8n)
-    N8N_MANUAL_WEBHOOK_URL: "http://localhost:5680/generate"
+    N8N_MANUAL_WEBHOOK_URL: "https://loksewa-backend-ah2s.onrender.com/generate"
 };
