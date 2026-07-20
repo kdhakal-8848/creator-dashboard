@@ -44,6 +44,26 @@ function handleAuthChange(session) {
         if (currentUser && currentUser.email) {
             const emailParts = currentUser.email.split('@')[0];
             nameParam = emailParts.substring(0, 2).toUpperCase();
+            
+            // Prefill Settings Profile
+            if (currentUser.user_metadata) {
+                document.getElementById('setting-display-name').value = currentUser.user_metadata.display_name || '';
+                document.getElementById('setting-phone').value = currentUser.user_metadata.phone || '';
+                if (currentUser.user_metadata.display_name) {
+                    nameParam = currentUser.user_metadata.display_name.substring(0, 2).toUpperCase();
+                }
+            }
+            
+            // Check MFA Status
+            if(!isMockMode) {
+                supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
+                    if (data && (data.currentLevel === 'aal2' || data.nextLevel === 'aal2')) {
+                        document.getElementById('mfa-status-text').innerText = 'Enabled';
+                        document.getElementById('mfa-status-text').style.color = 'var(--success)';
+                        document.getElementById('enroll-mfa-btn').style.display = 'none';
+                    }
+                });
+            }
         }
         document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
         
@@ -1049,4 +1069,134 @@ document.getElementById('copy-video-prompts').addEventListener('click', () => {
     const text = document.getElementById('video-prompts-text').value;
     navigator.clipboard.writeText(text);
     alert('Video prompts copied!');
+});
+
+// --- Mobile Menu Toggle ---
+document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+    document.getElementById('app-container').classList.toggle('sidebar-open');
+});
+
+// Close sidebar when clicking outside on mobile
+document.addEventListener('click', (e) => {
+    const container = document.getElementById('app-container');
+    // If we click on the app container (which acts as overlay via ::after)
+    // or if we click a nav link in mobile mode
+    if (container.classList.contains('sidebar-open') && 
+        (e.target === container || e.target.closest('.nav-links a'))) {
+        container.classList.remove('sidebar-open');
+    }
+});
+
+// --- Settings & Security Logic ---
+document.getElementById('save-profile-btn').addEventListener('click', async () => {
+    if(isMockMode) return alert('Cannot update profile in mock mode');
+    const btn = document.getElementById('save-profile-btn');
+    const feedback = document.getElementById('profile-feedback');
+    const displayName = document.getElementById('setting-display-name').value;
+    const phone = document.getElementById('setting-phone').value;
+    
+    btn.disabled = true;
+    feedback.innerText = "Saving...";
+    feedback.style.color = "var(--text-secondary)";
+    
+    const { data, error } = await supabase.auth.updateUser({
+        data: { display_name: displayName, phone: phone }
+    });
+    
+    if (error) {
+        feedback.innerText = error.message;
+        feedback.style.color = "var(--danger)";
+    } else {
+        feedback.innerText = "Profile updated successfully!";
+        feedback.style.color = "var(--success)";
+        if(displayName) {
+            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${displayName.substring(0,2)}&background=random`;
+        }
+    }
+    btn.disabled = false;
+});
+
+document.getElementById('update-password-btn').addEventListener('click', async () => {
+    if(isMockMode) return alert('Cannot update password in mock mode');
+    const password = document.getElementById('setting-new-password').value;
+    const feedback = document.getElementById('password-feedback');
+    if(!password || password.length < 6) {
+        feedback.innerText = "Password must be at least 6 characters.";
+        feedback.style.color = "var(--danger)";
+        return;
+    }
+    
+    feedback.innerText = "Updating...";
+    feedback.style.color = "var(--text-secondary)";
+    
+    const { data, error } = await supabase.auth.updateUser({ password });
+    
+    if (error) {
+        feedback.innerText = error.message;
+        feedback.style.color = "var(--danger)";
+    } else {
+        feedback.innerText = "Password updated successfully!";
+        feedback.style.color = "var(--success)";
+        document.getElementById('setting-new-password').value = '';
+    }
+});
+
+let currentMfaFactorId = null;
+
+document.getElementById('enroll-mfa-btn').addEventListener('click', async () => {
+    if(isMockMode) return alert('Cannot enroll MFA in mock mode');
+    const feedback = document.getElementById('mfa-feedback');
+    
+    try {
+        const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+        if (error) throw error;
+        
+        currentMfaFactorId = data.id;
+        document.getElementById('mfa-enrollment-flow').style.display = 'block';
+        document.getElementById('enroll-mfa-btn').style.display = 'none';
+        
+        // Generate QR code using external API
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data.totp.qr_code)}`;
+        document.getElementById('mfa-qr-code').src = qrUrl;
+        
+    } catch(e) {
+        alert("Error enrolling MFA: " + e.message);
+    }
+});
+
+document.getElementById('verify-mfa-btn').addEventListener('click', async () => {
+    const code = document.getElementById('mfa-verify-code').value;
+    const feedback = document.getElementById('mfa-feedback');
+    
+    if(!code || code.length !== 6) {
+        feedback.innerText = "Please enter a valid 6-digit code.";
+        feedback.style.color = "var(--danger)";
+        return;
+    }
+    
+    feedback.innerText = "Verifying...";
+    feedback.style.color = "var(--text-secondary)";
+    
+    try {
+        const challenge = await supabase.auth.mfa.challenge({ factorId: currentMfaFactorId });
+        if (challenge.error) throw challenge.error;
+        
+        const verify = await supabase.auth.mfa.verify({
+            factorId: currentMfaFactorId,
+            challengeId: challenge.data.id,
+            code: code
+        });
+        
+        if (verify.error) throw verify.error;
+        
+        feedback.innerText = "MFA Enabled successfully!";
+        feedback.style.color = "var(--success)";
+        document.getElementById('mfa-enrollment-flow').style.display = 'none';
+        document.getElementById('mfa-status-text').innerText = 'Enabled';
+        document.getElementById('mfa-status-text').style.color = 'var(--success)';
+        
+    } catch(e) {
+        feedback.innerText = e.message;
+        feedback.style.color = "var(--danger)";
+    }
 });

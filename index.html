@@ -59,7 +59,12 @@
         <main class="main-content">
             <!-- Header -->
             <header class="topbar">
-                <h1>Dashboard</h1>
+                <div style="display: flex; align-items: center;">
+                    <button id="mobile-menu-btn" style="background: none; border: none; color: var(--text-main); margin-right: 15px; cursor: pointer; display: none;">
+                        <i data-feather="menu"></i>
+                    </button>
+                    <h1>Dashboard</h1>
+                </div>
                 <div class="user-profile">
                     <img id="user-avatar" src="https://ui-avatars.com/api/?name=Admin&background=random" alt="User">
                 </div>
@@ -351,8 +356,56 @@
             </div>
 
             <div id="settings-view" class="view">
-                <h2>Settings</h2>
-                <p>Coming soon...</p>
+                <div class="view-header">
+                    <h2>Account Settings</h2>
+                </div>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 30px;">
+                    <!-- General Settings -->
+                    <div class="content-card" style="flex: 1; min-width: 300px; padding: 24px;">
+                        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">General Profile</h3>
+                        <div class="form-group">
+                            <label>Display Name</label>
+                            <input type="text" id="setting-display-name" class="full-width margin-bottom" placeholder="e.g. John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone Number</label>
+                            <input type="tel" id="setting-phone" class="full-width margin-bottom" placeholder="+1234567890">
+                        </div>
+                        <button class="btn-primary" id="save-profile-btn"><i data-feather="save"></i> Save Profile</button>
+                        <p id="profile-feedback" class="feedback-msg"></p>
+                    </div>
+
+                    <!-- Security & MFA -->
+                    <div class="content-card" style="flex: 1; min-width: 300px; padding: 24px;">
+                        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">Security</h3>
+                        
+                        <div class="form-group">
+                            <label>Change Password</label>
+                            <input type="password" id="setting-new-password" class="full-width margin-bottom" placeholder="New Password">
+                            <button class="btn-secondary" id="update-password-btn">Update Password</button>
+                            <p id="password-feedback" class="feedback-msg"></p>
+                        </div>
+
+                        <h4 style="margin-top: 30px; margin-bottom: 15px;">Multi-Factor Authentication (MFA)</h4>
+                        <div id="mfa-status-container" style="padding: 15px; background: rgba(0,0,0,0.05); border-radius: 8px; margin-bottom: 15px;">
+                            <p style="margin: 0; font-size: 14px; font-weight: 500;">Status: <span id="mfa-status-text" style="color: var(--danger);">Disabled</span></p>
+                        </div>
+                        
+                        <button class="btn-primary" id="enroll-mfa-btn"><i data-feather="shield"></i> Enroll in MFA</button>
+                        
+                        <!-- MFA Enrollment Flow (Hidden initially) -->
+                        <div id="mfa-enrollment-flow" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-subtle);">
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">1. Scan this QR Code with your Authenticator App (Google Authenticator, Authy, etc).</p>
+                            <img id="mfa-qr-code" src="" alt="MFA QR Code" style="width: 150px; height: 150px; margin-bottom: 15px; border-radius: 8px;">
+                            
+                            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">2. Enter the 6-digit PIN from your app to verify.</p>
+                            <input type="text" id="mfa-verify-code" class="full-width margin-bottom" placeholder="123456" maxlength="6" style="letter-spacing: 2px; font-size: 18px; text-align: center;">
+                            <button class="btn-primary full-width" id="verify-mfa-btn">Verify & Enable</button>
+                            <p id="mfa-feedback" class="feedback-msg"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

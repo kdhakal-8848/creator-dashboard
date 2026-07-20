@@ -743,3 +743,72 @@ input:focus, select:focus, textarea:focus {
 @keyframes spin {
     100% { transform: rotate(360deg); }
 }
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+    #mobile-menu-btn {
+        display: block !important;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: -300px;
+        top: 0;
+        bottom: 0;
+        width: 260px;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 20px rgba(0,0,0,0.1);
+    }
+
+    .app-container.sidebar-open .sidebar {
+        left: 0;
+    }
+    
+    .app-container.sidebar-open::after {
+        content: '';
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 90;
+        backdrop-filter: blur(4px);
+    }
+
+    .topbar {
+        padding: 16px 20px;
+    }
+    
+    .topbar h1 {
+        font-size: 1.4rem;
+    }
+
+    .view {
+        padding: 20px 16px 80px 16px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .editor-container {
+        flex-direction: column;
+        gap: 24px;
+    }
+    
+    .editor-sidebar {
+        padding: 20px;
+    }
+
+    .view-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    
+    .view-header select {
+        width: 100%;
+    }
+
+    #settings-view > div {
+        flex-direction: column;
+    }
+}
