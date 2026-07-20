@@ -152,8 +152,8 @@ let mockSettings = [
 
 // --- Branding State ---
 let currentBranding = JSON.parse(localStorage.getItem('loksewa_branding')) || {
-    name: "PUBLIC SERVICE NEPAL",
-    handle: "@PublicServiceNepal",
+    name: "CREATOR'S DEN",
+    handle: "@CreatorsDen",
     logoUrl: "assets/images/logo.png",
     facebookUrl: "https://business.facebook.com",
     instagramUrl: "https://instagram.com",
@@ -167,10 +167,15 @@ function updateBrandVisuals() {
     const nameEl = document.getElementById('slide-brand-name');
     const handleEl = document.getElementById('slide-brand-handle');
     const logoEl = document.getElementById('slide-brand-logo');
+    const sidebarNameEl = document.getElementById('sidebar-brand-name');
+    const sidebarLogoEl = document.getElementById('sidebar-brand-logo');
     
     if(nameEl) nameEl.innerText = currentBranding.name;
     if(handleEl) handleEl.innerText = currentBranding.handle;
     if(logoEl) logoEl.src = currentBranding.logoUrl;
+    
+    if(sidebarNameEl) sidebarNameEl.innerText = currentBranding.name;
+    if(sidebarLogoEl) sidebarLogoEl.src = currentBranding.logoUrl;
     
     // Apply CSS Variables for dynamic template coloring
     if (currentBranding.primaryColor) {
