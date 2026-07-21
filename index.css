@@ -646,6 +646,50 @@ input:focus, select:focus, textarea:focus {
     border-top: 2px solid #e2e8f0;
 }
 
+/* --- Dynamic Themes (Shapes & Accents) --- */
+
+/* Default */
+.theme-default .slide-header {
+    border-bottom: 4px solid var(--brand-secondary, #cc0000);
+}
+
+/* Minimal (Left Line Accent) */
+.theme-minimal .slide-header {
+    border-bottom: none;
+}
+.theme-minimal .slide-content h1 {
+    border-left: 12px solid var(--brand-primary, #003366);
+    padding-left: 24px;
+}
+
+/* Boxed (Title Background) */
+.theme-boxed .slide-header {
+    border-bottom: none;
+}
+.theme-boxed .slide-content h1 {
+    background: var(--brand-primary, #003366);
+    color: #ffffff !important;
+    padding: 24px 32px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+/* Highlighted (Overlay Box) */
+.theme-highlighted .slide-header {
+    border-bottom: none;
+}
+.theme-highlighted .slide-content {
+    background: rgba(255, 255, 255, 0.7);
+    padding: 40px;
+    border-radius: 20px;
+    border: 2px solid rgba(0,0,0,0.05);
+    backdrop-filter: blur(10px);
+}
+.theme-highlighted .slide-bg-overlay {
+    background: var(--brand-primary, #003366);
+    opacity: 0.1;
+}
+
 .preview-controls {
     display: flex;
     align-items: center;

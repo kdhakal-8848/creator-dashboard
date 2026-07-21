@@ -39,20 +39,17 @@ function handleAuthChange(session) {
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app-container').style.display = 'flex';
         
-        // Extract initials from email
+            // Extract initials from email
         let nameParam = "AD";
         if (currentUser && currentUser.email) {
             const emailParts = currentUser.email.split('@')[0];
             nameParam = emailParts.substring(0, 2).toUpperCase();
             
-            // Prefill Settings Profile
-            if (currentUser.user_metadata) {
-                document.getElementById('setting-display-name').value = currentUser.user_metadata.display_name || '';
-                document.getElementById('setting-phone').value = currentUser.user_metadata.phone || '';
-                if (currentUser.user_metadata.display_name) {
-                    nameParam = currentUser.user_metadata.display_name.substring(0, 2).toUpperCase();
-                }
+            // Only update the topbar avatar, don't overwrite form inputs here
+            if (currentUser.user_metadata && currentUser.user_metadata.display_name) {
+                nameParam = currentUser.user_metadata.display_name.substring(0, 2).toUpperCase();
             }
+            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
             
             // Check MFA Status
             if(!isMockMode) {
@@ -185,7 +182,9 @@ let currentBranding = JSON.parse(localStorage.getItem('loksewa_branding')) || {
     customTitleY: "50",
     customContentY: "70",
     customBgOpacity: "85",
-    customBgColor: "#000000"
+    customBgColor: "#000000",
+    themePreset: "theme-default",
+    showPagination: true
 };
 
 function updateBrandVisuals() {
@@ -224,6 +223,13 @@ function updateBrandVisuals() {
         const a = currentBranding.customBgOpacity / 100;
         document.documentElement.style.setProperty('--custom-bg-color', `rgba(${r}, ${g}, ${b}, ${a})`);
     }
+
+    // Apply Theme Class
+    const slideTarget = document.getElementById('slide-render-target');
+    if (slideTarget) {
+        slideTarget.classList.remove('theme-default', 'theme-minimal', 'theme-boxed', 'theme-highlighted');
+        slideTarget.classList.add(currentBranding.themePreset || 'theme-default');
+    }
 }
 
 // Initial application of branding
@@ -261,8 +267,13 @@ async function getPosts() {
     if (isMockMode) return mockPosts;
     const { data, error } = await supabase.from('posts').select('*').order('updated_at', { ascending: false });
     if (error) {
-        console.error(error);
-        return [];
+        console.error("Database error fetching posts:", error.message);
+        console.warn("Falling back to local storage (Mock Mode) due to database error.");
+        isMockMode = true;
+        // Also ensure UI reflects we are bypassing auth visually just in case
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'flex';
+        return mockPosts;
     }
     return data;
 }
@@ -477,7 +488,17 @@ function updateSlidePreview() {
     titleEl.innerText = slide.title;
     bodyEl.innerText = slide.content;
     document.getElementById('current-slide-indicator').innerText = `Slide ${currentSlideIndex + 1}`;
-    document.getElementById('preview-pagination').innerText = `${currentSlideIndex + 1} / ${currentSlides.length}`;
+    
+    // Check local toggle OR global setting for pagination
+    const localToggle = document.getElementById('toggle-slide-numbers');
+    const showPagination = localToggle ? localToggle.checked : (currentBranding.showPagination !== false);
+    
+    const paginationEl = document.getElementById('preview-pagination');
+    if (paginationEl) {
+        paginationEl.innerText = `${currentSlideIndex + 1} / ${currentSlides.length}`;
+        paginationEl.style.display = showPagination ? 'block' : 'none';
+    }
+    
     const slideCard = document.getElementById('slide-render-target');
     const isVisualTemplate = slideCard.classList.contains('template-visual');
     
@@ -498,6 +519,10 @@ function updateSlidePreview() {
     }
 }
 
+document.getElementById('toggle-slide-numbers').addEventListener('change', () => {
+    updateSlidePreview();
+});
+
 document.getElementById('prev-slide').addEventListener('click', () => {
     if(currentSlideIndex > 0) {
         currentSlideIndex--;
@@ -512,7 +537,7 @@ document.getElementById('next-slide').addEventListener('click', () => {
     }
 });
 
-document.getElementById('download-slides').addEventListener('click', async () => {
+async function downloadSlidesImage() {
     const target = document.getElementById('slide-render-target');
     const originalIndex = currentSlideIndex;
     
@@ -533,11 +558,15 @@ document.getElementById('download-slides').addEventListener('click', async () =>
     target.style.transform = originalTransform || 'scale(0.37037)';
     currentSlideIndex = originalIndex;
     updateSlidePreview();
+}
+
+document.getElementById('download-slides').addEventListener('click', async () => {
+    await downloadSlidesImage();
 });
 
 async function executePublish(platformUrl) {
-    // 1. Trigger Download
-    document.getElementById('download-slides').click();
+    // 1. Trigger Download and wait for it
+    await downloadSlidesImage();
     
     // 2. Copy Caption
     const text = document.getElementById('caption-text').value;
@@ -548,17 +577,32 @@ async function executePublish(platformUrl) {
         console.error("Clipboard error:", err);
     }
     
-    // 3. Update Status to Published
+    // 3. Update Status to Published AND Save Edits
     if(currentEditingId) {
         document.getElementById('editor-status').value = 'Published';
+        const updatedStatus = 'Published';
+        const newImageUrl = document.getElementById('editor-image').src; 
+        
+        const updatedText = JSON.stringify({
+            slides: currentSlides,
+            caption: document.getElementById('caption-text').value
+        });
+        
         if (isMockMode) {
             const postIndex = mockPosts.findIndex(p => p.id === currentEditingId);
             if(postIndex > -1) {
-                mockPosts[postIndex].status = 'Published';
+                mockPosts[postIndex].text = updatedText;
+                mockPosts[postIndex].status = updatedStatus;
+                mockPosts[postIndex].image_url = newImageUrl;
+                mockPosts[postIndex].updated_at = new Date().toISOString();
                 saveMockPosts();
             }
         } else {
-            supabase.from('posts').update({ status: 'Published' }).eq('id', currentEditingId).then();
+            await supabase.from('posts').update({ 
+                text: updatedText, 
+                status: updatedStatus, 
+                image_url: newImageUrl 
+            }).eq('id', currentEditingId);
         }
     }
     
@@ -568,6 +612,8 @@ async function executePublish(platformUrl) {
     } else {
         alert("Platform URL not set. Please set it in the Branding tab.");
     }
+    
+    document.querySelector('[data-target="queue-view"]').click();
 }
 
 document.getElementById('publish-facebook').addEventListener('click', () => {
@@ -684,7 +730,8 @@ document.getElementById('refine-post').addEventListener('click', async () => {
             alert('Refined successfully! Reloading...');
         }
         
-        // Return to queue
+        // Return to queue and reload
+        await loadQueue();
         document.querySelector('[data-target="queue-view"]').click();
     } catch(e) {
         alert("Error refining post: " + e.message);
@@ -753,6 +800,8 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
     // UI Loading State
     const btn = document.getElementById('trigger-manual');
     const overlay = document.getElementById('manual-loading-overlay');
+    const originalBtnHtml = btn.innerHTML; // Fix: Store original HTML
+    
     btn.style.display = 'none';
     feedback.style.display = 'none';
     overlay.style.display = 'block';
@@ -776,9 +825,28 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
                 throw new Error(data.error || "Unknown backend error");
             }
             
-            if (isMockMode && data.post) {
-                mockPosts.unshift(data.post);
-                saveMockPosts();
+            // Handle database errors silently handled by backend
+            if (data.db_error) {
+                console.warn("Database failed to save post:", data.db_error);
+                if (!isMockMode) {
+                    alert(`Supabase Error: ${data.db_error}\n\nFalling back to Local Storage so you don't lose your work.`);
+                    isMockMode = true;
+                }
+            }
+            
+            if (isMockMode) {
+                const newPost = data.post || {
+                    id: Date.now().toString(),
+                    topic: `[${contentType}] ${topic}`,
+                    text: data.text,
+                    image_url: data.image_url,
+                    status: 'Draft',
+                    updated_at: new Date().toISOString()
+                };
+                if (!mockPosts.find(p => p.id === newPost.id)) {
+                    mockPosts.unshift(newPost);
+                    saveMockPosts();
+                }
             }
             
             feedback.innerText = "Content triggered successfully! Check the Content Queue shortly.";
@@ -786,6 +854,11 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
             btn.style.display = 'block';
             overlay.style.display = 'none';
             feedback.style.display = 'block';
+            
+            // Fix: Reload queue and redirect in real mode too
+            await loadQueue();
+            document.querySelector('[data-target="queue-view"]').click();
+            document.getElementById('manual-topic').value = "";
             
         } catch(err) {
             console.error(err);
@@ -818,6 +891,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
             feather.replace();
             
             // Auto redirect to Queue
+            loadQueue();
             document.querySelector('[data-target="queue-view"]').click();
         }, 2500);
     }
@@ -849,8 +923,10 @@ document.getElementById('refresh-topic-btn').addEventListener('click', suggestRa
 
 // 5. Settings View (now handled directly in Account Settings HTML)
 async function loadSettings() {
-    // Account settings are now handled by the profile/security sections in HTML
-    // No dynamic settings-container needed
+    if (currentUser && currentUser.user_metadata) {
+        document.getElementById('setting-display-name').value = currentUser.user_metadata.display_name || '';
+        document.getElementById('setting-phone').value = currentUser.user_metadata.phone || '';
+    }
 }
 
 
@@ -879,6 +955,12 @@ function loadBrandingView() {
     document.getElementById('custom-bg-opacity').value = currentBranding.customBgOpacity || 85;
     document.getElementById('custom-bg-color').value = currentBranding.customBgColor || "#000000";
     
+    const themeSelect = document.getElementById('custom-theme-preset');
+    if(themeSelect) themeSelect.value = currentBranding.themePreset || 'theme-default';
+    
+    const paginationToggle = document.getElementById('custom-show-pagination');
+    if(paginationToggle) paginationToggle.checked = currentBranding.showPagination !== false;
+    
     // Prompt
     document.getElementById('prompt-template-input').value = currentPromptTemplate;
     
@@ -896,7 +978,7 @@ document.getElementById('brand-logo-upload').addEventListener('change', function
                 let img = new Image();
                 img.onload = function() {
                     let canvas = document.createElement('canvas');
-                    let ctx = canvas.getContext('root' ? '2d' : '2d');
+                    let ctx = canvas.getContext('2d');
                     // Resize to max 200px width/height
                     let maxW = 200, maxH = 200;
                     let ratio = Math.min(maxW / img.width, maxH / img.height);
@@ -933,7 +1015,13 @@ document.getElementById('save-branding').addEventListener('click', function() {
     const customBgOpacity = document.getElementById('custom-bg-opacity').value;
     const customBgColor = document.getElementById('custom-bg-color').value;
     
-    currentBranding = { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor };
+    const themeSelect = document.getElementById('custom-theme-preset');
+    const themePreset = themeSelect ? themeSelect.value : 'theme-default';
+    
+    const paginationToggle = document.getElementById('custom-show-pagination');
+    const showPagination = paginationToggle ? paginationToggle.checked : true;
+    
+    currentBranding = { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination };
     
     try {
         localStorage.setItem('loksewa_branding', JSON.stringify(currentBranding));
@@ -942,7 +1030,6 @@ document.getElementById('save-branding').addEventListener('click', function() {
         return;
     }
     
-    // Apply visuals immediately without requiring a page refresh
     updateBrandVisuals();
     
     // Save AI Prompt Template
@@ -1186,9 +1273,9 @@ document.getElementById('enroll-mfa-btn').addEventListener('click', async () => 
         document.getElementById('mfa-enrollment-flow').style.display = 'block';
         document.getElementById('enroll-mfa-btn').style.display = 'none';
         
-        // Generate QR code using external API
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(data.totp.qr_code)}`;
-        document.getElementById('mfa-qr-code').src = qrUrl;
+        // Generate QR code using raw SVG Data URI (Fix 5)
+        const svgString = encodeURIComponent(data.totp.qr_code);
+        document.getElementById('mfa-qr-code').src = `data:image/svg+xml;utf8,${svgString}`;
         
     } catch(e) {
         alert("Error enrolling MFA: " + e.message);
