@@ -64,7 +64,8 @@ function handleAuthChange(session) {
         }
         document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
         
-        loadDashboardStats(); // Refresh data now that we are authenticated
+        fetchBrands();
+        loadDashboardStats();
     } else {
         currentUser = null;
         document.getElementById('login-container').style.display = 'flex';
@@ -89,6 +90,7 @@ document.getElementById('login-btn').addEventListener('click', async () => {
                 const nameParam = emailParts.substring(0, 2).toUpperCase();
                 document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
                 
+                fetchBrands();
                 loadDashboardStats();
             }, 500);
         } else {
@@ -167,73 +169,102 @@ let mockSettings = [
     { key: 'prompt_template', value: 'Generate a gamified post...', description: 'Main prompt' }
 ];
 
+
 // --- Branding State ---
-let currentBranding = JSON.parse(localStorage.getItem('loksewa_branding')) || {
-    name: "CREATOR'S DEN",
-    handle: "@CreatorsDen",
-    logoUrl: "assets/images/logo.png",
-    facebookUrl: "https://business.facebook.com",
-    instagramUrl: "https://instagram.com",
-    tiktokUrl: "https://tiktok.com",
-    linkedinUrl: "https://linkedin.com",
-    primaryColor: "#1e3c72",
-    secondaryColor: "#2a5298",
-    customTitleSize: "100",
-    customTitleY: "50",
-    customContentY: "70",
-    customBgOpacity: "85",
-    customBgColor: "#000000",
-    themePreset: "theme-default",
-    showPagination: true
-};
+let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
+    {
+        id: "default-brand",
+        name: "CREATOR'S DEN",
+        handle: "@CreatorsDen",
+        logoUrl: "assets/images/logo.png",
+        facebookUrl: "https://business.facebook.com",
+        instagramUrl: "https://instagram.com",
+        tiktokUrl: "https://tiktok.com",
+        linkedinUrl: "https://linkedin.com",
+        primaryColor: "#1e3c72",
+        secondaryColor: "#2a5298",
+        customTitleSize: "100",
+        customTitleY: "50",
+        customContentY: "70",
+        customBgOpacity: "85",
+        customBgColor: "#000000",
+        themePreset: "theme-default",
+        showPagination: true
+    }
+];
+let activeBrandId = allBrands[0].id;
+let currentBranding = allBrands[0]; // Active brand for the UI
 
-function updateBrandVisuals() {
-    const nameEl = document.getElementById('slide-brand-name');
-    const handleEl = document.getElementById('slide-brand-handle');
-    const logoEl = document.getElementById('slide-brand-logo');
-    const sidebarNameEl = document.getElementById('sidebar-brand-name');
-    const sidebarLogoEl = document.getElementById('sidebar-brand-logo');
-    
-    if(nameEl) nameEl.innerText = currentBranding.name;
-    if(handleEl) handleEl.innerText = currentBranding.handle;
-    if(logoEl) logoEl.src = currentBranding.logoUrl;
-    
-    if(sidebarNameEl) sidebarNameEl.innerText = currentBranding.name;
-    if(sidebarLogoEl) sidebarLogoEl.src = currentBranding.logoUrl;
-    
-    // Apply CSS Variables for dynamic template coloring
-    if (currentBranding.primaryColor) {
-        document.documentElement.style.setProperty('--brand-primary', currentBranding.primaryColor);
+async function fetchBrands() {
+    if (!isMockMode) {
+        const { data, error } = await supabase.from('brands').select('*').order('created_at', { ascending: true });
+        if (!error && data && data.length > 0) {
+            // Map db fields to our local fields
+            allBrands = data.map(dbBrand => ({
+                id: dbBrand.id,
+                name: dbBrand.name,
+                handle: dbBrand.handle,
+                primaryColor: dbBrand.primary_color,
+                secondaryColor: dbBrand.secondary_color,
+                logoUrl: dbBrand.logo_url,
+                facebookUrl: dbBrand.social_links?.facebookUrl || '',
+                instagramUrl: dbBrand.social_links?.instagramUrl || '',
+                tiktokUrl: dbBrand.social_links?.tiktokUrl || '',
+                linkedinUrl: dbBrand.social_links?.linkedinUrl || '',
+                customTitleSize: dbBrand.template_settings?.customTitleSize || '100',
+                customTitleY: dbBrand.template_settings?.customTitleY || '50',
+                customContentY: dbBrand.template_settings?.customContentY || '70',
+                customBgOpacity: dbBrand.template_settings?.customBgOpacity || '85',
+                customBgColor: dbBrand.template_settings?.customBgColor || '#000000',
+                themePreset: dbBrand.template_settings?.themePreset || 'theme-default',
+                showPagination: dbBrand.template_settings?.showPagination !== false
+            }));
+            
+            // Try to keep the same active brand or fallback to first
+            if (!allBrands.find(b => b.id === activeBrandId)) {
+                activeBrandId = allBrands[0].id;
+            }
+            currentBranding = allBrands.find(b => b.id === activeBrandId) || allBrands[0];
+        }
     }
-    if (currentBranding.secondaryColor) {
-        document.documentElement.style.setProperty('--brand-secondary', currentBranding.secondaryColor);
-    }
-    
-    // Apply CSS Variables for custom template builder
-    if (currentBranding.customTitleSize) document.documentElement.style.setProperty('--custom-title-size', (currentBranding.customTitleSize * 0.72) + 'px');
-    if (currentBranding.customTitleY) document.documentElement.style.setProperty('--custom-title-y', -((100 - currentBranding.customTitleY) * 3) + 'px');
-    if (currentBranding.customContentY) document.documentElement.style.setProperty('--custom-content-y', currentBranding.customContentY + '%');
-    
-    // Convert hex to rgba for overlay
-    if (currentBranding.customBgColor && currentBranding.customBgOpacity) {
-        const hex = currentBranding.customBgColor.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        const a = currentBranding.customBgOpacity / 100;
-        document.documentElement.style.setProperty('--custom-bg-color', `rgba(${r}, ${g}, ${b}, ${a})`);
-    }
-
-    // Apply Theme Class
-    const slideTarget = document.getElementById('slide-render-target');
-    if (slideTarget) {
-        slideTarget.classList.remove('theme-default', 'theme-minimal', 'theme-boxed', 'theme-highlighted');
-        slideTarget.classList.add(currentBranding.themePreset || 'theme-default');
-    }
+    populateBrandSelectors();
+    updateBrandVisuals(currentBranding);
 }
 
-// Initial application of branding
-updateBrandVisuals();
+function populateBrandSelectors() {
+    const selectors = [
+        document.getElementById('brand-selector'),
+        document.getElementById('manual-brand'),
+        document.getElementById('queue-brand-filter')
+    ];
+    
+    selectors.forEach(sel => {
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = '';
+        if (sel.id === 'queue-brand-filter') {
+            const opt = document.createElement('option');
+            opt.value = 'All';
+            opt.innerText = 'All Brands';
+            sel.appendChild(opt);
+        }
+        allBrands.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.innerText = b.name;
+            sel.appendChild(opt);
+        });
+        
+        if (sel.id === 'brand-selector') {
+            sel.value = activeBrandId;
+        } else if (sel.id === 'manual-brand') {
+            sel.value = activeBrandId; // default to active brand
+        } else if (currentVal) {
+            sel.value = currentVal;
+        }
+    });
+}
+
 
 // --- Navigation Logic ---
 const navLinks = document.querySelectorAll('.nav-links a');
@@ -789,6 +820,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
     const topic = document.getElementById('manual-topic').value;
     const contentType = document.getElementById('manual-content-type').value;
     const language = document.getElementById('manual-language').value;
+    const brandId = document.getElementById('manual-brand').value;
     const feedback = document.getElementById('manual-feedback');
     
     if(!topic) {
@@ -813,7 +845,8 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    topic: topic, 
+                    topic: topic,
+                brand_id: brandId, 
                     contentType: contentType, 
                     language: language,
                     promptTemplate: currentPromptTemplate
@@ -998,7 +1031,8 @@ document.getElementById('brand-logo-upload').addEventListener('change', function
 });
 
 // Save Branding
-document.getElementById('save-branding').addEventListener('click', function() {
+
+document.getElementById('save-branding').addEventListener('click', async function() {
     const name = document.getElementById('brand-name-input').value;
     const handle = document.getElementById('brand-handle-input').value;
     const logoUrl = document.getElementById('brand-logo-preview').src;
@@ -1021,26 +1055,112 @@ document.getElementById('save-branding').addEventListener('click', function() {
     const paginationToggle = document.getElementById('custom-show-pagination');
     const showPagination = paginationToggle ? paginationToggle.checked : true;
     
-    currentBranding = { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination };
+    const templateSettings = { customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination };
+    const socialLinks = { facebookUrl, instagramUrl, tiktokUrl, linkedinUrl };
     
-    try {
-        localStorage.setItem('loksewa_branding', JSON.stringify(currentBranding));
-    } catch (e) {
-        alert("Could not save branding! Your logo might be too large.");
-        return;
+    if (activeBrandId.startsWith('new-')) {
+        // Create new brand in Supabase
+        if (!isMockMode) {
+            const { data, error } = await supabase.from('brands').insert({
+                name, handle, logo_url: logoUrl, primary_color: primaryColor, secondary_color: secondaryColor,
+                social_links: socialLinks, template_settings: templateSettings
+            }).select();
+            if (data && data[0]) {
+                activeBrandId = data[0].id;
+                allBrands.push({
+                    id: activeBrandId, name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl,
+                    primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination
+                });
+            }
+        } else {
+            activeBrandId = "mock-" + Date.now();
+            allBrands.push({
+                id: activeBrandId, name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl,
+                primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination
+            });
+        }
+    } else {
+        // Update existing brand
+        if (!isMockMode) {
+            await supabase.from('brands').update({
+                name, handle, logo_url: logoUrl, primary_color: primaryColor, secondary_color: secondaryColor,
+                social_links: socialLinks, template_settings: templateSettings
+            }).eq('id', activeBrandId);
+        }
+        const b = allBrands.find(br => br.id === activeBrandId);
+        if (b) {
+            Object.assign(b, { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination });
+        }
     }
     
-    updateBrandVisuals();
+    currentBranding = allBrands.find(br => br.id === activeBrandId);
+    if(isMockMode) localStorage.setItem('loksewa_all_brands', JSON.stringify(allBrands));
     
-    // Save AI Prompt Template
-    currentPromptTemplate = document.getElementById('prompt-template-input').value;
-    localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
+    updateBrandVisuals(currentBranding);
+    populateBrandSelectors();
     
     const feedback = document.getElementById('branding-feedback');
-    feedback.innerText = "Settings saved successfully! Branding updated instantly.";
+    feedback.innerText = "Brand saved successfully!";
     feedback.style.color = "var(--success)";
     setTimeout(() => { feedback.innerText = ""; }, 3000);
 });
+
+// Brand Selector Event
+document.getElementById('brand-selector').addEventListener('change', (e) => {
+    const bId = e.target.value;
+    if (bId) {
+        activeBrandId = bId;
+        currentBranding = allBrands.find(br => br.id === activeBrandId);
+        loadBrandingForm(currentBranding);
+        updateBrandVisuals(currentBranding);
+    }
+});
+
+// Create Brand Event
+document.getElementById('create-brand-btn').addEventListener('click', () => {
+    const newBrand = {
+        id: 'new-' + Date.now(),
+        name: "New Brand",
+        handle: "@newbrand",
+        logoUrl: "assets/images/logo.png",
+        primaryColor: "#000000",
+        secondaryColor: "#666666",
+        customTitleSize: "100", customTitleY: "50", customContentY: "70", customBgOpacity: "85", customBgColor: "#000000", themePreset: "theme-default", showPagination: true
+    };
+    activeBrandId = newBrand.id;
+    currentBranding = newBrand;
+    // Don't add to allBrands until saved
+    const opt = document.createElement('option');
+    opt.value = activeBrandId;
+    opt.innerText = newBrand.name;
+    document.getElementById('brand-selector').appendChild(opt);
+    document.getElementById('brand-selector').value = activeBrandId;
+    
+    loadBrandingForm(newBrand);
+    updateBrandVisuals(newBrand);
+});
+
+function loadBrandingForm(brand) {
+    document.getElementById('brand-name-input').value = brand.name || '';
+    document.getElementById('brand-handle-input').value = brand.handle || '';
+    document.getElementById('brand-logo-preview').src = brand.logoUrl || 'assets/images/logo.png';
+    document.getElementById('facebook-url-input').value = brand.facebookUrl || '';
+    document.getElementById('instagram-url-input').value = brand.instagramUrl || '';
+    document.getElementById('tiktok-url-input').value = brand.tiktokUrl || '';
+    document.getElementById('linkedin-url-input').value = brand.linkedinUrl || '';
+    document.getElementById('brand-primary-color-input').value = brand.primaryColor || '#1e3c72';
+    document.getElementById('brand-secondary-color-input').value = brand.secondaryColor || '#2a5298';
+    document.getElementById('custom-title-size').value = brand.customTitleSize || 100;
+    document.getElementById('custom-title-y').value = brand.customTitleY || 50;
+    document.getElementById('custom-content-y').value = brand.customContentY || 70;
+    document.getElementById('custom-bg-opacity').value = brand.customBgOpacity || 85;
+    document.getElementById('custom-bg-color').value = brand.customBgColor || '#000000';
+    const ts = document.getElementById('custom-theme-preset');
+    if(ts) ts.value = brand.themePreset || 'theme-default';
+    const pt = document.getElementById('custom-show-pagination');
+    if(pt) pt.checked = brand.showPagination !== false;
+}
+
 
 // --- Intelligence Logic ---
 // Real-time custom template updates

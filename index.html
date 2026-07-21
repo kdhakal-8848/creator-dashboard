@@ -110,6 +110,9 @@
             <div id="queue-view" class="view">
                 <div class="view-header">
                     <h2>Content Queue</h2>
+                    <select id="queue-brand-filter" style="margin-right: 8px;">
+                        <option value="All">All Brands</option>
+                    </select>
                     <select id="status-filter">
                         <option value="All">All Statuses</option>
                         <option value="Draft">Draft</option>
@@ -125,8 +128,14 @@
             </div>
 
             <div id="branding-view" class="view">
-                <div class="view-header">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h2>Brand Identity</h2>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="brand-selector" style="min-width: 200px;">
+                            <option value="">Loading Brands...</option>
+                        </select>
+                        <button class="btn-secondary" id="create-brand-btn"><i data-feather="plus"></i> New Brand</button>
+                    </div>
                 </div>
                 <div class="settings-list" style="max-width: 640px;">
                     <div class="setting-item">
@@ -346,6 +355,12 @@
                         <select id="manual-language" class="full-width">
                             <option value="English">English</option>
                             <option value="Nepali">Nepali</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Brand</label>
+                        <select id="manual-brand" class="full-width">
+                            <!-- Populated dynamically -->
                         </select>
                     </div>
                     <div class="form-group">
