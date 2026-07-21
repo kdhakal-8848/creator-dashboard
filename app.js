@@ -266,6 +266,51 @@ function populateBrandSelectors() {
 }
 
 
+function updateBrandVisuals(brand = currentBranding) {
+    if (!brand) return;
+    const nameEl = document.getElementById('slide-brand-name');
+    const handleEl = document.getElementById('slide-brand-handle');
+    const logoEl = document.getElementById('slide-brand-logo');
+    const sidebarNameEl = document.getElementById('sidebar-brand-name');
+    const sidebarLogoEl = document.getElementById('sidebar-brand-logo');
+    
+    if(nameEl) nameEl.innerText = brand.name || '';
+    if(handleEl) handleEl.innerText = brand.handle || '';
+    if(logoEl) logoEl.src = brand.logoUrl || '';
+    
+    if(sidebarNameEl) sidebarNameEl.innerText = brand.name || '';
+    if(sidebarLogoEl) sidebarLogoEl.src = brand.logoUrl || '';
+    
+    // Apply CSS Variables for dynamic template coloring
+    if (brand.primaryColor) {
+        document.documentElement.style.setProperty('--brand-primary', brand.primaryColor);
+    }
+    if (brand.secondaryColor) {
+        document.documentElement.style.setProperty('--brand-secondary', brand.secondaryColor);
+    }
+    
+    // Apply CSS Variables for custom template builder
+    if (brand.customTitleSize) document.documentElement.style.setProperty('--custom-title-size', (brand.customTitleSize * 0.72) + 'px');
+    if (brand.customTitleY) document.documentElement.style.setProperty('--custom-title-y', -((100 - brand.customTitleY) * 3) + 'px');
+    if (brand.customContentY) document.documentElement.style.setProperty('--custom-content-y', brand.customContentY + '%');
+    
+    // Convert hex to rgba for overlay
+    if (brand.customBgColor && brand.customBgOpacity) {
+        const hex = brand.customBgColor.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16) || 0;
+        const g = parseInt(hex.substring(2, 4), 16) || 0;
+        const b = parseInt(hex.substring(4, 6), 16) || 0;
+        const a = brand.customBgOpacity / 100;
+        document.documentElement.style.setProperty('--custom-bg-color', `rgba(${r}, ${g}, ${b}, ${a})`);
+    }
+
+    // Apply Theme Class
+    const slideTarget = document.getElementById('slide-render-target');
+    if (slideTarget) {
+        slideTarget.className = 'slide-card ' + (brand.themePreset || 'theme-default');
+    }
+}
+
 // --- Navigation Logic ---
 const navLinks = document.querySelectorAll('.nav-links a');
 const views = document.querySelectorAll('.view');
@@ -470,9 +515,6 @@ window.openEditor = async (id) => {
     document.getElementById('editor-image').src = post.image_url || 'https://via.placeholder.com/600x400?text=No+Image';
     editorStatus.value = post.status;
     
-    // Set default template class
-    document.getElementById('slide-render-target').className = 'slide-card template-classic';
-    templateSelector.value = 'template-classic';
     console.log("Set basic editor fields");
     
     const bgImg = document.getElementById('slide-bg-img');
