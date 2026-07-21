@@ -362,13 +362,20 @@ async function loadQueue() {
         filteredPosts = posts.filter(p => p.status === filter);
     }
     
+    const brandFilter = document.getElementById('queue-brand-filter') ? document.getElementById('queue-brand-filter').value : 'All';
+    if (brandFilter !== 'All') {
+        filteredPosts = filteredPosts.filter(p => p.brand_id === brandFilter);
+    }
+    
     filteredPosts.forEach(post => {
+        const postBrand = allBrands.find(b => b.id === post.brand_id);
+        const bName = postBrand ? postBrand.name : "Creator's Den";
         const card = document.createElement('div');
         card.className = 'content-card';
         card.innerHTML = `
             <div class="content-card-img" style="background-image: url('${post.image_url || 'https://via.placeholder.com/400x200?text=No+Image'}')"></div>
             <div class="content-card-body">
-                <div class="content-card-title">${post.topic}</div>
+                <div class="content-card-title">${post.topic} <span class="badge" style="background:#e1e4e8; color:#24292e; font-size:11px; padding:2px 6px; border-radius:10px;">${bName}</span></div>
                 <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom: 16px;">
                     ${post.text.substring(0, 80)}...
                 </p>
@@ -443,6 +450,21 @@ window.openEditor = async (id) => {
     currentEditingId = id;
     let editorStatus = document.getElementById('editor-status');
     let templateSelector = document.getElementById('template-selector');
+    
+    // Load the brand associated with this post
+    if (post.brand_id) {
+        const postBrand = allBrands.find(b => b.id === post.brand_id);
+        if (postBrand) {
+            currentBranding = postBrand;
+            updateBrandVisuals(currentBranding);
+            if (templateSelector) templateSelector.value = currentBranding.themePreset || 'theme-default';
+            const pTog = document.getElementById('toggle-slide-numbers');
+            if (pTog) pTog.checked = currentBranding.showPagination !== false;
+        }
+    } else {
+        // Fallback if no brand_id
+        updateBrandVisuals(currentBranding);
+    }
     
     document.getElementById('editor-topic').innerText = `Editing: ${post.topic}`;
     document.getElementById('editor-image').src = post.image_url || 'https://via.placeholder.com/600x400?text=No+Image';
@@ -874,6 +896,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
                     text: data.text,
                     image_url: data.image_url,
                     status: 'Draft',
+                    brand_id: brandId,
                     updated_at: new Date().toISOString()
                 };
                 if (!mockPosts.find(p => p.id === newPost.id)) {
@@ -912,6 +935,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
                     text: `Generated ${contentType.toLowerCase()} for ${topic} in ${language}...`,
                     image_url: 'assets/images/geography_nepal.png',
                     status: 'Draft',
+                    brand_id: brandId,
                     updated_at: new Date().toISOString()
                 });
                 saveMockPosts();
