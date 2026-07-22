@@ -193,7 +193,8 @@ const rssParser = new Parser();
 
 // --- Generate News Lab Endpoint ---
 app.post('/generate-news', async (req, res) => {
-    const { brand_id } = req.body;
+    const { brand_id, language } = req.body;
+    const targetLanguage = language || "English";
 
     try {
         console.log(`Fetching weird news for News Lab`);
@@ -230,7 +231,8 @@ Format the output strictly as a JSON object with the following schema:
   ],
   "caption": "Engaging caption for social media including hashtags. MUST INCLUDE EXACTLY 'Source: ${newsLink}' at the end of the caption."
 }
-Do NOT include markdown formatting like \`\`\`json around the response. Return ONLY valid JSON. Make it 3-5 slides.`;
+Do NOT include markdown formatting like \`\`\`json around the response. Return ONLY valid JSON. Make it 3-5 slides.
+IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be written in ${targetLanguage}.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;

@@ -1001,6 +1001,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
 // --- News Lab Logic ---
 document.getElementById('trigger-news').addEventListener('click', async () => {
     const brandId = document.getElementById('news-brand').value;
+    const language = document.getElementById('news-language').value;
     const feedback = document.getElementById('news-feedback');
     const btn = document.getElementById('trigger-news');
     const overlay = document.getElementById('news-loading-overlay');
@@ -1013,7 +1014,7 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
         const response = await fetch(CONFIG.BACKEND_URL + '/generate-news', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ brand_id: brandId })
+            body: JSON.stringify({ brand_id: brandId, language: language })
         });
         const data = await response.json();
         
