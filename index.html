@@ -46,6 +46,7 @@
                 <li><a href="#" data-target="home-view" class="active"><i data-feather="home"></i> Dashboard</a></li>
                 <li><a href="#" data-target="queue-view"><i data-feather="list"></i> Content Queue</a></li>
                 <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
+                <li><a href="#" data-target="news-view"><i data-feather="globe"></i> News Lab</a></li>
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Branding</a></li>
                 <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Account Settings</a></li>
@@ -377,6 +378,28 @@
                     <div id="manual-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
                         <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
                         <h3 style="margin-bottom: 8px; font-size: 16px;">Generating Content...</h3>
+                        <p style="color: #656d76; font-size: 13px;">This usually takes 15–45 seconds.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="news-view" class="view">
+                <h2 style="margin-bottom: 4px;">News Lab</h2>
+                <p style="color: #656d76; margin-bottom: 20px;">Automatically fetch interesting and weird international news to generate engaging content.</p>
+                <div style="max-width: 560px;">
+                    <div class="form-group">
+                        <label>Target Brand</label>
+                        <select id="news-brand" class="full-width">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <button class="btn-primary" id="trigger-news"><i data-feather="globe"></i> Generate Weird News Post</button>
+                    
+                    <div id="news-feedback" class="feedback-msg"></div>
+                    
+                    <div id="news-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
+                        <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
+                        <h3 style="margin-bottom: 8px; font-size: 16px;">Fetching & Generating Content...</h3>
                         <p style="color: #656d76; font-size: 13px;">This usually takes 15–45 seconds.</p>
                     </div>
                 </div>

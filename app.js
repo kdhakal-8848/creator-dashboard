@@ -235,7 +235,8 @@ function populateBrandSelectors() {
     const selectors = [
         document.getElementById('brand-selector'),
         document.getElementById('manual-brand'),
-        document.getElementById('queue-brand-filter')
+        document.getElementById('queue-brand-filter'),
+        document.getElementById('news-brand')
     ];
     
     selectors.forEach(sel => {
@@ -257,7 +258,7 @@ function populateBrandSelectors() {
         
         if (sel.id === 'brand-selector') {
             sel.value = activeBrandId;
-        } else if (sel.id === 'manual-brand') {
+        } else if (sel.id === 'manual-brand' || sel.id === 'news-brand') {
             sel.value = activeBrandId; // default to active brand
         } else if (currentVal) {
             sel.value = currentVal;
@@ -334,6 +335,7 @@ navLinks.forEach(link => {
         if(targetViewId === 'video-view') loadVideoQueue();
         if(targetViewId === 'settings-view') loadSettings();
         if(targetViewId === 'branding-view') loadBrandingView();
+        // news-view doesn't need data fetching on load
     });
 });
 
@@ -993,6 +995,103 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
             loadQueue();
             document.querySelector('[data-target="queue-view"]').click();
         }, 2500);
+    }
+});
+
+// --- News Lab Logic ---
+document.getElementById('trigger-news').addEventListener('click', async () => {
+    const brandId = document.getElementById('news-brand').value;
+    const feedback = document.getElementById('news-feedback');
+    const btn = document.getElementById('trigger-news');
+    const overlay = document.getElementById('news-loading-overlay');
+    
+    btn.style.display = 'none';
+    feedback.style.display = 'none';
+    overlay.style.display = 'block';
+    
+    try {
+        const response = await fetch(CONFIG.BACKEND_URL + '/generate-news', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brand_id: brandId })
+        });
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || "Unknown backend error");
+        }
+        
+        if (data.db_error) {
+            console.warn("Database failed to save post:", data.db_error);
+            if (!isMockMode) {
+                alert(`Supabase Error: ${data.db_error}\n\nFalling back to Local Storage.`);
+                isMockMode = true;
+            }
+        }
+        
+        if (isMockMode) {
+            const newPost = data.post || {
+                id: Date.now().toString(),
+                topic: `[News Lab] Generated Weird News`,
+                text: data.text,
+                image_url: data.image_url,
+                status: 'Draft',
+                brand_id: brandId,
+                updated_at: new Date().toISOString()
+            };
+            if (!mockPosts.find(p => p.id === newPost.id)) {
+                mockPosts.unshift(newPost);
+                saveMockPosts();
+            }
+        }
+        
+        feedback.innerText = "News Content fetched and drafted successfully!";
+        feedback.style.color = "var(--success)";
+        btn.style.display = 'block';
+        overlay.style.display = 'none';
+        feedback.style.display = 'block';
+        
+        await loadQueue();
+        document.querySelector('[data-target="queue-view"]').click();
+        
+    } catch(err) {
+        console.error(err);
+        if (isMockMode) {
+            // Mock mode fallback for News Lab
+            setTimeout(() => {
+                mockPosts.unshift({
+                    id: Date.now().toString(),
+                    topic: `[News Lab] Local Mock News Story`,
+                    text: JSON.stringify({
+                        slides: [
+                            {title: "Breaking Weird News", content: "Local Mock Story generated offline."},
+                            {title: "Details", content: "This is a placeholder because the backend failed."}
+                        ],
+                        caption: "Check out this wild mock story! Source: https://mock-news.com #WeirdNews"
+                    }),
+                    image_url: 'assets/images/geography_nepal.png',
+                    status: 'Draft',
+                    brand_id: brandId,
+                    updated_at: new Date().toISOString()
+                });
+                saveMockPosts();
+                
+                feedback.innerText = "Content drafted successfully (Mock)!";
+                feedback.style.color = "var(--success)";
+                btn.style.display = 'block';
+                overlay.style.display = 'none';
+                feedback.style.display = 'block';
+                
+                loadQueue();
+                document.querySelector('[data-target="queue-view"]').click();
+            }, 2000);
+        } else {
+            feedback.innerText = "Error triggering news generation: " + err.message;
+            feedback.style.color = "var(--danger)";
+            btn.style.display = 'block';
+            overlay.style.display = 'none';
+            feedback.style.display = 'block';
+        }
     }
 });
 

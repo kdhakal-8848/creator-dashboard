@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
+import Parser from 'rss-parser';
 
 global.WebSocket = WebSocket;
 
@@ -185,6 +186,93 @@ ${originalResearch}
     } catch (err) {
         console.error("Video Generation Error:", err);
         res.status(500).json({ error: "Failed to generate video prompts" });
+    }
+});
+
+const rssParser = new Parser();
+
+// --- Generate News Lab Endpoint ---
+app.post('/generate-news', async (req, res) => {
+    const { brand_id } = req.body;
+
+    try {
+        console.log(`Fetching weird news for News Lab`);
+        const feed = await rssParser.parseURL('https://nypost.com/weird-news/feed/');
+        
+        if (!feed.items || feed.items.length === 0) {
+            return res.status(500).json({ error: "No news found in RSS feed" });
+        }
+
+        // Pick a random recent news item
+        const newsItem = feed.items[Math.floor(Math.random() * Math.min(10, feed.items.length))];
+        const newsTitle = newsItem.title;
+        const newsLink = newsItem.link;
+        const newsContent = newsItem.contentSnippet || newsItem.content || '';
+
+        console.log(`Selected weird news: ${newsTitle}`);
+        
+        // 1. Generate content with Gemini
+        let text = "";
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        
+        const prompt = `You are an expert social media content creator. Create an engaging, weird, and interesting news post about the following international news story.
+
+Title: ${newsTitle}
+Summary: ${newsContent}
+
+Format the output strictly as a JSON object with the following schema:
+{
+  "slides": [
+    {
+      "title": "Short catchy title for slide",
+      "content": "Content for the slide"
+    }
+  ],
+  "caption": "Engaging caption for social media including hashtags. MUST INCLUDE EXACTLY 'Source: ${newsLink}' at the end of the caption."
+}
+Do NOT include markdown formatting like \`\`\`json around the response. Return ONLY valid JSON. Make it 3-5 slides.`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        text = response.text();
+
+        // Try to parse to ensure it's valid JSON
+        try {
+            JSON.parse(text);
+        } catch (e) {
+            console.error("Gemini returned invalid JSON for news", text);
+            return res.status(500).json({ error: "AI generated invalid JSON" });
+        }
+
+        // Generate AI image URL using pollinations.ai
+        const cleanTitle = newsTitle.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 100);
+        const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanTitle + " realistic photography cinematic lighting weird funny")}`;
+
+        // 2. Insert into Supabase
+        const { data, error } = await supabase
+            .from('posts')
+            .insert([
+                { 
+                    topic: `[News Lab] ${newsTitle.substring(0, 50)}...`, 
+                    text: text, 
+                    status: 'Draft',
+                    image_url: generatedImageUrl,
+                    brand_id: brand_id || null
+                }
+            ])
+            .select();
+
+        if (error) {
+            console.error("Supabase Error:", error);
+            return res.json({ success: true, text: text, image_url: generatedImageUrl, db_error: error.message });
+        }
+
+        console.log("Successfully generated and saved News Lab post:", data[0].id);
+        res.json({ success: true, post: data[0] });
+
+    } catch (err) {
+        console.error("News Lab Error:", err);
+        res.status(500).json({ error: "Internal server error: " + err.message });
     }
 });
 
