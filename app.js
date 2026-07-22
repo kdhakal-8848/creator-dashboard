@@ -1002,6 +1002,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
 document.getElementById('trigger-news').addEventListener('click', async () => {
     const brandId = document.getElementById('news-brand').value;
     const language = document.getElementById('news-language').value;
+    const contentType = document.getElementById('news-content-type').value;
     const feedback = document.getElementById('news-feedback');
     const btn = document.getElementById('trigger-news');
     const overlay = document.getElementById('news-loading-overlay');
@@ -1014,7 +1015,7 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-news'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ brand_id: brandId, language: language })
+            body: JSON.stringify({ brand_id: brandId, language: language, contentType: contentType })
         });
         const data = await response.json();
         

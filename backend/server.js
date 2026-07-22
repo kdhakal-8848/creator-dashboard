@@ -193,8 +193,9 @@ const rssParser = new Parser();
 
 // --- Generate News Lab Endpoint ---
 app.post('/generate-news', async (req, res) => {
-    const { brand_id, language } = req.body;
+    const { brand_id, language, contentType } = req.body;
     const targetLanguage = language || "English";
+    const templateStyle = contentType || "Standard News Summary";
 
     try {
         console.log(`Fetching weird news for News Lab`);
@@ -216,7 +217,8 @@ app.post('/generate-news', async (req, res) => {
         let text = "";
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         
-        const prompt = `You are an expert social media content creator. Create an engaging, weird, and interesting news post about the following international news story.
+        const prompt = `You are an expert social media content creator. Create an engaging news post about the following international news story.
+The output format and writing style MUST be tailored to this specific style: "${templateStyle}".
 
 Title: ${newsTitle}
 Summary: ${newsContent}
