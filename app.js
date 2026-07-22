@@ -1011,7 +1011,7 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
     overlay.style.display = 'block';
     
     try {
-        const response = await fetch(CONFIG.BACKEND_URL + '/generate-news', {
+        const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-news'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ brand_id: brandId, language: language })
