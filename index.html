@@ -261,7 +261,15 @@
                             <input type="file" id="image-upload" style="display:none;" accept="image/*">
                         </label>
                         <p id="slide-image-note" style="font-size: 11px; color: var(--color-fg-muted); margin-bottom: 12px;">Replaces the background for the current slide only.</p>
-                        
+
+                        <!-- Custom AI Image Generation for this slide -->
+                        <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
+                            <input type="text" id="custom-ai-image-prompt" class="input" placeholder="Prompt for new AI image..." style="font-size: 13px; padding: 8px;">
+                            <button id="generate-custom-image-btn" class="btn-primary" style="font-size: 13px; padding: 8px;">
+                                <i data-feather="image"></i> Generate AI Image
+                            </button>
+                        </div>
+
                         <hr class="divider">
 
                         <h3>Text Formatting</h3>

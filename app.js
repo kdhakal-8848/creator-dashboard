@@ -524,22 +524,38 @@ function syncFabricCanvasToCurrentSlide() {
     if (objects.length === 0) return;
     let updated = false;
     objects.forEach(obj => {
+        const style = {
+            left: obj.left, top: obj.top, width: obj.width, fontSize: obj.fontSize,
+            fill: obj.fill, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
+            fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign
+        };
         if (obj.isPlaceholder === 'title' || obj.customType === 'title') {
             if (obj.text !== undefined) currentSlides[currentSlideIndex].title = obj.text;
-            currentSlides[currentSlideIndex].titleStyle = {
-                left: obj.left, top: obj.top, width: obj.width, fontSize: obj.fontSize,
-                fill: obj.fill, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
-                fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign
-            };
+            currentSlides[currentSlideIndex].titleStyle = style;
             updated = true;
-        }
-        if (obj.isPlaceholder === 'body' || obj.customType === 'body') {
+        } else if (obj.isPlaceholder === 'body' || obj.customType === 'body') {
             if (obj.text !== undefined) currentSlides[currentSlideIndex].content = obj.text;
-            currentSlides[currentSlideIndex].bodyStyle = {
-                left: obj.left, top: obj.top, width: obj.width, fontSize: obj.fontSize,
-                fill: obj.fill, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
-                fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign
-            };
+            currentSlides[currentSlideIndex].bodyStyle = style;
+            updated = true;
+        } else if (obj.customType === 'header-asset') {
+            currentSlides[currentSlideIndex].headerAssetStyle = style;
+            updated = true;
+        } else if (obj.customType === 'brand-logo') {
+            currentSlides[currentSlideIndex].brandLogoStyle = style;
+            updated = true;
+        } else if (obj.customType === 'brand-handle') {
+            currentSlides[currentSlideIndex].brandHandleStyle = style;
+            updated = true;
+        } else if (obj.customType === 'cta-label') {
+            if (obj.text !== undefined) currentSlides[currentSlideIndex].ctaLabelText = obj.text;
+            currentSlides[currentSlideIndex].ctaLabelStyle = style;
+            updated = true;
+        } else if (obj.customType === 'cta-btn-bg') {
+            currentSlides[currentSlideIndex].ctaBtnBgStyle = style;
+            updated = true;
+        } else if (obj.customType === 'cta-btn-text') {
+            if (obj.text !== undefined) currentSlides[currentSlideIndex].ctaBtnTextContent = obj.text;
+            currentSlides[currentSlideIndex].ctaBtnTextStyle = style;
             updated = true;
         }
     });
@@ -584,8 +600,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (!fabricCanvas) initFabricCanvas();
     if (!fabricCanvas) return;
 
-    // IMPORTANT: sync current canvas text state BEFORE clearing — preserves edits on nav
-    syncFabricCanvasToCurrentSlide();
+    // We do NOT sync here anymore, because it would overwrite the new target slide
+    // with the old slide's canvas state just before we draw the new one!
+    // Sync is now strictly handled in the nav button click handlers and UI updaters BEFORE currentSlideIndex changes.
     fabricCanvas.clear();
 
     const templateSelector = document.getElementById('template-selector');
@@ -694,9 +711,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 fontFamily: headingFont,
                 selectable: true,
                 evented: true,
-                isPlaceholder: 'brand-name',
-                customType: 'brand-name'
+                customType: 'brand-handle'
             });
+            if (slideData.brandHandleStyle) {
+                brandText.set(slideData.brandHandleStyle);
+            }
             fabricCanvas.add(brandText);
         }
 
@@ -707,15 +726,18 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    const targetW = 200; // ~37% of left half width (540)
+                    const targetW = 400; // ~40% of the full width
                     const scale = targetW / img.width;
                     img.set({
                         left: 80,
                         top: 40,
                         scaleX: scale, scaleY: scale,
                         selectable: true, evented: true,
-                        customType: 'header-asset', isPlaceholder: 'header-asset'
+                        customType: 'header-asset'
                     });
+                    if (slideData.headerAssetStyle) {
+                        img.set(slideData.headerAssetStyle);
+                    }
                     fabricCanvas.add(img);
                     fabricCanvas.bringToFront(img);
                     fabricCanvas.renderAll();
@@ -749,6 +771,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 textAlign: 'center', originX: 'center', letterSpacing: 4,
                 selectable: true, customType: 'cta-label'
             });
+            if (slideData.ctaLabelStyle) ctaLabel.set(slideData.ctaLabelStyle);
             fabricCanvas.add(ctaLabel);
 
             const ctaTitleTop = ctaLabelTop + ctaLabel.getScaledHeight() + 30;
@@ -782,6 +805,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 rx: 45, ry: 45,
                 selectable: true, evented: true, customType: 'cta-btn-bg'
             });
+            if (slideData.ctaBtnBgStyle) ctaBtnRect.set(slideData.ctaBtnBgStyle);
             fabricCanvas.add(ctaBtnRect);
 
             const ctaBtnText = new fabric.IText('FOLLOW NOW', {
@@ -790,6 +814,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 fontFamily: headingFont, textAlign: 'center', originX: 'center',
                 selectable: true, evented: true, customType: 'cta-btn-text'
             });
+            if (slideData.ctaBtnTextStyle) ctaBtnText.set(slideData.ctaBtnTextStyle);
             fabricCanvas.add(ctaBtnText);
 
         } else {
@@ -1196,6 +1221,57 @@ window.openEditor = async (id) => {
     // Set UI
     document.getElementById('editor-topic').innerText = `Editing: ${post.topic}`;
     document.getElementById('editor-status').value = post.status;
+    
+    // Setup keyboard shortcuts if not already set
+    if (!window.fabricShortcutsBound) {
+        window.fabricShortcutsBound = true;
+        document.addEventListener('keydown', (e) => {
+            if (!fabricCanvas) return;
+            const activeObj = fabricCanvas.getActiveObject();
+            if (!activeObj || !activeObj.isEditing && !activeObj.text) return;
+            
+            // Check if we are focusing on an input field outside canvas
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') && activeEl.id !== 'custom-ai-image-prompt' && !activeEl.classList.contains('upper-canvas')) {
+                return; 
+            }
+
+            if (e.metaKey || e.ctrlKey) {
+                let updated = false;
+                if (e.key === 'b') {
+                    e.preventDefault();
+                    const isBold = activeObj.fontWeight === 'bold' || activeObj.fontWeight >= 700;
+                    activeObj.set('fontWeight', isBold ? 'normal' : 'bold');
+                    updated = true;
+                } else if (e.key === 'i') {
+                    e.preventDefault();
+                    const isItalic = activeObj.fontStyle === 'italic';
+                    activeObj.set('fontStyle', isItalic ? 'normal' : 'italic');
+                    updated = true;
+                } else if (e.key === 'u') {
+                    e.preventDefault();
+                    const isUnderlined = activeObj.underline;
+                    activeObj.set('underline', !isUnderlined);
+                    updated = true;
+                } else if (e.key === '=' || e.key === '+') {
+                    e.preventDefault();
+                    activeObj.set('fontSize', (activeObj.fontSize || 40) + 2);
+                    updated = true;
+                } else if (e.key === '-') {
+                    e.preventDefault();
+                    activeObj.set('fontSize', Math.max(10, (activeObj.fontSize || 40) - 2));
+                    updated = true;
+                }
+                
+                if (updated) {
+                    fabricCanvas.requestRenderAll();
+                    syncFabricCanvasToCurrentSlide();
+                    saveCanvasHistory();
+                }
+            }
+        });
+    }
+
     const templateSel = document.getElementById('template-selector');
     if (templateSel) templateSel.value = currentBranding.themePreset || 'template-classic';
 
@@ -2191,3 +2267,25 @@ window.onload = () => {
     suggestRandomTopic();
     if (window.feather) feather.replace();
 };
+
+// --- Custom AI Image Generation ---
+document.getElementById('generate-custom-image-btn')?.addEventListener('click', () => {
+    const promptEl = document.getElementById('custom-ai-image-prompt');
+    const promptText = promptEl.value.trim();
+    if (!promptText) {
+        showToast('Please enter an image prompt', 'error');
+        return;
+    }
+    
+    showToast('Generating AI Image...', 'info');
+    const seed = Math.floor(Math.random() * 100000);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?seed=${seed}&nologo=true&width=1080&height=1350`;
+    
+    // Simulate slight delay then apply
+    setTimeout(() => {
+        currentImageUrls[currentSlideIndex] = imageUrl;
+        document.getElementById('editor-image').src = imageUrl;
+        updateSlidePreview();
+        showToast('AI Image applied to slide!');
+    }, 1000);
+});
