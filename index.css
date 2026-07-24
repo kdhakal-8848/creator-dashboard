@@ -948,7 +948,7 @@ input:focus, select:focus, textarea:focus {
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
 /* ============================================================
-   Mobile Responsiveness
+   Mobile & Touch Responsiveness (iOS / Android / Tablets)
    ============================================================ */
 @media (max-width: 960px) {
     .stats-grid { grid-template-columns: 1fr 1fr; }
@@ -957,42 +957,254 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media (max-width: 768px) {
-    #mobile-menu-btn { display: block !important; }
+    /* --- 1. Touch Targets & iOS Auto-Zoom Fix --- */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="tel"],
+    input[type="number"],
+    input[type="url"],
+    select,
+    textarea {
+        font-size: 16px !important; /* Prevents iOS Safari forced zoom on focus */
+        min-height: 44px;
+        padding: 10px 12px;
+        box-sizing: border-box;
+    }
 
-    .sidebar {
-        position: fixed;
-        left: -300px;
+    .btn-primary, .btn-secondary {
+        min-height: 44px;
+        padding: 10px 16px;
+        font-size: 14px;
+        touch-action: manipulation;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* --- 2. Topbar & Navigation Drawer --- */
+    .topbar {
+        padding: 10px 14px;
+        position: sticky;
         top: 0;
-        bottom: 0;
-        width: 260px;
-        transition: left 0.2s ease;
-        box-shadow: var(--shadow-lg);
-        z-index: 200;
+        z-index: 100;
         background: var(--color-canvas-default);
     }
 
-    .app-container.sidebar-open .sidebar { left: 0; }
+    .topbar h1 {
+        font-size: 18px;
+        font-weight: 700;
+    }
 
+    #mobile-menu-btn {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border-radius: var(--border-radius-sm);
+        background: var(--color-canvas-subtle);
+        border: 1px solid var(--color-border-default);
+        margin-right: 8px;
+    }
+
+    /* Slide-out Sidebar Drawer */
+    .sidebar {
+        position: fixed;
+        left: -320px;
+        top: 0;
+        bottom: 0;
+        width: 280px;
+        max-width: 85vw;
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: var(--shadow-lg);
+        z-index: 500;
+        background: var(--color-canvas-default);
+    }
+
+    .app-container.sidebar-open .sidebar {
+        transform: translateX(320px);
+    }
+
+    /* Backdrop Overlay Blur */
     .app-container.sidebar-open::after {
         content: '';
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.4);
-        z-index: 100;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 400;
     }
 
-    .topbar { padding: 12px 16px; }
-    .view { padding: 16px 16px 60px; }
+    /* Navigation Links Touch Size */
+    .nav-links a {
+        padding: 12px 14px;
+        font-size: 15px;
+        min-height: 48px;
+    }
 
-    .editor-container { flex-direction: column; }
-    .editor-sidebar { width: 100%; position: static; }
+    /* --- 3. View Containers & Layout Grids --- */
+    .view {
+        padding: 14px 14px 80px;
+    }
+
+    .two-col-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        padding: 14px;
+    }
+
+    .stat-value {
+        font-size: 26px;
+    }
+
+    .cards-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .content-card-img {
+        max-height: 240px;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .data-table {
+        min-width: 480px;
+    }
+
+    /* --- 4. Responsive 4:5 Slide Canvas Stage --- */
+    .slide-preview-wrapper,
+    .studio-canvas-wrapper {
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box;
+    }
 
     .slide-preview-stage,
     .studio-canvas-stage {
-        width: min(90vw, 320px);
-        height: calc(min(90vw, 320px) * 1350/1080);
+        width: 100% !important;
+        max-width: 380px !important;
+        height: auto !important;
+        aspect-ratio: 4 / 5 !important;
+        margin: 0 auto;
+        border-radius: var(--border-radius-md);
+        box-shadow: var(--shadow-lg);
     }
 
-    .stats-grid { grid-template-columns: 1fr 1fr; }
-    .two-col-grid { grid-template-columns: 1fr; }
+    /* Force internal Fabric.js canvas elements to scale smoothly */
+    .slide-preview-stage .canvas-container,
+    .slide-preview-stage canvas,
+    .studio-canvas-stage .canvas-container,
+    .studio-canvas-stage canvas {
+        width: 100% !important;
+        height: 100% !important;
+        aspect-ratio: 4 / 5 !important;
+    }
+
+    /* --- 5. Editor Layout --- */
+    .editor-container {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .editor-main {
+        width: 100%;
+    }
+
+    .editor-sidebar {
+        width: 100%;
+        position: static;
+        padding: 16px;
+        box-sizing: border-box;
+    }
+
+    /* Text formatting toolbar */
+    .text-format-controls {
+        padding: 8px;
+    }
+
+    .fmt-btn {
+        min-height: 38px !important;
+        font-size: 15px !important;
+    }
+
+    /* --- 6. Template Studio Mobile Layout --- */
+    .studio-layout {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .studio-palette {
+        position: static;
+        padding: 14px;
+    }
+
+    .palette-elements {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+
+    .palette-item {
+        padding: 10px 4px;
+        font-size: 10px;
+        min-height: 56px;
+    }
+
+    .studio-properties {
+        position: static;
+        padding: 14px;
+    }
+
+    /* --- 7. Instagram Caption Box & Hashtags --- */
+    .caption-box {
+        border-radius: var(--border-radius-sm);
+    }
+
+    .caption-section {
+        padding: 12px 14px;
+    }
+
+    .hashtag-pill {
+        padding: 6px 12px;
+        font-size: 13px;
+        margin-bottom: 4px;
+    }
+
+    /* --- 8. Brand Identity Form --- */
+    #branding-view .two-col-grid {
+        grid-template-columns: 1fr;
+    }
 }
+
+@media (max-width: 480px) {
+    .palette-elements {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .topbar h1 {
+        font-size: 16px;
+    }
+
+    #active-brand-chip {
+        display: none; /* Hide chip on tiny screens to save space */
+    }
+
+    .stat-value {
+        font-size: 22px;
+    }
+}
+
