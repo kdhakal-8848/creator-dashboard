@@ -726,8 +726,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    const targetW = 400; // ~40% of the full width
-                    const scale = targetW / img.width;
+                    // Maximize height to fit between top edge (0) and yellow line (135)
+                    const targetH = 115; 
+                    const scale = targetH / img.height;
                     img.set({
                         left: 80,
                         top: 125,

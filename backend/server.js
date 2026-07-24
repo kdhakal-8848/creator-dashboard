@@ -398,9 +398,9 @@ Total Slides: ${count}
 Language: ${targetLanguage}
 
 MANDATORY SLIDE STRUCTURE:
-- Slide 1 (HOOK): The title should NOT literally say "Did You Know?" or "Mind Blowing Fact". Instead, the title MUST be a short, bold, hooky statement related to the topic itself (e.g., "Sharks are older than trees!"). Content: the single most SHOCKING fact (max 15 words). image_prompt: dramatic wide-angle visual that makes the fact tangible.
-- Slides 2 to ${count - 1} (FACTS): ONE mind-blowing fact per slide. Max 35 words body. Bold key numbers/stats. Each must have a unique, specific image_prompt.
-- Slide ${count} (CTA — MANDATORY): Set "is_cta": true. Title: "Follow for Daily Facts! 🔥". Content: "Read caption for the full breakdown ↓\\n\\nFollow ${handle} for a new mind-blowing fact every day." DO NOT include image_prompt for this slide.
+- Slide 1 (HOOK): Title MUST be a short, bold, fascinating statement about the topic itself (Example: "Sharks are older than trees!"). NEVER use generic clickbait titles. Content: the single most fascinating fact (max 15 words). image_prompt: dramatic wide-angle visual that makes the fact tangible.
+- Slides 2 to ${count - 1} (FACTS): ONE fascinating fact per slide. Max 35 words body. Bold key numbers/stats. Each must have a unique, specific image_prompt.
+- Slide ${count} (CTA — MANDATORY): Set "is_cta": true. Title: "Follow for Daily Facts! 🔥". Content: "Read caption for the full breakdown ↓\\n\\nFollow ${handle} for a new fascinating fact every day." DO NOT include image_prompt for this slide.
 
 TYPOGRAPHY & COPY RULES:
 - Headlines: 80pt+ impact — short, punchy, high contrast
