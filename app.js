@@ -544,13 +544,15 @@ function fabricColorToHex(color) {
 }
 
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
+// --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
 async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (!fabricCanvas) initFabricCanvas();
     if (!fabricCanvas) return;
 
     fabricCanvas.clear();
-    fabricCanvas.backgroundColor = brand?.primaryColor || '#1a1a2e';
-    fabricCanvas.renderAll();
+
+    const templateSelector = document.getElementById('template-selector');
+    const selectedPreset = templateSelector?.value || brand?.themePreset || 'template-classic';
 
     const isCTA = slideData.is_cta === true || slideIndex === currentSlides.length - 1;
     const primaryColor = brand?.primaryColor || '#1e3c72';
@@ -558,106 +560,119 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     const accentColor = brand?.accentColor || '#f59e0b';
     const brandName = brand?.name || "Creator's Den";
     const handle = brand?.handle || '@CreatorsDen';
-    const logoUrl = brand?.logoUrl || '';
+    const headingFont = brand?.headingFont || 'Inter';
+    const bodyFont = brand?.bodyFont || 'Inter';
+
+    // Canvas Background Color based on Preset
+    let bgColor = primaryColor;
+    if (selectedPreset === 'template-bold') bgColor = '#0d0d0d';
+    if (selectedPreset === 'template-glass') bgColor = '#0a192f';
+    if (selectedPreset === 'template-visual') bgColor = '#0f172a';
+    if (selectedPreset === 'template-minimal') bgColor = '#121218';
+    if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
+
+    fabricCanvas.backgroundColor = bgColor;
+    fabricCanvas.renderAll();
 
     const addObjects = () => {
-        const objects = [];
+        // --- 1. Overlay Layer ---
+        let overlayFill = 'rgba(0,0,0,0.65)';
+        if (selectedPreset === 'template-bold') overlayFill = 'rgba(10,10,10,0.85)';
+        if (selectedPreset === 'template-glass') overlayFill = 'rgba(10, 25, 47, 0.75)';
+        if (selectedPreset === 'template-visual') overlayFill = 'rgba(0,0,0,0.25)';
+        if (selectedPreset === 'template-minimal') overlayFill = 'rgba(18,18,24,0.85)';
+        if (selectedPreset === 'template-custom' && brand?.customBgOpacity) {
+            const hex = (brand.customBgColor || '#000000').replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16) || 0;
+            const g = parseInt(hex.substring(2, 4), 16) || 0;
+            const b = parseInt(hex.substring(4, 6), 16) || 0;
+            const a = (brand.customBgOpacity || 85) / 100;
+            overlayFill = `rgba(${r},${g},${b},${a})`;
+        }
 
-        // --- Overlay Rectangle ---
+        if (isCTA) {
+            overlayFill = new fabric.Gradient({
+                type: 'linear', gradientUnits: 'pixels',
+                coords: { x1: 0, y1: 0, x2: 0, y2: CANVAS_H },
+                colorStops: [{ offset: 0, color: primaryColor }, { offset: 1, color: secondaryColor }]
+            });
+        }
+
         const overlay = new fabric.Rect({
             left: 0, top: 0,
             width: CANVAS_W, height: CANVAS_H,
-            fill: isCTA
-                ? new fabric.Gradient({ type: 'linear', gradientUnits: 'pixels', coords: { x1: 0, y1: 0, x2: 0, y2: CANVAS_H }, colorStops: [{ offset: 0, color: primaryColor }, { offset: 1, color: secondaryColor }] })
-                : `rgba(0,0,0,0.65)`,
-            selectable: false,
-            evented: false,
-            customType: 'overlay'
+            fill: overlayFill,
+            selectable: false, evented: false, customType: 'overlay'
         });
         fabricCanvas.add(overlay);
 
-        // --- Brand Header Bar (top strip) ---
-        const headerBar = new fabric.Rect({
-            left: 0, top: 0,
-            width: CANVAS_W, height: 130,
-            fill: 'rgba(0,0,0,0.4)',
-            selectable: false, evented: false, customType: 'header-bar'
-        });
-        fabricCanvas.add(headerBar);
+        // --- 2. Header Bar / Top Strip ---
+        if (selectedPreset !== 'template-minimal' && selectedPreset !== 'template-visual') {
+            const headerBar = new fabric.Rect({
+                left: 0, top: 0,
+                width: CANVAS_W, height: 130,
+                fill: selectedPreset === 'template-bold' ? '#141414' : 'rgba(0,0,0,0.4)',
+                selectable: false, evented: false, customType: 'header-bar'
+            });
+            fabricCanvas.add(headerBar);
+        }
 
-        // --- Brand Name / Handle Text in Header ---
+        // --- 3. Brand Name in Header ---
         const brandText = new fabric.IText(brandName, {
-            left: 80, top: 50,
-            fontSize: 36,
+            left: selectedPreset === 'template-bold' ? 90 : 80,
+            top: selectedPreset === 'template-minimal' ? 60 : 50,
+            fontSize: selectedPreset === 'template-bold' ? 38 : 36,
             fontWeight: '800',
-            fill: '#ffffff',
-            fontFamily: brand?.headingFont || 'Inter',
-            selectable: true,
-            isPlaceholder: 'brand-name',
-            customType: 'brand-name'
+            fill: selectedPreset === 'template-bold' ? '#ffd700' : '#ffffff',
+            fontFamily: headingFont,
+            selectable: true, isPlaceholder: 'brand-name', customType: 'brand-name'
         });
         fabricCanvas.add(brandText);
 
-        // --- Accent Divider Line ---
-        const accentLine = new fabric.Rect({
-            left: 80, top: 135,
-            width: 200, height: 6,
-            fill: accentColor,
-            rx: 3, ry: 3,
-            selectable: false, evented: false, customType: 'accent-line'
-        });
-        fabricCanvas.add(accentLine);
+        // --- 4. Accent Line ---
+        if (selectedPreset !== 'template-minimal') {
+            const accentLine = new fabric.Rect({
+                left: 80,
+                top: selectedPreset === 'template-minimal' ? 110 : 135,
+                width: selectedPreset === 'template-bold' ? 260 : 200,
+                height: selectedPreset === 'template-bold' ? 8 : 6,
+                fill: selectedPreset === 'template-bold' ? '#ffd700' : accentColor,
+                rx: 3, ry: 3,
+                selectable: false, evented: false, customType: 'accent-line'
+            });
+            fabricCanvas.add(accentLine);
+        }
 
         if (isCTA) {
             // ===== CTA SLIDE LAYOUT =====
             const ctaLabel = new fabric.IText('BEFORE YOU GO', {
                 left: CANVAS_W / 2, top: 420,
-                fontSize: 32,
-                fontWeight: '700',
-                fill: accentColor,
-                fontFamily: brand?.headingFont || 'Inter',
-                textAlign: 'center',
-                originX: 'center',
-                letterSpacing: 4,
-                selectable: true,
-                customType: 'cta-label'
+                fontSize: 32, fontWeight: '700',
+                fill: accentColor, fontFamily: headingFont,
+                textAlign: 'center', originX: 'center', letterSpacing: 4,
+                selectable: true, customType: 'cta-label'
             });
             fabricCanvas.add(ctaLabel);
 
             const ctaTitle = new fabric.Textbox(slideData.title || 'Follow for More! 🔥', {
-                left: 80, top: 500,
-                width: CANVAS_W - 160,
-                fontSize: 96,
-                fontWeight: '900',
-                fill: '#ffffff',
-                fontFamily: brand?.headingFont || 'Inter',
-                textAlign: 'center',
-                lineHeight: 1.1,
-                selectable: true,
-                isPlaceholder: 'title',
-                customType: 'title'
+                left: 80, top: 500, width: CANVAS_W - 160,
+                fontSize: 96, fontWeight: '900', fill: '#ffffff',
+                fontFamily: headingFont, textAlign: 'center', lineHeight: 1.1,
+                selectable: true, isPlaceholder: 'title', customType: 'title'
             });
             fabricCanvas.add(ctaTitle);
 
             const ctaBody = new fabric.Textbox(slideData.content || `Read the caption for the full breakdown ↓\n\nFollow ${handle} for amazing content every day.`, {
-                left: 80, top: 780,
-                width: CANVAS_W - 160,
-                fontSize: 46,
-                fill: 'rgba(255,255,255,0.88)',
-                fontFamily: brand?.bodyFont || 'Inter',
-                textAlign: 'center',
-                lineHeight: 1.5,
-                selectable: true,
-                isPlaceholder: 'body',
-                customType: 'body'
+                left: 80, top: 780, width: CANVAS_W - 160,
+                fontSize: 46, fill: 'rgba(255,255,255,0.88)',
+                fontFamily: bodyFont, textAlign: 'center', lineHeight: 1.5,
+                selectable: true, isPlaceholder: 'body', customType: 'body'
             });
             fabricCanvas.add(ctaBody);
 
-            // CTA Button-style box
             const ctaBtnRect = new fabric.Rect({
                 left: CANVAS_W / 2 - 200, top: 1050,
-                width: 400, height: 100,
-                fill: accentColor,
+                width: 400, height: 100, fill: accentColor,
                 rx: 50, ry: 50,
                 selectable: false, evented: false, customType: 'cta-btn-bg'
             });
@@ -665,63 +680,172 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
 
             const ctaBtnText = new fabric.IText('FOLLOW NOW', {
                 left: CANVAS_W / 2, top: 1090,
-                fontSize: 36,
-                fontWeight: '800',
-                fill: '#000000',
-                fontFamily: brand?.headingFont || 'Inter',
-                textAlign: 'center',
-                originX: 'center',
+                fontSize: 36, fontWeight: '800', fill: '#000000',
+                fontFamily: headingFont, textAlign: 'center', originX: 'center',
                 selectable: false, evented: false, customType: 'cta-btn-text'
             });
             fabricCanvas.add(ctaBtnText);
 
         } else {
-            // ===== CONTENT SLIDE LAYOUT =====
-            const slideTitle = new fabric.Textbox(slideData.title || '', {
-                left: 80, top: 210,
-                width: CANVAS_W - 160,
-                fontSize: 88,
-                fontWeight: '900',
-                fill: '#ffffff',
-                fontFamily: brand?.headingFont || 'Inter',
-                lineHeight: 1.1,
-                selectable: true,
-                isPlaceholder: 'title',
-                customType: 'title'
-            });
-            fabricCanvas.add(slideTitle);
+            // ===== CONTENT SLIDE LAYOUT BY PRESET =====
 
-            const titleBottom = 210 + slideTitle.getScaledHeight() + 40;
+            if (selectedPreset === 'template-glass') {
+                // Glassmorphism Card Container
+                const glassCard = new fabric.Rect({
+                    left: 60, top: 180,
+                    width: CANVAS_W - 120, height: 950,
+                    fill: 'rgba(255, 255, 255, 0.12)',
+                    stroke: 'rgba(255, 255, 255, 0.35)',
+                    strokeWidth: 2,
+                    rx: 36, ry: 36,
+                    selectable: false, evented: false, customType: 'glass-card'
+                });
+                fabricCanvas.add(glassCard);
 
-            const slideBody = new fabric.Textbox(slideData.content || '', {
-                left: 80,
-                top: Math.max(titleBottom, 450),
-                width: CANVAS_W - 160,
-                fontSize: 52,
-                fill: 'rgba(255,255,255,0.90)',
-                fontFamily: brand?.bodyFont || 'Inter',
-                lineHeight: 1.55,
-                selectable: true,
-                isPlaceholder: 'body',
-                customType: 'body'
-            });
-            fabricCanvas.add(slideBody);
+                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                    left: 100, top: 230, width: CANVAS_W - 200,
+                    fontSize: 80, fontWeight: '800', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = 230 + slideTitle.getScaledHeight() + 35;
+                const slideBody = new fabric.Textbox(slideData.content || '', {
+                    left: 100, top: Math.max(titleBottom, 420), width: CANVAS_W - 200,
+                    fontSize: 48, fill: '#f8fafc',
+                    fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-bold') {
+                // Bold Yellow Vertical Left Bar
+                const verticalBar = new fabric.Rect({
+                    left: 65, top: 210,
+                    width: 14, height: 820,
+                    fill: '#ffd700', rx: 7, ry: 7,
+                    selectable: false, evented: false, customType: 'bold-vertical-bar'
+                });
+                fabricCanvas.add(verticalBar);
+
+                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                    left: 105, top: 210, width: CANVAS_W - 185,
+                    fontSize: 92, fontWeight: '900', fill: '#ffd700',
+                    fontFamily: headingFont, lineHeight: 1.1,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = 210 + slideTitle.getScaledHeight() + 35;
+                const slideBody = new fabric.Textbox(slideData.content || '', {
+                    left: 105, top: Math.max(titleBottom, 450), width: CANVAS_W - 185,
+                    fontSize: 50, fontWeight: '600', fill: '#ffffff',
+                    fontFamily: bodyFont, lineHeight: 1.5,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-visual') {
+                // Bottom Solid Panel
+                const bottomPanel = new fabric.Rect({
+                    left: 0, top: 800,
+                    width: CANVAS_W, height: 550,
+                    fill: 'rgba(15, 23, 42, 0.94)',
+                    stroke: accentColor, strokeWidth: 4,
+                    selectable: false, evented: false, customType: 'bottom-panel'
+                });
+                fabricCanvas.add(bottomPanel);
+
+                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                    left: 80, top: 840, width: CANVAS_W - 160,
+                    fontSize: 72, fontWeight: '800', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = 840 + slideTitle.getScaledHeight() + 25;
+                const slideBody = new fabric.Textbox(slideData.content || '', {
+                    left: 80, top: Math.max(titleBottom, 960), width: CANVAS_W - 160,
+                    fontSize: 44, fill: '#cbd5e1',
+                    fontFamily: bodyFont, lineHeight: 1.5,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-minimal') {
+                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                    left: 80, top: 230, width: CANVAS_W - 160,
+                    fontSize: 84, fontWeight: '700', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = 230 + slideTitle.getScaledHeight() + 35;
+                const slideBody = new fabric.Textbox(slideData.content || '', {
+                    left: 80, top: Math.max(titleBottom, 460), width: CANVAS_W - 160,
+                    fontSize: 48, fontWeight: '400', fill: '#cbd5e1',
+                    fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-custom') {
+                const customTitleSize = parseFloat(brand?.customTitleSize || 100) * 0.88;
+                const customTitleY = 210 + (parseFloat(brand?.customTitleY || 50) - 50) * 2;
+                const customContentY = (parseFloat(brand?.customContentY || 70) / 100) * CANVAS_H;
+
+                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                    left: 80, top: customTitleY, width: CANVAS_W - 160,
+                    fontSize: customTitleSize, fontWeight: '900', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.1,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                });
+                fabricCanvas.add(slideTitle);
+
+                const slideBody = new fabric.Textbox(slideData.content || '', {
+                    left: 80, top: customContentY, width: CANVAS_W - 160,
+                    fontSize: 52, fill: 'rgba(255,255,255,0.90)',
+                    fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                });
+                fabricCanvas.add(slideBody);
+
+            } else {
+                // Default / Classic Template
+                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                    left: 80, top: 210, width: CANVAS_W - 160,
+                    fontSize: 88, fontWeight: '900', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.1,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = 210 + slideTitle.getScaledHeight() + 40;
+                const slideBody = new fabric.Textbox(slideData.content || '', {
+                    left: 80, top: Math.max(titleBottom, 450), width: CANVAS_W - 160,
+                    fontSize: 52, fill: 'rgba(255,255,255,0.90)',
+                    fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                });
+                fabricCanvas.add(slideBody);
+            }
 
             // Slide number badge
+            const badgeColor = selectedPreset === 'template-bold' ? '#ffd700' : accentColor;
+            const badgeTextColor = selectedPreset === 'template-bold' ? '#000000' : '#000000';
             const slideNumBadge = new fabric.Rect({
                 left: CANVAS_W - 160, top: CANVAS_H - 100,
-                width: 100, height: 60,
-                fill: accentColor,
+                width: 100, height: 60, fill: badgeColor,
                 rx: 30, ry: 30,
                 selectable: false, evented: false, customType: 'slide-num-bg'
             });
             const slideNumText = new fabric.IText(`${slideIndex + 1}/${currentSlides.length}`, {
                 left: CANVAS_W - 110, top: CANVAS_H - 88,
-                fontSize: 30,
-                fontWeight: '700',
-                fill: '#000000',
-                fontFamily: 'Inter',
-                originX: 'center',
+                fontSize: 30, fontWeight: '700', fill: badgeTextColor,
+                fontFamily: 'Inter', originX: 'center',
                 selectable: false, evented: false, customType: 'slide-num'
             });
             const showPagination = document.getElementById('toggle-slide-numbers')?.checked !== false;
@@ -734,10 +858,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         // --- Footer Handle ---
         const footerHandle = new fabric.IText(handle, {
             left: 80, top: CANVAS_H - 80,
-            fontSize: 32,
-            fontWeight: '600',
-            fill: 'rgba(255,255,255,0.6)',
-            fontFamily: brand?.bodyFont || 'Inter',
+            fontSize: 32, fontWeight: '600',
+            fill: selectedPreset === 'template-bold' ? '#ffd700' : 'rgba(255,255,255,0.6)',
+            fontFamily: bodyFont,
             selectable: false, evented: false, customType: 'footer-handle'
         });
         fabricCanvas.add(footerHandle);
