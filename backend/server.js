@@ -252,6 +252,9 @@ IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be 
         const cleanTitle = newsTitle.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 100);
         const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanTitle + " realistic photography cinematic lighting weird funny")}`;
 
+        // Sanitize brand_id for database insertion (ignore default-brand / mock IDs)
+        const cleanBrandId = (brand_id && typeof brand_id === 'string' && !brand_id.startsWith('default') && !brand_id.startsWith('mock')) ? brand_id : null;
+
         // 2. Insert into Supabase
         const { data, error } = await supabase
             .from('posts')
@@ -261,7 +264,7 @@ IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be 
                     text: text, 
                     status: 'Draft',
                     image_url: generatedImageUrl,
-                    brand_id: brand_id || null
+                    brand_id: cleanBrandId
                 }
             ])
             .select();
@@ -329,6 +332,9 @@ IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be 
         const cleanTopic = factTopic.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 100);
         const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanTopic + " stunning high resolution photography detailed vibrant cinematic 8k")}`;
 
+        // Sanitize brand_id for database insertion (ignore default-brand / mock IDs)
+        const cleanBrandId = (brand_id && typeof brand_id === 'string' && !brand_id.startsWith('default') && !brand_id.startsWith('mock')) ? brand_id : null;
+
         // Insert into Supabase
         const { data, error } = await supabase
             .from('posts')
@@ -338,7 +344,7 @@ IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be 
                     text: text, 
                     status: 'Draft',
                     image_url: generatedImageUrl,
-                    brand_id: brand_id || null
+                    brand_id: cleanBrandId
                 }
             ])
             .select();

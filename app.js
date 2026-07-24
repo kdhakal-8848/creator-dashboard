@@ -1246,16 +1246,24 @@ if (triggerFactsBtn) {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Failed to generate facts carousel.");
             
-            if (isMockMode) {
-                const newPost = data.post || {
-                    id: Date.now().toString(),
-                    topic: `[Facts Lab] ${topic}`,
-                    text: data.text,
-                    image_url: data.image_url,
-                    status: 'Draft',
-                    brand_id: brandId,
-                    updated_at: new Date().toISOString()
-                };
+            if (data.db_error) {
+                console.warn("Database failed to save post:", data.db_error);
+                if (!isMockMode) {
+                    isMockMode = true;
+                }
+            }
+            
+            const newPost = data.post || {
+                id: Date.now().toString(),
+                topic: `[Facts Lab] ${topic.substring(0, 50)}`,
+                text: data.text,
+                image_url: data.image_url,
+                status: 'Draft',
+                brand_id: brandId,
+                updated_at: new Date().toISOString()
+            };
+
+            if (isMockMode || !data.post) {
                 if (!mockPosts.find(p => p.id === newPost.id)) {
                     mockPosts.unshift(newPost);
                     saveMockPosts();
@@ -1268,8 +1276,14 @@ if (triggerFactsBtn) {
             overlay.style.display = 'none';
             feedback.style.display = 'block';
             
+            // Reset queue filters to 'All' so the new post is never hidden
+            const qBrandFilter = document.getElementById('queue-brand-filter');
+            if (qBrandFilter) qBrandFilter.value = 'All';
+            const statusFilter = document.getElementById('status-filter');
+            if (statusFilter) statusFilter.value = 'All';
+
             await loadQueue();
-            const postId = data.post ? data.post.id : (mockPosts[0] ? mockPosts[0].id : null);
+            const postId = data.post ? data.post.id : newPost.id;
             if (postId) {
                 window.openEditor(postId);
             } else {
