@@ -5,54 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Creator's Den — Content Engine</title>
     <meta name="description" content="Creator's Den multi-brand content creation and management platform">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Feather Icons -->
     <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Fabric.js v5 Canvas Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <!-- Styles -->
-    <link rel="stylesheet" href="index.css?v=20260724_v1">
-    <!-- html2canvas -->
+    <link rel="stylesheet" href="index.css?v=20260724_v2">
+    <!-- html2canvas (fallback) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
     <!-- Login Container -->
-    <div id="login-container" style="display: flex; height: 100vh; align-items: center; justify-content: center; background-color: #f6f8fa;">
-        <div id="signin-card" style="width: 340px; padding: 24px; text-align: center; background: #fff; border: 1px solid #d0d7de; border-radius: 12px;">
-            <div style="width: 48px; height: 48px; border-radius: 50%; background: #1f883d; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
-                <i data-feather="cpu" style="width: 24px; height: 24px; color: white;"></i>
+    <div id="login-container" style="display: flex; height: 100vh; align-items: center; justify-content: center; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);">
+        <div id="signin-card" style="width: 360px; padding: 32px; text-align: center; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,0.5);">
+            <div style="width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; box-shadow: 0 8px 24px rgba(99,102,241,0.4);">
+                <i data-feather="cpu" style="width: 28px; height: 28px; color: white;"></i>
             </div>
-            <h2 style="margin-bottom: 4px; font-size: 20px;">Sign in to Creator's Den</h2>
-            <p style="color: #656d76; margin-bottom: 20px; font-size: 14px;">Content Engine</p>
+            <h2 style="margin-bottom: 4px; font-size: 22px; color: white; font-weight: 700;">Creator's Den</h2>
+            <p style="color: rgba(255,255,255,0.5); margin-bottom: 28px; font-size: 14px;">Content Engine</p>
             
             <div style="text-align: left;">
-                <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Email address</label>
-                <input type="email" id="login-email" style="width: 100%; padding: 5px 12px; margin-bottom: 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
+                <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; color: rgba(255,255,255,0.7);">Email address</label>
+                <input type="email" id="login-email" style="width: 100%; padding: 10px 14px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.08); color: white; box-sizing: border-box;">
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <label style="font-size: 14px; font-weight: 600;">Password</label>
-                    <a href="#" id="forgot-password-link" style="font-size: 12px; color: #0969da; text-decoration: none;">Forgot password?</a>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.7);">Password</label>
+                    <a href="#" id="forgot-password-link" style="font-size: 12px; color: #818cf8; text-decoration: none;">Forgot password?</a>
                 </div>
-                <input type="password" id="login-password" style="width: 100%; padding: 5px 12px; margin-bottom: 16px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
+                <input type="password" id="login-password" style="width: 100%; padding: 10px 14px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.08); color: white; box-sizing: border-box;">
             </div>
             
-            <button id="login-btn" style="width: 100%; padding: 8px 16px; background: #1f883d; color: white; border: 1px solid rgba(27,31,36,0.15); border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Sign in</button>
-            <p id="login-feedback" style="margin-top: 12px; font-size: 14px; color: #d1242f;"></p>
+            <button id="login-btn" style="width: 100%; padding: 12px 16px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(99,102,241,0.4);">Sign In</button>
+            <p id="login-feedback" style="margin-top: 14px; font-size: 14px; color: #f87171;"></p>
         </div>
 
         <!-- Forgot / Reset Password Card -->
-        <div id="reset-password-card" style="display: none; width: 340px; padding: 24px; text-align: center; background: #fff; border: 1px solid #d0d7de; border-radius: 12px;">
-            <div style="width: 48px; height: 48px; border-radius: 50%; background: #0969da; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
-                <i data-feather="key" style="width: 24px; height: 24px; color: white;"></i>
+        <div id="reset-password-card" style="display: none; width: 360px; padding: 32px; text-align: center; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;">
+            <div style="width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, #0ea5e9, #6366f1); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;">
+                <i data-feather="key" style="width: 28px; height: 28px; color: white;"></i>
             </div>
-            <h2 style="margin-bottom: 4px; font-size: 20px;">Reset Password</h2>
-            <p style="color: #656d76; margin-bottom: 20px; font-size: 13px;">Enter your email to receive a password reset link.</p>
+            <h2 style="margin-bottom: 4px; font-size: 22px; color: white; font-weight: 700;">Reset Password</h2>
+            <p style="color: rgba(255,255,255,0.5); margin-bottom: 24px; font-size: 13px;">Enter your email to receive a reset link.</p>
             
             <div style="text-align: left;">
-                <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Account Email</label>
-                <input type="email" id="reset-email" placeholder="name@example.com" style="width: 100%; padding: 5px 12px; margin-bottom: 16px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
+                <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; color: rgba(255,255,255,0.7);">Account Email</label>
+                <input type="email" id="reset-email" placeholder="name@example.com" style="width: 100%; padding: 10px 14px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.08); color: white; box-sizing: border-box;">
             </div>
             
-            <button id="send-reset-btn" style="width: 100%; padding: 8px 16px; background: #0969da; color: white; border: 1px solid rgba(27,31,36,0.15); border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">Send Reset Link</button>
-            <button id="back-to-signin-btn" style="width: 100%; padding: 6px 12px; background: transparent; color: #656d76; border: 1px solid #d0d7de; border-radius: 6px; font-size: 13px; cursor: pointer;">Back to Sign In</button>
-            <p id="reset-feedback" style="margin-top: 12px; font-size: 14px; color: #d1242f;"></p>
+            <button id="send-reset-btn" style="width: 100%; padding: 12px 16px; background: linear-gradient(135deg, #0ea5e9, #6366f1); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 12px;">Send Reset Link</button>
+            <button id="back-to-signin-btn" style="width: 100%; padding: 10px 12px; background: transparent; color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 13px; cursor: pointer;">Back to Sign In</button>
+            <p id="reset-feedback" style="margin-top: 14px; font-size: 14px; color: #f87171;"></p>
         </div>
     </div>
 
@@ -69,8 +73,9 @@
                 <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
                 <li><a href="#" data-target="news-view"><i data-feather="globe"></i> News Lab</a></li>
                 <li><a href="#" data-target="facts-view"><i data-feather="zap"></i> Facts Lab</a></li>
+                <li><a href="#" data-target="template-studio-view"><i data-feather="layout"></i> Template Studio</a></li>
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
-                <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Branding</a></li>
+                <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Brand Identity</a></li>
                 <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Account Settings</a></li>
                 <li style="margin-top: auto;"><a href="#" id="logout-btn" style="color: var(--color-danger-fg);"><i data-feather="log-out"></i> Logout</a></li>
             </ul>
@@ -86,12 +91,17 @@
                     </button>
                     <h1>Dashboard</h1>
                 </div>
-                <div class="user-profile">
-                    <img id="user-avatar" src="https://ui-avatars.com/api/?name=Admin&background=random" alt="User">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span id="active-brand-chip" style="font-size: 12px; font-weight: 600; padding: 4px 10px; background: var(--color-neutral-muted); border-radius: 20px; color: var(--color-fg-muted);">Creator's Den</span>
+                    <div class="user-profile">
+                        <img id="user-avatar" src="https://ui-avatars.com/api/?name=AD&background=random" alt="User">
+                    </div>
                 </div>
             </header>
 
-            <!-- Views -->
+            <!-- ============================================================ -->
+            <!-- Dashboard -->
+            <!-- ============================================================ -->
             <div id="home-view" class="view active-view">
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -123,159 +133,37 @@
                                 <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody id="recent-activity-table">
-                            <!-- Populated by JS -->
-                        </tbody>
+                        <tbody id="recent-activity-table"></tbody>
                     </table>
                 </div>
             </div>
 
+            <!-- ============================================================ -->
+            <!-- Content Queue -->
+            <!-- ============================================================ -->
             <div id="queue-view" class="view">
                 <div class="view-header">
                     <h2>Content Queue</h2>
-                    <select id="queue-brand-filter" style="margin-right: 8px;">
-                        <option value="All">All Brands</option>
-                    </select>
-                    <select id="status-filter">
-                        <option value="All">All Statuses</option>
-                        <option value="Draft">Draft</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Queued">Queued</option>
-                        <option value="Published">Published</option>
-                        <option value="Failed">Failed</option>
-                    </select>
-                </div>
-                <div class="cards-grid" id="queue-grid">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-
-            <div id="branding-view" class="view">
-                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2>Brand Identity</h2>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <select id="brand-selector" style="min-width: 200px;">
-                            <option value="">Loading Brands...</option>
+                        <select id="queue-brand-filter" style="margin-right: 8px;">
+                            <option value="All">All Brands</option>
                         </select>
-                        <button class="btn-secondary" id="create-brand-btn"><i data-feather="plus"></i> New Brand</button>
+                        <select id="status-filter">
+                            <option value="All">All Statuses</option>
+                            <option value="Draft">Draft</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Queued">Queued</option>
+                            <option value="Published">Published</option>
+                            <option value="Failed">Failed</option>
+                        </select>
                     </div>
                 </div>
-                <div class="settings-list" style="max-width: 640px;">
-                    <div class="setting-item">
-                        <label>Brand Name</label>
-                        <input type="text" id="brand-name-input" placeholder="e.g. Creator's Den">
-                    </div>
-                    <div class="setting-item">
-                        <label>Brand Handle</label>
-                        <input type="text" id="brand-handle-input" placeholder="e.g. @CreatorsDen">
-                    </div>
-                    <div class="two-col-grid">
-                        <div class="setting-item">
-                            <label>Facebook URL</label>
-                            <input type="url" id="facebook-url-input" placeholder="https://facebook.com/...">
-                        </div>
-                        <div class="setting-item">
-                            <label>Instagram URL</label>
-                            <input type="url" id="instagram-url-input" placeholder="https://instagram.com/...">
-                        </div>
-                        <div class="setting-item">
-                            <label>TikTok URL</label>
-                            <input type="url" id="tiktok-url-input" placeholder="https://tiktok.com/...">
-                        </div>
-                        <div class="setting-item">
-                            <label>LinkedIn URL</label>
-                            <input type="url" id="linkedin-url-input" placeholder="https://linkedin.com/...">
-                        </div>
-                    </div>
-                    <div class="two-col-grid">
-                        <div class="setting-item">
-                            <label>Primary Brand Color</label>
-                            <input type="color" id="brand-primary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
-                        </div>
-                        <div class="setting-item">
-                            <label>Secondary Brand Color</label>
-                            <input type="color" id="brand-secondary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
-                        </div>
-                    </div>
-                    <div class="two-col-grid">
-                        <div class="setting-item">
-                            <label>Brand Logo</label>
-                            <div style="display: flex; align-items: center; gap: 16px;">
-                                <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="width: 64px; height: 64px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px;">
-                                <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
-                                    <i data-feather="upload"></i> Upload Logo
-                                    <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
-                                </label>
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <label>Brand Header Asset (Handle & Badge)</label>
-                            <div style="display: flex; align-items: center; gap: 16px;">
-                                <img id="brand-header-asset-preview" src="assets/images/logo.png" alt="Header Asset Preview" style="max-width: 140px; height: 50px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px; background: #fafafa;">
-                                <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
-                                    <i data-feather="upload"></i> Upload Header Asset
-                                    <input type="file" id="brand-header-asset-upload" style="display:none;" accept="image/*">
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <h3 style="margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">Custom Template Designer</h3>
-                    <div class="two-col-grid">
-                        <div class="form-group">
-                            <label>Title Size (%)</label>
-                            <input type="range" id="custom-title-size" min="50" max="200" value="100" class="full-width">
-                        </div>
-                        <div class="form-group">
-                            <label>Title Y-Position (%)</label>
-                            <input type="range" id="custom-title-y" min="0" max="100" value="50" class="full-width">
-                        </div>
-                        <div class="form-group">
-                            <label>Content Y-Position (%)</label>
-                            <input type="range" id="custom-content-y" min="0" max="100" value="70" class="full-width">
-                        </div>
-                        <div class="form-group">
-                            <label>Overlay Opacity (%)</label>
-                            <input type="range" id="custom-bg-opacity" min="0" max="100" value="85" class="full-width">
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label>Overlay Color</label>
-                            <input type="color" id="custom-bg-color" value="#000000" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label>Theme Style (Shapes & Accents)</label>
-                            <select id="custom-theme-preset" class="full-width" style="padding: 8px; border: 1px solid #d0d7de; border-radius: 6px;">
-                                <option value="theme-default">Default (Clean)</option>
-                                <option value="theme-minimal">Minimal (Line Accent)</option>
-                                <option value="theme-boxed">Boxed (Title Highlight)</option>
-                                <option value="theme-highlighted">Highlighted (Overlay Box)</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="grid-column: span 2;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
-                                <input type="checkbox" id="custom-show-pagination" checked>
-                                Show Slide Numbers (e.g. 1 / 5) by default
-                            </label>
-                        </div>
-                    </div>
-
-                    <h3 style="margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">AI Engine Instructions</h3>
-                    <div style="padding: 12px 0;">
-                        <p style="font-size: 13px; color: #656d76; margin-bottom: 12px;">
-                            Use <code>${topic}</code> and <code>${contentType}</code> as variables.
-                        </p>
-                        <textarea id="prompt-template-input" class="rich-textarea" style="min-height: 160px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size: 13px; width: 100%;" spellcheck="false"></textarea>
-                    </div>
-
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button class="btn-primary" id="save-branding"><i data-feather="save"></i> Save Settings</button>
-                        <button class="btn-secondary" id="reset-prompt-btn"><i data-feather="refresh-cw"></i> Reset Prompt</button>
-                    </div>
-                    <p id="branding-feedback" class="feedback-msg"></p>
-                </div>
+                <div class="cards-grid" id="queue-grid"></div>
             </div>
 
-            <!-- Editor View -->
+            <!-- ============================================================ -->
+            <!-- Editor View (Fabric.js Canvas) -->
+            <!-- ============================================================ -->
             <div id="editor-view" class="view">
                 <button class="btn-secondary" id="back-to-queue"><i data-feather="arrow-left"></i> Back</button>
                 <div class="editor-container">
@@ -291,31 +179,17 @@
                             </div>
                         </div>
                         
-                        <!-- Real-time Slide Preview -->
+                        <!-- Fabric.js Canvas Preview -->
                         <div class="slide-preview-wrapper">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 0 4px;">
-                                <span style="font-size: 13px; font-weight: 600; color: #656d76;">Preview</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 4px; width: 100%;">
+                                <span style="font-size: 13px; font-weight: 600; color: #656d76;">Canvas (Click to select & edit elements)</span>
+                                <div style="display: flex; gap: 6px;">
+                                    <button class="btn-secondary" id="canvas-undo" style="padding: 3px 8px; font-size: 12px;" title="Undo"><i data-feather="corner-up-left" style="width:13px;height:13px;"></i></button>
+                                    <button class="btn-secondary" id="canvas-redo" style="padding: 3px 8px; font-size: 12px;" title="Redo"><i data-feather="corner-up-right" style="width:13px;height:13px;"></i></button>
+                                </div>
                             </div>
                             <div class="slide-preview-stage" id="slide-stage">
-                                <div class="slide-card" id="slide-render-target">
-                                    <img id="slide-bg-img" src="" alt="Background" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:1;">
-                                    <div class="slide-bg-overlay"></div>
-                                    <div class="slide-header" id="slide-header-container">
-                                        <img id="slide-brand-header-asset" src="" alt="Header Asset" style="display:none; height: 52px; max-width: 80%; object-fit: contain; z-index: 2;">
-                                        <div id="slide-brand-default-header" style="display: flex; align-items: center;">
-                                            <img id="slide-brand-logo" src="assets/images/logo.png" alt="Brand Logo" style="height: 48px; margin-right: 16px;">
-                                            <span id="slide-brand-name">CREATOR'S DEN</span>
-                                        </div>
-                                    </div>
-                                    <div class="slide-content">
-                                        <h1 id="preview-title" contenteditable="true" spellcheck="false" title="Click directly to edit text (Figma style)">Slide Title</h1>
-                                        <p id="preview-body" contenteditable="true" spellcheck="false" title="Click directly to edit text (Figma style)">Slide content goes here...</p>
-                                    </div>
-                                    <div class="slide-footer">
-                                        <span id="slide-brand-handle">@CreatorsDen</span>
-                                        <span id="preview-pagination">1 / 2</span>
-                                    </div>
-                                </div>
+                                <canvas id="slide-canvas"></canvas>
                             </div>
                             <div class="preview-controls">
                                 <button class="btn-secondary" id="prev-slide"><i data-feather="chevron-left"></i></button>
@@ -326,24 +200,72 @@
 
                         <hr class="divider">
 
-                        <h3>Slide Content</h3>
+                        <!-- Slide Content Form -->
+                        <h3>Slide Content <span id="slide-form-cta-badge" style="display:none; font-size:11px; background:#10b981; color:#fff; padding:2px 8px; border-radius:20px; font-weight:600; margin-left:8px;">CTA Slide</span></h3>
                         <div id="slides-form-container" style="margin-bottom: 16px;"></div>
                         
-                        <h3>Social Media Caption</h3>
-                        <textarea id="caption-text" class="rich-textarea" rows="4" style="min-height: 100px;"></textarea>
-                        <button class="btn-secondary margin-bottom" id="copy-caption" style="margin-top: 8px;"><i data-feather="copy"></i> Copy Caption</button>
+                        <!-- Instagram Caption Box -->
+                        <h3 style="margin-top: 16px;">Instagram Caption</h3>
+                        <div id="caption-box" class="caption-box">
+                            <div class="caption-section" id="caption-hook-section">
+                                <div class="caption-section-label">🪝 Hook</div>
+                                <div class="caption-section-text" id="caption-hook" contenteditable="true" spellcheck="true"></div>
+                            </div>
+                            <div class="caption-section" id="caption-body-section">
+                                <div class="caption-section-label">📝 Body</div>
+                                <div class="caption-section-text" id="caption-body" contenteditable="true" spellcheck="true"></div>
+                            </div>
+                            <div class="caption-section" id="caption-cta-section">
+                                <div class="caption-section-label">🎯 CTA</div>
+                                <div class="caption-section-text" id="caption-cta" contenteditable="true" spellcheck="true"></div>
+                            </div>
+                            <div class="caption-section" id="caption-hashtags-section">
+                                <div class="caption-section-label">🏷️ Hashtags</div>
+                                <div id="caption-hashtags-container">
+                                    <div class="hashtag-group"><span class="hashtag-group-label">Niche</span><span class="hashtag-group-tags" id="hashtags-niche"></span></div>
+                                    <div class="hashtag-group"><span class="hashtag-group-label">Broad</span><span class="hashtag-group-tags" id="hashtags-broad"></span></div>
+                                    <div class="hashtag-group"><span class="hashtag-group-label">High-Intent</span><span class="hashtag-group-tags" id="hashtags-high-intent"></span></div>
+                                </div>
+                            </div>
+                            <!-- Fallback plain textarea for old posts -->
+                            <textarea id="caption-text-fallback" class="rich-textarea" rows="4" style="min-height: 80px; display:none;"></textarea>
+                        </div>
+                        <button class="btn-secondary margin-bottom" id="copy-caption" style="margin-top: 8px;"><i data-feather="copy"></i> Copy Full Caption</button>
                     </div>
 
                     <div class="editor-sidebar">
-                        <h3>Background Image</h3>
+                        <h3>Slide Background</h3>
                         <div class="image-preview" id="editor-image-container">
                             <img id="editor-image" src="" alt="Preview">
                         </div>
-                        <label class="btn-secondary full-width text-center" style="display:block; cursor:pointer;">
-                            <i data-feather="upload"></i> Set Background
+                        <label class="btn-secondary full-width text-center" style="display:block; cursor:pointer; margin-bottom:8px;">
+                            <i data-feather="upload"></i> Replace This Slide's Image
                             <input type="file" id="image-upload" style="display:none;" accept="image/*">
                         </label>
+                        <p id="slide-image-note" style="font-size: 11px; color: var(--color-fg-muted); margin-bottom: 12px;">Replaces the background for the current slide only.</p>
                         
+                        <hr class="divider">
+
+                        <h3>Text Formatting</h3>
+                        <div class="text-format-controls" id="text-format-panel">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                                <div>
+                                    <label style="font-size: 11px; margin-bottom: 3px;">Font Size</label>
+                                    <input type="number" id="fmt-font-size" value="72" min="12" max="200" style="padding: 4px 8px; font-size: 13px;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 11px; margin-bottom: 3px;">Color</label>
+                                    <input type="color" id="fmt-color" value="#ffffff" style="height: 30px; width: 100%; padding: 2px; border-radius: 4px; cursor: pointer;">
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                                <button class="btn-secondary fmt-btn" data-fmt="bold" style="flex:1; font-weight:700; padding: 5px;"><b>B</b></button>
+                                <button class="btn-secondary fmt-btn" data-fmt="italic" style="flex:1; font-style:italic; padding: 5px;"><i>I</i></button>
+                                <button class="btn-secondary fmt-btn" data-fmt="align-left" style="flex:1; padding: 5px;" title="Align Left"><i data-feather="align-left" style="width:14px;height:14px;"></i></button>
+                                <button class="btn-secondary fmt-btn" data-fmt="align-center" style="flex:1; padding: 5px;" title="Align Center"><i data-feather="align-center" style="width:14px;height:14px;"></i></button>
+                            </div>
+                        </div>
+
                         <hr class="divider">
                         
                         <h3>Template</h3>
@@ -352,8 +274,15 @@
                             <option value="template-glass">Glassmorphism</option>
                             <option value="template-bold">Bold Impact</option>
                             <option value="template-visual">Visual Heavy (75% Image)</option>
-                            <option value="template-custom">Custom Advanced Template</option>
+                            <option value="template-custom">Custom Advanced</option>
                         </select>
+                        <div id="saved-templates-section">
+                            <label style="font-size: 12px; color: var(--color-fg-muted);">Saved Templates</label>
+                            <select id="saved-template-selector" style="width: 100%; margin-bottom: 8px; font-size: 13px;">
+                                <option value="">— Select a saved template —</option>
+                            </select>
+                            <button class="btn-secondary full-width" id="apply-saved-template" style="font-size: 13px; margin-bottom: 12px;"><i data-feather="check"></i> Apply Template</button>
+                        </div>
                         <div style="margin-bottom: 16px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal; font-size: 14px;">
                                 <input type="checkbox" id="toggle-slide-numbers" checked> Show Slide Numbers
@@ -376,6 +305,9 @@
                 </div>
             </div>
 
+            <!-- ============================================================ -->
+            <!-- Manual Input View -->
+            <!-- ============================================================ -->
             <div id="manual-view" class="view">
                 <h2 style="margin-bottom: 4px;">Generate Content</h2>
                 <p style="color: #656d76; margin-bottom: 20px;">Trigger AI generation for a specific topic.</p>
@@ -398,9 +330,7 @@
                     </div>
                     <div class="form-group">
                         <label>Target Brand</label>
-                        <select id="manual-brand" class="full-width">
-                            <!-- Populated dynamically -->
-                        </select>
+                        <select id="manual-brand" class="full-width"><!-- Populated dynamically --></select>
                     </div>
                     <div class="form-group">
                         <label style="display: flex; justify-content: space-between; align-items: center;">
@@ -410,9 +340,7 @@
                         <input type="text" id="manual-topic" placeholder="e.g. Geography of Nepal - Rivers">
                     </div>
                     <button class="btn-primary" id="trigger-manual"><i data-feather="zap"></i> Generate Content</button>
-                    
                     <div id="manual-feedback" class="feedback-msg"></div>
-                    
                     <div id="manual-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
                         <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
                         <h3 style="margin-bottom: 8px; font-size: 16px;">Generating Content...</h3>
@@ -421,12 +349,15 @@
                 </div>
             </div>
 
+            <!-- ============================================================ -->
+            <!-- News Lab View -->
+            <!-- ============================================================ -->
             <div id="news-view" class="view">
                 <h2 style="margin-bottom: 4px;">News Lab</h2>
-                <p style="color: #656d76; margin-bottom: 20px;">Automatically fetch interesting and weird international news to generate engaging content.</p>
+                <p style="color: #656d76; margin-bottom: 20px;">Automatically fetch interesting international news and generate engaging carousels.</p>
                 <div style="max-width: 560px;">
                     <div class="form-group">
-                        <label>Content Type / Template</label>
+                        <label>Content Type / Style</label>
                         <select id="news-content-type" class="full-width">
                             <option value="Standard News Summary">Standard News Summary</option>
                             <option value="Conspiracy Theory Style">Conspiracy Theory Style</option>
@@ -444,14 +375,10 @@
                     </div>
                     <div class="form-group">
                         <label>Target Brand</label>
-                        <select id="news-brand" class="full-width">
-                            <!-- Populated dynamically -->
-                        </select>
+                        <select id="news-brand" class="full-width"><!-- Populated dynamically --></select>
                     </div>
-                    <button class="btn-primary" id="trigger-news"><i data-feather="globe"></i> Generate Weird News Post</button>
-                    
+                    <button class="btn-primary" id="trigger-news"><i data-feather="globe"></i> Generate News Post</button>
                     <div id="news-feedback" class="feedback-msg"></div>
-                    
                     <div id="news-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
                         <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
                         <h3 style="margin-bottom: 8px; font-size: 16px;">Fetching & Generating Content...</h3>
@@ -460,10 +387,12 @@
                 </div>
             </div>
 
+            <!-- ============================================================ -->
             <!-- Facts Lab View -->
+            <!-- ============================================================ -->
             <div id="facts-view" class="view">
-                <h2 style="margin-bottom: 4px;">Facts Lab (Instagram Carousel Creator)</h2>
-                <p style="color: #656d76; margin-bottom: 20px;">Generate high-converting, amazing facts carousels complete with AI images, "Did you know?" cover hook, and customizable slide details.</p>
+                <h2 style="margin-bottom: 4px;">Facts Lab — Instagram Carousel Creator</h2>
+                <p style="color: #656d76; margin-bottom: 20px;">Generate high-converting facts carousels with unique AI images per slide, hook cover, and CTA finale.</p>
                 <div style="max-width: 600px;">
                     <div class="form-group">
                         <label>Fact Topic / Niche</label>
@@ -488,7 +417,7 @@
                             <label>Number of Slides</label>
                             <select id="facts-slide-count" class="full-width">
                                 <option value="3">3 Slides (Quick Fact)</option>
-                                <option value="5" selected>5 Slides (Standard Fact)</option>
+                                <option value="5" selected>5 Slides (Standard)</option>
                                 <option value="7">7 Slides (Deep Dive)</option>
                             </select>
                         </div>
@@ -496,29 +425,158 @@
 
                     <div class="form-group">
                         <label>Target Brand</label>
-                        <select id="facts-brand" class="full-width">
-                            <!-- Populated dynamically -->
-                        </select>
+                        <select id="facts-brand" class="full-width"><!-- Populated dynamically --></select>
                     </div>
 
                     <button class="btn-primary full-width" id="trigger-facts" style="padding: 12px; font-size: 15px;"><i data-feather="zap"></i> Generate Amazing Facts Carousel</button>
-                    
                     <div id="facts-feedback" class="feedback-msg"></div>
-                    
                     <div id="facts-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
                         <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
                         <h3 style="margin-bottom: 8px; font-size: 16px;">Crafting Facts & AI Images...</h3>
-                        <p style="color: #656d76; font-size: 13px;">Writing hook cover, detailing fact slides, and generating AI visuals. Taking 15–30 seconds...</p>
+                        <p style="color: #656d76; font-size: 13px;">Writing hook, generating slide-specific visuals, crafting CTA. ~15–30 sec.</p>
                     </div>
                 </div>
             </div>
 
+            <!-- ============================================================ -->
+            <!-- Template Studio View -->
+            <!-- ============================================================ -->
+            <div id="template-studio-view" class="view">
+                <div class="view-header">
+                    <div>
+                        <h2>Template Studio</h2>
+                        <p style="color: #656d76; font-size: 14px; margin-top: 4px;">Design reusable slide layouts. Save them to apply instantly in the editor.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="studio-template-name" placeholder="Template name..." style="width: 200px;">
+                        <button class="btn-primary" id="save-studio-template"><i data-feather="save"></i> Save Template</button>
+                    </div>
+                </div>
+
+                <div class="studio-layout">
+                    <!-- Element Palette -->
+                    <div class="studio-palette">
+                        <h4 style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-fg-muted);">Elements</h4>
+                        <div class="palette-elements">
+                            <div class="palette-item" data-element="bg-color" draggable="true">
+                                <i data-feather="square"></i>
+                                <span>Background</span>
+                            </div>
+                            <div class="palette-item" data-element="brand-logo" draggable="true">
+                                <i data-feather="image"></i>
+                                <span>Brand Logo</span>
+                            </div>
+                            <div class="palette-item" data-element="header-image" draggable="true">
+                                <i data-feather="layout"></i>
+                                <span>Header Image</span>
+                            </div>
+                            <div class="palette-item" data-element="title-block" draggable="true">
+                                <i data-feather="type"></i>
+                                <span>Title Block</span>
+                            </div>
+                            <div class="palette-item" data-element="body-block" draggable="true">
+                                <i data-feather="align-left"></i>
+                                <span>Body Text</span>
+                            </div>
+                            <div class="palette-item" data-element="watermark" draggable="true">
+                                <i data-feather="shield"></i>
+                                <span>Watermark</span>
+                            </div>
+                            <div class="palette-item" data-element="image-frame" draggable="true">
+                                <i data-feather="camera"></i>
+                                <span>Image Frame</span>
+                            </div>
+                            <div class="palette-item" data-element="divider-line" draggable="true">
+                                <i data-feather="minus"></i>
+                                <span>Divider Line</span>
+                            </div>
+                            <div class="palette-item" data-element="handle-text" draggable="true">
+                                <i data-feather="at-sign"></i>
+                                <span>Handle / Footer</span>
+                            </div>
+                        </div>
+
+                        <hr style="margin: 16px 0; border: 0; border-top: 1px solid var(--color-border-muted);">
+
+                        <h4 style="margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-fg-muted);">Saved Templates</h4>
+                        <div id="studio-saved-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;"></div>
+                        
+                        <hr style="margin: 16px 0; border: 0; border-top: 1px solid var(--color-border-muted);">
+
+                        <h4 style="margin-bottom: 10px; font-size: 13px; color: var(--color-fg-muted);">Canvas BG Color</h4>
+                        <input type="color" id="studio-bg-color" value="#1a1a2e" style="width: 100%; height: 36px; border-radius: 6px; cursor: pointer; border: 1px solid var(--color-border-default);">
+                    </div>
+
+                    <!-- Studio Canvas -->
+                    <div class="studio-canvas-wrapper">
+                        <div class="studio-canvas-stage">
+                            <canvas id="studio-canvas"></canvas>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">
+                            <button class="btn-secondary" id="studio-clear"><i data-feather="trash-2"></i> Clear Canvas</button>
+                            <button class="btn-secondary" id="studio-delete-selected"><i data-feather="x"></i> Delete Selected</button>
+                            <button class="btn-secondary" id="studio-bring-front"><i data-feather="chevrons-up"></i> Bring Front</button>
+                            <button class="btn-secondary" id="studio-send-back"><i data-feather="chevrons-down"></i> Send Back</button>
+                        </div>
+                    </div>
+
+                    <!-- Properties Panel -->
+                    <div class="studio-properties">
+                        <h4 style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-fg-muted);">Properties</h4>
+                        <div id="studio-props-empty" style="color: var(--color-fg-muted); font-size: 13px;">Select an element to edit its properties.</div>
+                        <div id="studio-props-panel" style="display: none;">
+                            <div class="form-group">
+                                <label style="font-size: 12px;">X Position</label>
+                                <input type="number" id="prop-x" style="font-size: 13px; padding: 4px 8px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px;">Y Position</label>
+                                <input type="number" id="prop-y" style="font-size: 13px; padding: 4px 8px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px;">Width</label>
+                                <input type="number" id="prop-width" style="font-size: 13px; padding: 4px 8px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px;">Height</label>
+                                <input type="number" id="prop-height" style="font-size: 13px; padding: 4px 8px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px;">Opacity</label>
+                                <input type="range" id="prop-opacity" min="0" max="1" step="0.05" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 12px;">Rotation (°)</label>
+                                <input type="number" id="prop-rotation" style="font-size: 13px; padding: 4px 8px;" min="-360" max="360">
+                            </div>
+                            <div class="form-group" id="prop-color-group">
+                                <label style="font-size: 12px;">Color / Fill</label>
+                                <input type="color" id="prop-color" style="height: 30px; width: 100%; border-radius: 4px; cursor: pointer;">
+                            </div>
+                            <div class="form-group" id="prop-fontsize-group" style="display:none;">
+                                <label style="font-size: 12px;">Font Size</label>
+                                <input type="number" id="prop-fontsize" style="font-size: 13px; padding: 4px 8px;">
+                            </div>
+                            <div class="form-group" id="prop-text-group" style="display:none;">
+                                <label style="font-size: 12px;">Text Content</label>
+                                <textarea id="prop-text" rows="3" style="font-size: 13px; padding: 4px 8px;"></textarea>
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; font-size: 13px; cursor: pointer; margin-bottom: 12px;">
+                                <input type="checkbox" id="prop-lock"> Lock Position
+                            </label>
+                            <button class="btn-primary full-width" id="prop-apply"><i data-feather="check"></i> Apply</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- Video Content View -->
+            <!-- ============================================================ -->
             <div id="video-view" class="view">
                 <h2 style="margin-bottom: 4px;">Video Content Creator</h2>
                 <p style="color: #656d76; margin-bottom: 20px;">Generate video prompts from your existing content.</p>
-                <div class="cards-grid" id="video-grid">
-                    <!-- Populated by JS -->
-                </div>
+                <div class="cards-grid" id="video-grid"></div>
             </div>
 
             <!-- Video Editor View -->
@@ -544,7 +602,6 @@
                         </div>
                         <button class="btn-primary full-width" id="generate-video-btn"><i data-feather="film"></i> Generate Video Prompts</button>
                         <p id="video-feedback" style="margin-top: 8px; font-size: 14px;"></p>
-                        
                         <div id="video-prompts-result" style="margin-top: 16px; display: none;">
                             <h4>Resulting Prompts</h4>
                             <textarea id="video-prompts-text" class="rich-textarea" rows="10" readonly style="min-height: 160px;"></textarea>
@@ -554,13 +611,221 @@
                 </div>
             </div>
 
+            <!-- ============================================================ -->
+            <!-- Brand Identity View -->
+            <!-- ============================================================ -->
+            <div id="branding-view" class="view">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Brand Identity</h2>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="brand-selector" style="min-width: 200px;">
+                            <option value="">Loading Brands...</option>
+                        </select>
+                        <button class="btn-secondary" id="create-brand-btn"><i data-feather="plus"></i> New Brand</button>
+                    </div>
+                </div>
+                <div class="settings-list" style="max-width: 720px;">
+                    
+                    <!-- Core Identity -->
+                    <div class="setting-item">
+                        <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 8px;">Core Identity</h4>
+                        <div class="two-col-grid">
+                            <div class="form-group">
+                                <label>Brand Name</label>
+                                <input type="text" id="brand-name-input" placeholder="e.g. Creator's Den">
+                            </div>
+                            <div class="form-group">
+                                <label>Instagram Handle</label>
+                                <input type="text" id="brand-handle-input" placeholder="e.g. @CreatorsDen">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Brand Voice & Narrative -->
+                    <div class="setting-item">
+                        <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 8px;">Brand Voice & Narrative</h4>
+                        <div class="form-group">
+                            <label>Brand Narrative <span style="font-weight: 400; color: var(--color-fg-muted);">(What does your brand stand for?)</span></label>
+                            <textarea id="brand-narrative-input" class="rich-textarea" rows="3" style="min-height: 80px;" placeholder="e.g. We make complex knowledge digestible and entertaining for aspiring civil servants in Nepal."></textarea>
+                        </div>
+                        <div class="two-col-grid">
+                            <div class="form-group">
+                                <label>Tone of Voice</label>
+                                <select id="brand-tone-input" class="full-width">
+                                    <option value="Educational & Authoritative">Educational & Authoritative</option>
+                                    <option value="Conversational & Friendly">Conversational & Friendly</option>
+                                    <option value="Inspirational & Motivational">Inspirational & Motivational</option>
+                                    <option value="Sarcastic & Witty">Sarcastic & Witty</option>
+                                    <option value="Technical & Expert">Technical & Expert</option>
+                                    <option value="Bold & Provocative">Bold & Provocative</option>
+                                    <option value="Empathetic & Supportive">Empathetic & Supportive</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Ideal Customer Profile (ICP)</label>
+                                <input type="text" id="brand-icp-input" placeholder="e.g. 20–30 yr Nepali professionals preparing for Loksewa">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Identity -->
+                    <div class="setting-item">
+                        <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 8px;">Visual Identity</h4>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+                            <div class="form-group">
+                                <label>Primary</label>
+                                <input type="color" id="brand-primary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                            </div>
+                            <div class="form-group">
+                                <label>Secondary</label>
+                                <input type="color" id="brand-secondary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                            </div>
+                            <div class="form-group">
+                                <label>Accent</label>
+                                <input type="color" id="brand-accent-color-input" value="#f59e0b" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                            </div>
+                            <div class="form-group">
+                                <label>Background</label>
+                                <input type="color" id="brand-bg-color-input" value="#0f0c29" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                            </div>
+                        </div>
+                        <div class="two-col-grid">
+                            <div class="form-group">
+                                <label>Heading Font</label>
+                                <select id="brand-heading-font" class="full-width">
+                                    <option value="Inter">Inter (Modern)</option>
+                                    <option value="Bebas Neue">Bebas Neue (Bold Impact)</option>
+                                    <option value="Playfair Display">Playfair Display (Elegant)</option>
+                                    <option value="Montserrat">Montserrat (Clean)</option>
+                                    <option value="Oswald">Oswald (Strong)</option>
+                                    <option value="Raleway">Raleway (Refined)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Body Font</label>
+                                <select id="brand-body-font" class="full-width">
+                                    <option value="Inter">Inter (Clean Sans)</option>
+                                    <option value="Lato">Lato (Readable)</option>
+                                    <option value="Open Sans">Open Sans (Neutral)</option>
+                                    <option value="Source Sans Pro">Source Sans Pro (Pro)</option>
+                                    <option value="Nunito">Nunito (Friendly)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="two-col-grid">
+                            <div class="setting-item" style="padding: 12px;">
+                                <label>Brand Logo</label>
+                                <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px;">
+                                    <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="width: 64px; height: 64px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px;">
+                                    <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
+                                        <i data-feather="upload"></i> Upload Logo
+                                        <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="setting-item" style="padding: 12px;">
+                                <label>Header Asset (Handle & Badge)</label>
+                                <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px;">
+                                    <img id="brand-header-asset-preview" src="assets/images/logo.png" alt="Header Asset Preview" style="max-width: 140px; height: 50px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px; background: #fafafa;">
+                                    <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
+                                        <i data-feather="upload"></i> Upload Header
+                                        <input type="file" id="brand-header-asset-upload" style="display:none;" accept="image/*">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Social Links -->
+                    <div class="setting-item">
+                        <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 8px;">Social Links</h4>
+                        <div class="two-col-grid">
+                            <div class="form-group">
+                                <label>Facebook URL</label>
+                                <input type="url" id="facebook-url-input" placeholder="https://facebook.com/...">
+                            </div>
+                            <div class="form-group">
+                                <label>Instagram URL</label>
+                                <input type="url" id="instagram-url-input" placeholder="https://instagram.com/...">
+                            </div>
+                            <div class="form-group">
+                                <label>TikTok URL</label>
+                                <input type="url" id="tiktok-url-input" placeholder="https://tiktok.com/...">
+                            </div>
+                            <div class="form-group">
+                                <label>LinkedIn URL</label>
+                                <input type="url" id="linkedin-url-input" placeholder="https://linkedin.com/...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Template Designer -->
+                    <div class="setting-item">
+                        <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 8px;">Slide Template Overrides</h4>
+                        <div class="two-col-grid">
+                            <div class="form-group">
+                                <label>Title Size (%)</label>
+                                <input type="range" id="custom-title-size" min="50" max="200" value="100" class="full-width">
+                            </div>
+                            <div class="form-group">
+                                <label>Title Y-Position (%)</label>
+                                <input type="range" id="custom-title-y" min="0" max="100" value="50" class="full-width">
+                            </div>
+                            <div class="form-group">
+                                <label>Content Y-Position (%)</label>
+                                <input type="range" id="custom-content-y" min="0" max="100" value="70" class="full-width">
+                            </div>
+                            <div class="form-group">
+                                <label>Overlay Opacity (%)</label>
+                                <input type="range" id="custom-bg-opacity" min="0" max="100" value="85" class="full-width">
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label>Overlay Color</label>
+                                <input type="color" id="custom-bg-color" value="#000000" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label>Theme Style</label>
+                                <select id="custom-theme-preset" class="full-width" style="padding: 8px; border: 1px solid #d0d7de; border-radius: 6px;">
+                                    <option value="theme-default">Default (Clean)</option>
+                                    <option value="theme-minimal">Minimal (Line Accent)</option>
+                                    <option value="theme-boxed">Boxed (Title Highlight)</option>
+                                    <option value="theme-highlighted">Highlighted (Overlay Box)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                                    <input type="checkbox" id="custom-show-pagination" checked>
+                                    Show Slide Numbers by default
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Engine Instructions -->
+                    <div class="setting-item">
+                        <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 8px;">AI Engine Instructions (Custom Prompt)</h4>
+                        <p style="font-size: 13px; color: #656d76; margin-bottom: 12px;">
+                            Use <code>${topic}</code> and <code>${contentType}</code> as variables. This prompt applies to the <strong>Manual Input</strong> lab only.
+                        </p>
+                        <textarea id="prompt-template-input" class="rich-textarea" style="min-height: 160px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; font-size: 13px; width: 100%;" spellcheck="false"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button class="btn-primary" id="save-branding"><i data-feather="save"></i> Save Brand Identity</button>
+                        <button class="btn-secondary" id="reset-prompt-btn"><i data-feather="refresh-cw"></i> Reset Prompt</button>
+                    </div>
+                    <p id="branding-feedback" class="feedback-msg"></p>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- Account Settings View -->
+            <!-- ============================================================ -->
             <div id="settings-view" class="view">
                 <div class="view-header">
                     <h2>Account Settings</h2>
                 </div>
-                
                 <div style="display: flex; flex-wrap: wrap; gap: 16px;">
-                    <!-- General Settings -->
                     <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #d0d7de;">
                         <h3 style="margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">Profile</h3>
                         <div class="form-group">
@@ -575,29 +840,22 @@
                         <p id="profile-feedback" class="feedback-msg"></p>
                     </div>
 
-                    <!-- Security & MFA -->
                     <div style="flex: 1; min-width: 300px; background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #d0d7de;">
                         <h3 style="margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #d0d7de;">Security</h3>
-                        
                         <div class="form-group">
                             <label>Change Password</label>
                             <input type="password" id="setting-new-password" class="full-width margin-bottom" placeholder="New Password">
                             <button class="btn-secondary" id="update-password-btn">Update Password</button>
                             <p id="password-feedback" class="feedback-msg"></p>
                         </div>
-
                         <h4 style="margin-top: 20px; margin-bottom: 12px;">Multi-Factor Authentication</h4>
                         <div style="padding: 12px; background: #f6f8fa; border-radius: 6px; margin-bottom: 12px; border: 1px solid #d0d7de;">
                             <p style="margin: 0; font-size: 14px; font-weight: 500;">Status: <span id="mfa-status-text" style="color: var(--color-danger-fg);">Disabled</span></p>
                         </div>
-                        
                         <button class="btn-primary" id="enroll-mfa-btn"><i data-feather="shield"></i> Enroll in MFA</button>
-                        
-                        <!-- MFA Enrollment Flow -->
                         <div id="mfa-enrollment-flow" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #d0d7de;">
                             <p style="font-size: 13px; color: #656d76; margin-bottom: 12px;">1. Scan this QR Code with your Authenticator App.</p>
                             <img id="mfa-qr-code" src="" alt="MFA QR Code" style="width: 120px; height: 120px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #d0d7de;">
-                            
                             <p style="font-size: 13px; color: #656d76; margin-bottom: 8px;">2. Enter the 6-digit PIN from your app.</p>
                             <input type="text" id="mfa-verify-code" class="full-width margin-bottom" placeholder="123456" maxlength="6" style="letter-spacing: 4px; font-size: 18px; text-align: center;">
                             <button class="btn-primary full-width" id="verify-mfa-btn">Verify & Enable</button>
@@ -610,9 +868,9 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="app.js?v=20260720"></script>
+    <script type="module" src="app.js?v=20260724_v2"></script>
     <script>
-        feather.replace();
+        if (typeof feather !== 'undefined') feather.replace();
     </script>
 </body>
 </html>
