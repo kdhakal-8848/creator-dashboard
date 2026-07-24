@@ -707,9 +707,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    const targetH = 165;
-                    const scale = targetH / (img.height || targetH);
-                    // Use saved styling if it exists for header asset? Currently not persisting it, but default is top-left
+                    const targetW = 200; // ~37% of left half width (540)
+                    const scale = targetW / img.width;
                     img.set({
                         left: 80,
                         top: 40,

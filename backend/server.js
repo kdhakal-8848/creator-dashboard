@@ -136,8 +136,8 @@ Topic: ${topic}
 Content Type: ${contentType}
 
 CAROUSEL NARRATIVE FRAMEWORK (STRICT):
-- Slide 1: HOOK — high-contrast statement or bold question. Include a highly descriptive image_prompt for this hook.
-- Slides 2-N-1: ONE idea per slide, max 40 words body, scannable bullet-style. CRITICAL: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE TEXT (DO NOT REPEAT CONTENT) AND A COMPLETELY UNIQUE image_prompt.
+- Slide 1: INTRODUCTION — Be creative and write something related to the topic in short. The body part on this first slide can be a bit longer. DO NOT just write a mind-blowing fact. Include a highly descriptive image_prompt.
+- Slides 2-N-1: CORE IDEAS — ONE distinct idea per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
 - FINAL SLIDE: CTA only. Set "is_cta": true. Title: "Save This for Your Exam! 📌". Content: "Read the caption for the full breakdown ↓\n\nFollow ${brand_context?.handle || '@CreatorsDen'} for daily Loksewa prep." NO image_prompt on this slide.
 
 Return ONLY valid JSON, no markdown. Use this exact schema:
@@ -325,8 +325,8 @@ Style: "${templateStyle}"
 Source Link: ${storyLink}
 
 CAROUSEL NARRATIVE FRAMEWORK (STRICT):
-- Slide 1: HOOK — shocking or intriguing headline on this story. image_prompt: photojournalistic realistic scene related to story.
-- Slides 2-3: KEY FACTS — key breakdown or timeline per slide, max 40 words. CRITICAL: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE TEXT (DO NOT REPEAT CONTENT) AND A COMPLETELY UNIQUE image_prompt.
+- Slide 1: INTRODUCTION — Be creative and write something related to the news story in short. The body part on this first slide can be a bit longer. Include a highly descriptive image_prompt related to the story.
+- Slides 2-3: KEY FACTS — key breakdown or timeline per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
 - Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily world news." NO image_prompt.
 
 Write all slide text in ${targetLanguage}.
