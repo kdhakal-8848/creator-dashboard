@@ -423,8 +423,22 @@ ${SLIDE_SCHEMA}`;
             return res.status(500).json({ error: "AI returned invalid JSON" });
         }
 
-        // Enforce CTA on last slide regardless of AI compliance
+        // Enforce title clean-up for Slide 1: strip generic meta-phrases
         if (parsed.slides && parsed.slides.length > 0) {
+            let slide1Title = parsed.slides[0].title || '';
+            slide1Title = slide1Title.replace(/Did You Know\??/gi, '')
+                                     .replace(/Mind[- ]blowing facts?/gi, '')
+                                     .replace(/Mind[- ]blowing/gi, '')
+                                     .replace(/Amazing Facts?/gi, '')
+                                     .replace(/Crazy Facts?/gi, '')
+                                     .replace(/^Facts About /gi, '')
+                                     .replace(/Facts Lab/gi, '')
+                                     .trim();
+            if (!slide1Title || slide1Title.length < 3) {
+                slide1Title = factTopic.replace(/facts?/gi, '').trim();
+            }
+            parsed.slides[0].title = slide1Title;
+
             const lastSlide = parsed.slides[parsed.slides.length - 1];
             lastSlide.is_cta = true;
             delete lastSlide.image_prompt;

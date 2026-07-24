@@ -726,13 +726,13 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    // Maximize height to fit between top edge (0) and yellow line (135)
-                    const targetH = 115; 
+                    // Make header asset 3x larger (~300px height)
+                    const targetH = 300; 
                     const scale = targetH / img.height;
                     img.set({
                         left: 80,
-                        top: 125,
-                        originY: 'bottom',
+                        top: 40,
+                        originY: 'top',
                         scaleX: scale, scaleY: scale,
                         selectable: true, evented: true,
                         customType: 'header-asset'
