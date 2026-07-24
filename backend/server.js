@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/generate', async (req, res) => {
-    const { topic, contentType, promptTemplate } = req.body;
+    const { topic, contentType, promptTemplate, brand_id } = req.body;
 
     if (!topic || !contentType) {
         return res.status(400).json({ error: "Missing topic or contentType" });
@@ -92,6 +92,9 @@ Do NOT include markdown formatting like \`\`\`json around the response. Return O
         // Generate AI image URL using free pollinations.ai API
         const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(topic + " high quality photography")}`;
 
+        // Sanitize brand_id for database insertion (ignore default-brand / mock IDs)
+        const cleanBrandId = (brand_id && typeof brand_id === 'string' && !brand_id.startsWith('default') && !brand_id.startsWith('mock')) ? brand_id : null;
+
         // 2. Insert into Supabase
         const { data, error } = await supabase
             .from('posts')
@@ -100,7 +103,8 @@ Do NOT include markdown formatting like \`\`\`json around the response. Return O
                     topic: `[${contentType}] ${topic}`, 
                     text: text, 
                     status: 'Draft',
-                    image_url: generatedImageUrl
+                    image_url: generatedImageUrl,
+                    brand_id: cleanBrandId
                 }
             ])
             .select();

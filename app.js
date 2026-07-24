@@ -1249,6 +1249,7 @@ if (triggerFactsBtn) {
             if (data.db_error) {
                 console.warn("Database failed to save post:", data.db_error);
                 if (!isMockMode) {
+                    alert(`Supabase Error: ${data.db_error}\n\nFalling back to Local Storage so you don't lose your work.`);
                     isMockMode = true;
                 }
             }
