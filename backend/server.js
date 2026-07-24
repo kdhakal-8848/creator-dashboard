@@ -31,21 +31,23 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 /**
  * Generate a Pollinations.ai image URL from a descriptive prompt
  */
-function buildImageUrl(imagePrompt) {
+function buildImageUrl(imagePrompt, seed) {
     const enhancedPrompt = `${imagePrompt}, stunning high resolution photography, cinematic lighting, 8k, ultra-detailed`;
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}`;
+    const randomSeed = seed !== undefined ? seed : Math.floor(Math.random() * 999999);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?seed=${randomSeed}&nologo=true&width=1080&height=1350`;
 }
 
 /**
  * Build an array of per-slide image URLs from parsed slide data.
- * Last slide (CTA) gets null.
+ * Last slide (CTA) gets null. Each slide gets a unique seed.
  */
 function buildImageUrls(slides) {
+    const baseSeed = Math.floor(Math.random() * 90000) + 10000;
     return slides.map((slide, i) => {
         const isCTA = slide.is_cta === true || i === slides.length - 1;
         if (isCTA) return null;
         const prompt = slide.image_prompt || `${slide.title} vivid photography`;
-        return buildImageUrl(prompt);
+        return buildImageUrl(prompt, baseSeed + i * 1000);
     });
 }
 

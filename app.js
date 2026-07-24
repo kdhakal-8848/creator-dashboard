@@ -519,19 +519,22 @@ function initFabricCanvas() {
 
 function syncFabricCanvasToCurrentSlide() {
     if (!fabricCanvas || !currentSlides[currentSlideIndex]) return;
+    // Only sync if canvas has objects (avoid syncing after a clear)
     const objects = fabricCanvas.getObjects();
+    if (objects.length === 0) return;
+    let updated = false;
     objects.forEach(obj => {
-        if (obj.isPlaceholder === 'title' || obj.customType === 'title') {
-            if (obj.text !== undefined) {
-                currentSlides[currentSlideIndex].title = obj.text;
-            }
+        if ((obj.isPlaceholder === 'title' || obj.customType === 'title') && obj.text !== undefined) {
+            currentSlides[currentSlideIndex].title = obj.text;
+            updated = true;
         }
-        if (obj.isPlaceholder === 'body' || obj.customType === 'body') {
-            if (obj.text !== undefined) {
-                currentSlides[currentSlideIndex].content = obj.text;
-            }
+        if ((obj.isPlaceholder === 'body' || obj.customType === 'body') && obj.text !== undefined) {
+            currentSlides[currentSlideIndex].content = obj.text;
+            updated = true;
         }
     });
+    if (!updated) return;
+    // Also update the form inputs if they exist
     const titleIn = document.getElementById(`slide-title-${currentSlideIndex}`);
     const contentIn = document.getElementById(`slide-content-${currentSlideIndex}`);
     if (titleIn) titleIn.value = currentSlides[currentSlideIndex].title || '';
@@ -571,6 +574,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (!fabricCanvas) initFabricCanvas();
     if (!fabricCanvas) return;
 
+    // IMPORTANT: sync current canvas text state BEFORE clearing — preserves edits on nav
+    syncFabricCanvasToCurrentSlide();
     fabricCanvas.clear();
 
     const templateSelector = document.getElementById('template-selector');
@@ -686,14 +691,17 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
         // --- 5. Brand Header Asset (Moveable, ON/OFF toggleable) ---
+        // Note: data: URLs don't need crossOrigin — avoid passing it to prevent silent failures
         if (showHeaderAsset && brand?.headerAssetUrl) {
-            fabric.Image.fromURL(brand.headerAssetUrl, (img) => {
+            const assetUrl = brand.headerAssetUrl;
+            const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
+            fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    const targetH = 40;
+                    const targetH = 55;
                     const scale = targetH / (img.height || targetH);
                     img.set({
-                        left: CANVAS_W - 140,
-                        top: selectedPreset === 'template-minimal' ? 50 : 42,
+                        left: CANVAS_W - Math.round(img.width * scale) - 70,
+                        top: selectedPreset === 'template-minimal' ? 38 : 32,
                         scaleX: scale, scaleY: scale,
                         selectable: true, evented: true,
                         customType: 'header-asset', isPlaceholder: 'header-asset'
@@ -701,8 +709,10 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fabricCanvas.add(img);
                     fabricCanvas.bringToFront(img);
                     fabricCanvas.renderAll();
+                } else {
+                    console.warn('[Header Asset] Image loaded but has no width, URL starts with:', assetUrl.substring(0, 40));
                 }
-            }, { crossOrigin: 'anonymous' });
+            }, loadOpts);
         }
 
         // --- 6. Accent Line ---
@@ -919,15 +929,15 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
 
             // Slide number badge
             const badgeColor = selectedPreset === 'template-bold' ? '#ffd700' : accentColor;
-            const badgeTextColor = selectedPreset === 'template-bold' ? '#000000' : '#000000';
+            const badgeTextColor = '#000000';
             const slideNumBadge = new fabric.Rect({
-                left: CANVAS_W - 160, top: CANVAS_H - 100,
-                width: 100, height: 60, fill: badgeColor,
-                rx: 30, ry: 30,
+                left: CANVAS_W - 165, top: CANVAS_H - 102,
+                width: 105, height: 62, fill: badgeColor,
+                rx: 31, ry: 31,
                 selectable: false, evented: false, customType: 'slide-num-bg'
             });
             const slideNumText = new fabric.IText(`${slideIndex + 1}/${currentSlides.length}`, {
-                left: CANVAS_W - 110, top: CANVAS_H - 88,
+                left: CANVAS_W - 112, top: CANVAS_H - 90,
                 fontSize: 30, fontWeight: '700', fill: badgeTextColor,
                 fontFamily: 'Inter', originX: 'center',
                 selectable: false, evented: false, customType: 'slide-num'
@@ -936,6 +946,27 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             slideNumText.set('opacity', showPagination ? 1 : 0);
             fabricCanvas.add(slideNumBadge);
             fabricCanvas.add(slideNumText);
+
+            // Swipe indicator — show on non-final slides only when there are multiple slides
+            const isLastSlide = slideIndex === currentSlides.length - 1;
+            if (currentSlides.length > 1 && !isLastSlide) {
+                const swipeBg = new fabric.Rect({
+                    left: CANVAS_W - 260, top: CANVAS_H - 102,
+                    width: 180, height: 62, fill: 'rgba(0,0,0,0.55)',
+                    rx: 31, ry: 31,
+                    selectable: true, evented: true, customType: 'swipe-bg'
+                });
+                const swipeText = new fabric.IText('SWIPE ➔', {
+                    left: CANVAS_W - 170, top: CANVAS_H - 88,
+                    fontSize: 26, fontWeight: '700', fill: '#ffffff',
+                    fontFamily: 'Inter', originX: 'center',
+                    selectable: true, evented: true, customType: 'swipe-text'
+                });
+                swipeBg.set('opacity', showSwipe ? 1 : 0);
+                swipeText.set('opacity', showSwipe ? 1 : 0);
+                fabricCanvas.add(swipeBg);
+                fabricCanvas.add(swipeText);
+            }
         }
 
         // --- 6. Footer Handle (Moveable, ON/OFF toggleable) ---
@@ -956,9 +987,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         saveCanvasHistory();
     };
 
-    // Set background image if available
+    // Set background image if available — with timeout fallback for slow Pollinations requests
     if (imageUrl && !isCTA) {
-        fabric.Image.fromURL(imageUrl, (img) => {
+        // Add a cache-bust seed to force Pollinations to generate a new unique image per slide
+        let loadUrl = imageUrl;
+        if (loadUrl.includes('image.pollinations.ai') && !loadUrl.includes('&nologo')) {
+            loadUrl = loadUrl + '&nologo=true';
+        }
+
+        let imgLoaded = false;
+        const imgTimeout = setTimeout(() => {
+            if (!imgLoaded) {
+                console.warn('[Slide Image] Timeout loading image for slide, rendering without bg:', loadUrl.substring(0, 60));
+                addObjects();
+            }
+        }, 8000); // 8 second timeout before rendering without image
+
+        fabric.Image.fromURL(loadUrl, (img) => {
+            imgLoaded = true;
+            clearTimeout(imgTimeout);
             if (img && img.width > 0) {
                 const scaleX = CANVAS_W / img.width;
                 const scaleY = CANVAS_H / img.height;
@@ -976,6 +1023,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             }
             addObjects();
         }, { crossOrigin: 'anonymous' });
+
     } else {
         addObjects();
     }
@@ -1184,8 +1232,8 @@ function renderSlidesForm() {
                 <h4 style="font-size:13px;font-weight:700;color:#656d76;">Slide ${index + 1}${isCTA?'<span style="font-size:10px;background:#10b981;color:#fff;padding:1px 7px;border-radius:20px;margin-left:8px;font-weight:600;">CTA</span>':''}</h4>
                 <button onclick="window.jumpToSlide(${index})" style="background:none;border:none;cursor:pointer;color:#0969da;font-size:12px;font-weight:600;">▶ Preview</button>
             </div>
-            <input type="text" class="full-width" style="margin-bottom:8px;padding:5px 10px;border:1px solid #d0d7de;border-radius:5px;font-size:13px;" value="${(slide.title||'').replace(/"/g, '&quot;')}" oninput="window.updateSlideData(${index},'title',this.value)">
-            <textarea class="rich-textarea" style="min-height:80px;font-size:13px;" oninput="window.updateSlideData(${index},'content',this.value)">${slide.content||''}</textarea>
+            <input type="text" id="slide-title-${index}" class="full-width" style="margin-bottom:8px;padding:5px 10px;border:1px solid #d0d7de;border-radius:5px;font-size:13px;" value="${(slide.title||'').replace(/"/g, '&quot;')}" oninput="window.updateSlideData(${index},'title',this.value)">
+            <textarea id="slide-content-${index}" class="rich-textarea" style="min-height:80px;font-size:13px;" oninput="window.updateSlideData(${index},'content',this.value)">${slide.content||''}</textarea>
         `;
         div.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') window.jumpToSlide(index); });
         container.appendChild(div);
