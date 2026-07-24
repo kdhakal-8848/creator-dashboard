@@ -572,7 +572,10 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
 
     fabricCanvas.backgroundColor = bgColor;
-    fabricCanvas.renderAll();
+    
+    const showLogo = document.getElementById('toggle-brand-logo')?.checked !== false;
+    const showHandle = document.getElementById('toggle-brand-handle')?.checked !== false;
+    const showPagination = document.getElementById('toggle-slide-numbers')?.checked !== false;
 
     const addObjects = () => {
         // --- 1. Overlay Layer ---
@@ -617,19 +620,50 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             fabricCanvas.add(headerBar);
         }
 
-        // --- 3. Brand Name in Header ---
-        const brandText = new fabric.IText(brandName, {
-            left: selectedPreset === 'template-bold' ? 90 : 80,
-            top: selectedPreset === 'template-minimal' ? 60 : 50,
-            fontSize: selectedPreset === 'template-bold' ? 38 : 36,
-            fontWeight: '800',
-            fill: selectedPreset === 'template-bold' ? '#ffd700' : '#ffffff',
-            fontFamily: headingFont,
-            selectable: true, isPlaceholder: 'brand-name', customType: 'brand-name'
-        });
-        fabricCanvas.add(brandText);
+        // --- 3. Brand Logo (Moveable, ON/OFF toggleable) ---
+        let hasLogoRendered = false;
+        if (showLogo && brand?.logoUrl) {
+            fabric.Image.fromURL(brand.logoUrl, (img) => {
+                if (img && img.width > 0) {
+                    const targetSize = 56;
+                    const scale = targetSize / (img.height || targetSize);
+                    img.set({
+                        left: 80,
+                        top: selectedPreset === 'template-minimal' ? 42 : 36,
+                        scaleX: scale,
+                        scaleY: scale,
+                        selectable: true,
+                        evented: true,
+                        customType: 'brand-logo',
+                        isPlaceholder: 'brand-logo'
+                    });
+                    fabricCanvas.add(img);
+                    fabricCanvas.bringToFront(img);
+                    fabricCanvas.renderAll();
+                }
+            }, { crossOrigin: 'anonymous' });
+            hasLogoRendered = true;
+        }
 
-        // --- 4. Accent Line ---
+        // --- 4. Brand Name / Handle in Header (Moveable, ON/OFF toggleable) ---
+        if (showHandle) {
+            const brandTextLeft = (showLogo && brand?.logoUrl) ? 150 : (selectedPreset === 'template-bold' ? 90 : 80);
+            const brandText = new fabric.IText(brandName, {
+                left: brandTextLeft,
+                top: selectedPreset === 'template-minimal' ? 52 : 44,
+                fontSize: selectedPreset === 'template-bold' ? 38 : 36,
+                fontWeight: '800',
+                fill: selectedPreset === 'template-bold' ? '#ffd700' : '#ffffff',
+                fontFamily: headingFont,
+                selectable: true,
+                evented: true,
+                isPlaceholder: 'brand-name',
+                customType: 'brand-name'
+            });
+            fabricCanvas.add(brandText);
+        }
+
+        // --- 5. Accent Line ---
         if (selectedPreset !== 'template-minimal') {
             const accentLine = new fabric.Rect({
                 left: 80,
@@ -848,22 +882,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 fontFamily: 'Inter', originX: 'center',
                 selectable: false, evented: false, customType: 'slide-num'
             });
-            const showPagination = document.getElementById('toggle-slide-numbers')?.checked !== false;
             slideNumBadge.set('opacity', showPagination ? 1 : 0);
             slideNumText.set('opacity', showPagination ? 1 : 0);
             fabricCanvas.add(slideNumBadge);
             fabricCanvas.add(slideNumText);
         }
 
-        // --- Footer Handle ---
-        const footerHandle = new fabric.IText(handle, {
-            left: 80, top: CANVAS_H - 80,
-            fontSize: 32, fontWeight: '600',
-            fill: selectedPreset === 'template-bold' ? '#ffd700' : 'rgba(255,255,255,0.6)',
-            fontFamily: bodyFont,
-            selectable: false, evented: false, customType: 'footer-handle'
-        });
-        fabricCanvas.add(footerHandle);
+        // --- 6. Footer Handle (Moveable, ON/OFF toggleable) ---
+        if (showHandle) {
+            const footerHandle = new fabric.IText(handle, {
+                left: 80, top: CANVAS_H - 80,
+                fontSize: 32, fontWeight: '600',
+                fill: selectedPreset === 'template-bold' ? '#ffd700' : 'rgba(255,255,255,0.6)',
+                fontFamily: bodyFont,
+                selectable: true,
+                evented: true,
+                customType: 'footer-handle'
+            });
+            fabricCanvas.add(footerHandle);
+        }
 
         fabricCanvas.renderAll();
         saveCanvasHistory();
@@ -1127,6 +1164,8 @@ document.getElementById('next-slide').addEventListener('click', () => {
     if (currentSlideIndex < currentSlides.length - 1) { currentSlideIndex++; renderSlidesForm(); updateSlidePreview(); }
 });
 
+document.getElementById('toggle-brand-logo')?.addEventListener('change', () => updateSlidePreview());
+document.getElementById('toggle-brand-handle')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-slide-numbers')?.addEventListener('change', () => updateSlidePreview());
 
 document.getElementById('back-to-queue').addEventListener('click', () => {
