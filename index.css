@@ -172,10 +172,21 @@ h4 { font-size: 14px; font-weight: 600; }
 /* --- Main Content --- */
 .main-content {
     flex: 1;
-    display: flex;
-    flex-direction: column;
     overflow-y: auto;
     background-color: var(--color-canvas-subtle);
+    position: relative;
+}
+
+.two-col-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .two-col-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* --- Topbar --- */
@@ -928,6 +939,10 @@ input:focus, select:focus, textarea:focus {
     .form-row, .setting-item {
         flex-direction: column;
         align-items: flex-start;
+    }
+    
+    .two-col-grid {
+        grid-template-columns: 1fr !important;
     }
     
     .setting-item input[type="text"],
