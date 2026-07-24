@@ -1002,13 +1002,13 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const isLastSlide = slideIndex === currentSlides.length - 1;
             if (currentSlides.length > 1 && !isLastSlide) {
                 const swipeBg = new fabric.Rect({
-                    left: CANVAS_W - 260, top: CANVAS_H - 102,
+                    left: 80, top: CANVAS_H - 102,
                     width: 180, height: 62, fill: 'rgba(0,0,0,0.55)',
                     rx: 31, ry: 31,
                     selectable: true, evented: true, customType: 'swipe-bg'
                 });
                 const swipeText = new fabric.IText('SWIPE ➔', {
-                    left: CANVAS_W - 170, top: CANVAS_H - 88,
+                    left: 170, top: CANVAS_H - 88,
                     fontSize: 26, fontWeight: '700', fill: '#ffffff',
                     fontFamily: 'Inter', originX: 'center',
                     selectable: true, evented: true, customType: 'swipe-text'
