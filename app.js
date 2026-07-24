@@ -174,6 +174,33 @@ function saveMockPosts() { if (isMockMode) localStorage.setItem('loksewa_mock_po
 // ============================================================
 let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
     {
+        id: "gearup-loksewa",
+        name: "GearUp Loksewa",
+        handle: "@GearUpLoksewa",
+        logoUrl: "assets/images/logo.png",
+        headerAssetUrl: "",
+        facebookUrl: "https://facebook.com",
+        instagramUrl: "https://instagram.com",
+        tiktokUrl: "https://tiktok.com",
+        linkedinUrl: "https://linkedin.com",
+        primaryColor: "#003366",
+        secondaryColor: "#cc0000",
+        accentColor: "#f59e0b",
+        bgColor: "#0f0c29",
+        headingFont: "Inter",
+        bodyFont: "Inter",
+        narrative: "Empowering Loksewa aspirants in Nepal with high-yield study material, daily quizzes, and general knowledge carousels.",
+        toneOfVoice: "Educational & Authoritative",
+        icp: "Loksewa Examination Candidates in Nepal",
+        customTitleSize: "100",
+        customTitleY: "50",
+        customContentY: "70",
+        customBgOpacity: "85",
+        customBgColor: "#000000",
+        themePreset: "theme-default",
+        showPagination: true
+    },
+    {
         id: "default-brand",
         name: "CREATOR'S DEN",
         handle: "@CreatorsDen",
