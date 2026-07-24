@@ -203,10 +203,28 @@ app.post('/generate-news', async (req, res) => {
 
     try {
         console.log(`Fetching weird news for News Lab`);
-        const feed = await rssParser.parseURL('https://nypost.com/weird-news/feed/');
         
-        if (!feed.items || feed.items.length === 0) {
-            return res.status(500).json({ error: "No news found in RSS feed" });
+        // Try multiple RSS feeds in order of preference
+        const RSS_FEEDS = [
+            'https://feeds.bbci.co.uk/news/world/rss.xml',   // BBC World News
+            'https://www.theguardian.com/world/rss',           // The Guardian World
+            'https://rss.nytimes.com/services/xml/rss/nyt/World.xml' // NYT World
+        ];
+        
+        let feed = null;
+        let feedError = null;
+        for (const feedUrl of RSS_FEEDS) {
+            try {
+                feed = await rssParser.parseURL(feedUrl);
+                if (feed.items && feed.items.length > 0) break;
+            } catch (e) {
+                feedError = e;
+                console.warn(`RSS feed ${feedUrl} failed:`, e.message);
+            }
+        }
+        
+        if (!feed || !feed.items || feed.items.length === 0) {
+            return res.status(500).json({ error: "No news found in any RSS feed: " + (feedError?.message || 'unknown') });
         }
 
         // Pick a random recent news item

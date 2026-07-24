@@ -1540,11 +1540,18 @@ document.getElementById('save-branding').addEventListener('click', async functio
     currentBranding = allBrands.find(br => br.id === activeBrandId);
     if(isMockMode) localStorage.setItem('loksewa_all_brands', JSON.stringify(allBrands));
     
+    // Save the custom prompt template (this is global, not per-brand)
+    const promptInput = document.getElementById('prompt-template-input');
+    if (promptInput) {
+        currentPromptTemplate = promptInput.value || DEFAULT_PROMPT_TEMPLATE;
+        localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
+    }
+    
     updateBrandVisuals(currentBranding);
     populateBrandSelectors();
     
     const feedback = document.getElementById('branding-feedback');
-    feedback.innerText = "Brand saved successfully!";
+    feedback.innerText = "Brand & prompt saved successfully!";
     feedback.style.color = "var(--success)";
     setTimeout(() => { feedback.innerText = ""; }, 3000);
 });
