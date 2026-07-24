@@ -249,64 +249,85 @@ app.post('/generate-video', async (req, res) => {
 // ============================================================
 // POST /generate-news — News Lab
 // ============================================================
-const rssParser = new Parser();
-
 app.post('/generate-news', async (req, res) => {
-    const { brand_id, language, contentType, brand_context } = req.body;
+    const { topic, category, brand_id, language, contentType, brand_context } = req.body;
     const targetLanguage = language || "English";
     const templateStyle = contentType || "Standard News Summary";
+    const selectedCategory = category || "Weird & Bizarre News (Worldwide)";
     const brandCtx = getBrandContextBlock(brand_context);
 
     try {
-        console.log(`[/generate-news] style: "${templateStyle}", lang: ${targetLanguage}`);
+        console.log(`[/generate-news] topic: "${topic || 'auto'}", category: "${selectedCategory}", style: "${templateStyle}", lang: ${targetLanguage}`);
 
-        // Try multiple RSS feeds in order of preference
-        const RSS_FEEDS = [
-            'https://feeds.bbci.co.uk/news/world/rss.xml',
-            'https://www.theguardian.com/world/rss',
-            'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'
-        ];
+        let storyTitle = topic || "";
+        let storyContent = "";
+        let storyLink = "https://news.google.com";
 
-        let feed = null;
-        let feedError = null;
-        for (const feedUrl of RSS_FEEDS) {
-            try {
-                feed = await rssParser.parseURL(feedUrl);
-                if (feed.items && feed.items.length > 0) break;
-            } catch (e) {
-                feedError = e;
-                console.warn(`RSS ${feedUrl} failed:`, e.message);
+        if (!storyTitle) {
+            // Automatic Generation based on Category
+            let feedUrls = [
+                'https://feeds.bbci.co.uk/news/world/rss.xml',
+                'https://www.theguardian.com/world/rss',
+                'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'
+            ];
+
+            if (selectedCategory.includes('Nepal')) {
+                feedUrls = [
+                    'https://kathmandupost.com/rss',
+                    'https://myrepublica.nagariknetwork.com/rss',
+                    'https://thehimalayantimes.com/rss'
+                ];
+            } else if (selectedCategory.includes('Good News')) {
+                feedUrls = ['https://www.goodnewsnetwork.org/feed/'];
+            } else if (selectedCategory.includes('Science') || selectedCategory.includes('Discovery')) {
+                feedUrls = ['https://www.sciencedaily.com/rss/all.xml', 'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml'];
+            } else if (selectedCategory.includes('Health')) {
+                feedUrls = ['https://rss.nytimes.com/services/xml/rss/nyt/Health.xml'];
+            } else if (selectedCategory.includes('Tech')) {
+                feedUrls = ['https://feeds.feedburner.com/TechCrunch/', 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml'];
+            }
+
+            let feed = null;
+            for (const feedUrl of feedUrls) {
+                try {
+                    feed = await rssParser.parseURL(feedUrl);
+                    if (feed.items && feed.items.length > 0) break;
+                } catch (e) {
+                    console.warn(`RSS ${feedUrl} failed:`, e.message);
+                }
+            }
+
+            if (feed && feed.items && feed.items.length > 0) {
+                const newsItem = feed.items[Math.floor(Math.random() * Math.min(10, feed.items.length))];
+                storyTitle = newsItem.title || "Recent News Story";
+                storyLink = newsItem.link || storyLink;
+                storyContent = newsItem.contentSnippet || newsItem.content || '';
+            } else {
+                storyTitle = `Top Story in ${selectedCategory}`;
+                storyContent = `Latest developments in ${selectedCategory}`;
             }
         }
 
-        if (!feed || !feed.items || feed.items.length === 0) {
-            return res.status(500).json({ error: "No news found: " + (feedError?.message || 'unknown') });
-        }
-
-        const newsItem = feed.items[Math.floor(Math.random() * Math.min(10, feed.items.length))];
-        const newsTitle = newsItem.title;
-        const newsLink = newsItem.link;
-        const newsContent = newsItem.contentSnippet || newsItem.content || '';
-
-        console.log(`Selected news: "${newsTitle}"`);
+        console.log(`Final story focus: "${storyTitle}"`);
 
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const handle = brand_context?.handle || '@CreatorsDen';
 
         const prompt = `You are an expert social media content creator.${brandCtx}
 
-Create an engaging carousel post about this international news story.
+Create an engaging news carousel post about this news story.
+Topic / Story Title: ${storyTitle}
+Category: ${selectedCategory}
+Summary Context: ${storyContent || 'Generate a compelling breakdown of this topic.'}
 Style: "${templateStyle}"
-Title: ${newsTitle}
-Summary: ${newsContent}
-Source URL: ${newsLink}
+Source Link: ${storyLink}
 
 CAROUSEL NARRATIVE FRAMEWORK (STRICT):
-- Slide 1: HOOK — shocking or intriguing angle on this story. image_prompt: photojournalistic scene related to story.
-- Slides 2-3: KEY FACTS — one key fact or angle per slide, max 40 words. Unique image_prompt per slide.
-- Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\\n\\nFollow ${handle} for daily world news." NO image_prompt.
+- Slide 1: HOOK — shocking or intriguing headline on this story. image_prompt: photojournalistic realistic scene related to story.
+- Slides 2-3: KEY FACTS — key breakdown or timeline per slide, max 40 words. Unique image_prompt per slide.
+- Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily world news." NO image_prompt.
 
-Write all slide text in ${targetLanguage}. The source URL MUST appear in the caption CTA.
+Write all slide text in ${targetLanguage}.
 
 Return ONLY valid JSON (no markdown):
 ${SLIDE_SCHEMA}`;
@@ -322,18 +343,13 @@ ${SLIDE_SCHEMA}`;
             return res.status(500).json({ error: "AI returned invalid JSON" });
         }
 
-        // Append source to caption CTA if not already there
-        if (parsed.caption && parsed.caption.cta && !parsed.caption.cta.includes(newsLink)) {
-            parsed.caption.cta += `\n\nSource: ${newsLink}`;
-        }
-
         const imageUrls = buildImageUrls(parsed.slides);
         const cleanBrandId = sanitizeBrandId(brand_id);
 
         const { data, error } = await supabase
             .from('posts')
             .insert([{
-                topic: `[News Lab] ${newsTitle.substring(0, 60)}`,
+                topic: `[News Lab] ${storyTitle.substring(0, 60)}`,
                 text: JSON.stringify(parsed),
                 status: 'Draft',
                 image_url: JSON.stringify(imageUrls),
@@ -341,17 +357,18 @@ ${SLIDE_SCHEMA}`;
             }])
             .select();
 
-        if (error) {
-            console.error("Supabase error:", error);
-            return res.json({ success: true, text: JSON.stringify(parsed), image_url: JSON.stringify(imageUrls), db_error: error.message });
-        }
+        if (error) throw error;
 
-        console.log("Saved News Lab post:", data[0].id);
-        res.json({ success: true, post: data[0] });
+        res.json({
+            success: true,
+            topic: storyTitle,
+            category: selectedCategory,
+            post: data ? data[0] : null
+        });
 
-    } catch (err) {
-        console.error("News Lab error:", err);
-        res.status(500).json({ error: "Internal server error: " + err.message });
+    } catch (error) {
+        console.error("Error in /generate-news:", error);
+        res.status(500).json({ error: error.message || "Failed to generate news content" });
     }
 });
 

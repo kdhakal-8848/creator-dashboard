@@ -181,8 +181,26 @@
                         
                         <!-- Fabric.js Canvas Preview -->
                         <div class="slide-preview-wrapper">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 4px; width: 100%;">
-                                <span style="font-size: 13px; font-weight: 600; color: #656d76;">Canvas (Click to select & edit elements)</span>
+                            <!-- Design Toggles Bar directly above canvas stage -->
+                            <div class="design-toggles-bar" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--color-canvas-default); border: 1px solid var(--color-border-default); border-radius: 8px; margin-bottom: 12px; width: 100%; box-sizing: border-box;">
+                                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.05em;">Toggles:</span>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                                        <input type="checkbox" id="toggle-brand-logo" checked> Logo
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                                        <input type="checkbox" id="toggle-brand-handle" checked> Handle
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                                        <input type="checkbox" id="toggle-brand-header-asset" checked> Header Asset
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                                        <input type="checkbox" id="toggle-slide-numbers" checked> Numbers
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                                        <input type="checkbox" id="toggle-swipe-indicator" checked> Swipe Tab ("SWIPE ➔")
+                                    </label>
+                                </div>
                                 <div style="display: flex; gap: 6px;">
                                     <button class="btn-secondary" id="canvas-undo" style="padding: 3px 8px; font-size: 12px;" title="Undo"><i data-feather="corner-up-left" style="width:13px;height:13px;"></i></button>
                                     <button class="btn-secondary" id="canvas-redo" style="padding: 3px 8px; font-size: 12px;" title="Redo"><i data-feather="corner-up-right" style="width:13px;height:13px;"></i></button>
@@ -361,10 +379,31 @@
             <!-- ============================================================ -->
             <div id="news-view" class="view">
                 <h2 style="margin-bottom: 4px;">News Lab</h2>
-                <p style="color: #656d76; margin-bottom: 20px;">Automatically fetch interesting international news and generate engaging carousels.</p>
-                <div style="max-width: 560px;">
+                <p style="color: #656d76; margin-bottom: 20px;">Generate engaging news carousels automatically or specify a custom story topic.</p>
+                <div style="max-width: 580px;">
                     <div class="form-group">
-                        <label>Content Type / Style</label>
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            Specific News Topic (Optional)
+                            <span style="font-size: 11px; font-weight: normal; color: var(--color-fg-muted);">Leave empty for auto-search</span>
+                        </label>
+                        <input type="text" id="news-topic-input" placeholder="e.g. Nepal hydropower milestone, SpaceX Starship launch, AI breakthrough" class="full-width" style="margin-bottom: 6px;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>News Category / Auto-Search Focus</label>
+                        <select id="news-category-select" class="full-width">
+                            <option value="Nepal Today (Latest Nepal News)">🇳🇵 Nepal Today (News in Nepal today)</option>
+                            <option value="Good News (Worldwide)">🌟 Good News (Worldwide)</option>
+                            <option value="Weird & Bizarre News (Worldwide)" selected>🤪 Weird & Bizarre News (Worldwide)</option>
+                            <option value="Important Discoveries & Science">🔬 Important Discoveries & Science</option>
+                            <option value="Health & Human Wellness">❤️ Health & Human Wellness</option>
+                            <option value="Tech & Artificial Intelligence">💻 Tech & Artificial Intelligence</option>
+                            <option value="Global Economy & Finance">📈 Global Economy & Finance</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Content Type / Angle</label>
                         <select id="news-content-type" class="full-width">
                             <option value="Standard News Summary">Standard News Summary</option>
                             <option value="Conspiracy Theory Style">Conspiracy Theory Style</option>
@@ -373,18 +412,22 @@
                             <option value="Gamified Quiz">Gamified Quiz</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>Language</label>
-                        <select id="news-language" class="full-width">
-                            <option value="English">English</option>
-                            <option value="Nepali">Nepali</option>
-                        </select>
+
+                    <div class="two-col-grid">
+                        <div class="form-group">
+                            <label>Language</label>
+                            <select id="news-language" class="full-width">
+                                <option value="English">English</option>
+                                <option value="Nepali">Nepali</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Target Brand</label>
+                            <select id="news-brand" class="full-width"><!-- Populated dynamically --></select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Target Brand</label>
-                        <select id="news-brand" class="full-width"><!-- Populated dynamically --></select>
-                    </div>
-                    <button class="btn-primary" id="trigger-news"><i data-feather="globe"></i> Generate News Post</button>
+
+                    <button class="btn-primary full-width" id="trigger-news" style="padding: 12px; font-size: 15px;"><i data-feather="globe"></i> Generate News Post</button>
                     <div id="news-feedback" class="feedback-msg"></div>
                     <div id="news-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
                         <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>

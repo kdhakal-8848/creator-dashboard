@@ -505,15 +505,37 @@ function initFabricCanvas() {
     // Scale all coordinates: objects are placed in virtual 1080x1350 space
     fabricCanvas.setZoom(CANVAS_ZOOM);
 
-    // Track history for undo/redo
-    fabricCanvas.on('object:modified', () => saveCanvasHistory());
+    // Track history for undo/redo & sync canvas text to current slide state
+    fabricCanvas.on('object:modified', () => { syncFabricCanvasToCurrentSlide(); saveCanvasHistory(); });
     fabricCanvas.on('object:added', () => saveCanvasHistory());
     fabricCanvas.on('object:removed', () => saveCanvasHistory());
+    fabricCanvas.on('text:changed', () => syncFabricCanvasToCurrentSlide());
 
     // Update format panel on selection
     fabricCanvas.on('selection:created', onCanvasSelection);
     fabricCanvas.on('selection:updated', onCanvasSelection);
     fabricCanvas.on('selection:cleared', () => {});
+}
+
+function syncFabricCanvasToCurrentSlide() {
+    if (!fabricCanvas || !currentSlides[currentSlideIndex]) return;
+    const objects = fabricCanvas.getObjects();
+    objects.forEach(obj => {
+        if (obj.isPlaceholder === 'title' || obj.customType === 'title') {
+            if (obj.text !== undefined) {
+                currentSlides[currentSlideIndex].title = obj.text;
+            }
+        }
+        if (obj.isPlaceholder === 'body' || obj.customType === 'body') {
+            if (obj.text !== undefined) {
+                currentSlides[currentSlideIndex].content = obj.text;
+            }
+        }
+    });
+    const titleIn = document.getElementById(`slide-title-${currentSlideIndex}`);
+    const contentIn = document.getElementById(`slide-content-${currentSlideIndex}`);
+    if (titleIn) titleIn.value = currentSlides[currentSlideIndex].title || '';
+    if (contentIn) contentIn.value = currentSlides[currentSlideIndex].content || '';
 }
 
 function saveCanvasHistory() {
@@ -575,7 +597,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     
     const showLogo = document.getElementById('toggle-brand-logo')?.checked !== false;
     const showHandle = document.getElementById('toggle-brand-handle')?.checked !== false;
+    const showHeaderAsset = document.getElementById('toggle-brand-header-asset')?.checked !== false;
     const showPagination = document.getElementById('toggle-slide-numbers')?.checked !== false;
+    const showSwipe = document.getElementById('toggle-swipe-indicator')?.checked !== false;
 
     const addObjects = () => {
         // --- 1. Overlay Layer ---
@@ -621,7 +645,6 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
         // --- 3. Brand Logo (Moveable, ON/OFF toggleable) ---
-        let hasLogoRendered = false;
         if (showLogo && brand?.logoUrl) {
             fabric.Image.fromURL(brand.logoUrl, (img) => {
                 if (img && img.width > 0) {
@@ -642,7 +665,6 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fabricCanvas.renderAll();
                 }
             }, { crossOrigin: 'anonymous' });
-            hasLogoRendered = true;
         }
 
         // --- 4. Brand Name / Handle in Header (Moveable, ON/OFF toggleable) ---
@@ -663,7 +685,27 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             fabricCanvas.add(brandText);
         }
 
-        // --- 5. Accent Line ---
+        // --- 5. Brand Header Asset (Moveable, ON/OFF toggleable) ---
+        if (showHeaderAsset && brand?.headerAssetUrl) {
+            fabric.Image.fromURL(brand.headerAssetUrl, (img) => {
+                if (img && img.width > 0) {
+                    const targetH = 40;
+                    const scale = targetH / (img.height || targetH);
+                    img.set({
+                        left: CANVAS_W - 140,
+                        top: selectedPreset === 'template-minimal' ? 50 : 42,
+                        scaleX: scale, scaleY: scale,
+                        selectable: true, evented: true,
+                        customType: 'header-asset', isPlaceholder: 'header-asset'
+                    });
+                    fabricCanvas.add(img);
+                    fabricCanvas.bringToFront(img);
+                    fabricCanvas.renderAll();
+                }
+            }, { crossOrigin: 'anonymous' });
+        }
+
+        // --- 6. Accent Line ---
         if (selectedPreset !== 'template-minimal') {
             const accentLine = new fabric.Rect({
                 left: 80,
@@ -678,45 +720,53 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
         if (isCTA) {
-            // ===== CTA SLIDE LAYOUT =====
+            // ===== CTA SLIDE DYNAMIC LAYOUT (ZERO OVERLAP) =====
+            const ctaLabelTop = 260;
             const ctaLabel = new fabric.IText('BEFORE YOU GO', {
-                left: CANVAS_W / 2, top: 420,
-                fontSize: 32, fontWeight: '700',
+                left: CANVAS_W / 2, top: ctaLabelTop,
+                fontSize: 30, fontWeight: '700',
                 fill: accentColor, fontFamily: headingFont,
                 textAlign: 'center', originX: 'center', letterSpacing: 4,
                 selectable: true, customType: 'cta-label'
             });
             fabricCanvas.add(ctaLabel);
 
+            const ctaTitleTop = ctaLabelTop + ctaLabel.getScaledHeight() + 30;
             const ctaTitle = new fabric.Textbox(slideData.title || 'Follow for More! 🔥', {
-                left: 80, top: 500, width: CANVAS_W - 160,
-                fontSize: 96, fontWeight: '900', fill: '#ffffff',
-                fontFamily: headingFont, textAlign: 'center', lineHeight: 1.1,
+                left: 80, top: ctaTitleTop, width: CANVAS_W - 160,
+                fontSize: 84, fontWeight: '900', fill: '#ffffff',
+                fontFamily: headingFont, textAlign: 'center', lineHeight: 1.15,
                 selectable: true, isPlaceholder: 'title', customType: 'title'
             });
             fabricCanvas.add(ctaTitle);
 
-            const ctaBody = new fabric.Textbox(slideData.content || `Read the caption for the full breakdown ↓\n\nFollow ${handle} for amazing content every day.`, {
-                left: 80, top: 780, width: CANVAS_W - 160,
-                fontSize: 46, fill: 'rgba(255,255,255,0.88)',
+            const ctaTitleHeight = ctaTitle.getScaledHeight();
+            const ctaBodyTop = ctaTitleTop + ctaTitleHeight + 35;
+
+            const ctaBody = new fabric.Textbox(slideData.content || `Read the caption for the full breakdown ↓\n\nFollow ${handle} for daily prep & insights.`, {
+                left: 80, top: ctaBodyTop, width: CANVAS_W - 160,
+                fontSize: 44, fill: 'rgba(255,255,255,0.88)',
                 fontFamily: bodyFont, textAlign: 'center', lineHeight: 1.5,
                 selectable: true, isPlaceholder: 'body', customType: 'body'
             });
             fabricCanvas.add(ctaBody);
 
+            const ctaBodyHeight = ctaBody.getScaledHeight();
+            const ctaBtnTop = Math.max(ctaBodyTop + ctaBodyHeight + 45, 1050);
+
             const ctaBtnRect = new fabric.Rect({
-                left: CANVAS_W / 2 - 200, top: 1050,
-                width: 400, height: 100, fill: accentColor,
-                rx: 50, ry: 50,
-                selectable: false, evented: false, customType: 'cta-btn-bg'
+                left: CANVAS_W / 2 - 220, top: ctaBtnTop,
+                width: 440, height: 90, fill: accentColor,
+                rx: 45, ry: 45,
+                selectable: true, evented: true, customType: 'cta-btn-bg'
             });
             fabricCanvas.add(ctaBtnRect);
 
             const ctaBtnText = new fabric.IText('FOLLOW NOW', {
-                left: CANVAS_W / 2, top: 1090,
-                fontSize: 36, fontWeight: '800', fill: '#000000',
+                left: CANVAS_W / 2, top: ctaBtnTop + 25,
+                fontSize: 34, fontWeight: '800', fill: '#000000',
                 fontFamily: headingFont, textAlign: 'center', originX: 'center',
-                selectable: false, evented: false, customType: 'cta-btn-text'
+                selectable: true, evented: true, customType: 'cta-btn-text'
             });
             fabricCanvas.add(ctaBtnText);
 
@@ -1143,9 +1193,12 @@ function renderSlidesForm() {
 }
 
 window.jumpToSlide = (index) => {
+    syncFabricCanvasToCurrentSlide();
     currentSlideIndex = index;
     renderSlidesForm();
     updateSlidePreview();
+    updateSidebarImagePreview(index);
+    updateCTABadge();
 };
 
 window.updateSlideData = (index, field, value) => {
@@ -1158,15 +1211,31 @@ window.updateSlideData = (index, field, value) => {
 
 // Prev/Next Slide
 document.getElementById('prev-slide').addEventListener('click', () => {
-    if (currentSlideIndex > 0) { currentSlideIndex--; renderSlidesForm(); updateSlidePreview(); }
+    if (currentSlideIndex > 0) {
+        syncFabricCanvasToCurrentSlide();
+        currentSlideIndex--;
+        renderSlidesForm();
+        updateSlidePreview();
+        updateSidebarImagePreview(currentSlideIndex);
+        updateCTABadge();
+    }
 });
 document.getElementById('next-slide').addEventListener('click', () => {
-    if (currentSlideIndex < currentSlides.length - 1) { currentSlideIndex++; renderSlidesForm(); updateSlidePreview(); }
+    if (currentSlideIndex < currentSlides.length - 1) {
+        syncFabricCanvasToCurrentSlide();
+        currentSlideIndex++;
+        renderSlidesForm();
+        updateSlidePreview();
+        updateSidebarImagePreview(currentSlideIndex);
+        updateCTABadge();
+    }
 });
 
 document.getElementById('toggle-brand-logo')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-brand-handle')?.addEventListener('change', () => updateSlidePreview());
+document.getElementById('toggle-brand-header-asset')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-slide-numbers')?.addEventListener('change', () => updateSlidePreview());
+document.getElementById('toggle-swipe-indicator')?.addEventListener('change', () => updateSlidePreview());
 
 document.getElementById('back-to-queue').addEventListener('click', () => {
     document.querySelector('[data-target="queue-view"]')?.click();
@@ -1246,6 +1315,7 @@ document.getElementById('download-slides').addEventListener('click', downloadSli
 // 3e. SAVE POST
 // ============================================================
 document.getElementById('save-post').addEventListener('click', async () => {
+    syncFabricCanvasToCurrentSlide();
     const updatedStatus = document.getElementById('editor-status').value;
     const updatedText = JSON.stringify({ slides: currentSlides, caption: getCaptionText() });
     const updatedImageUrl = JSON.stringify(currentImageUrls);
