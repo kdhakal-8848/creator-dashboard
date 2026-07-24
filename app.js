@@ -730,7 +730,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     const scale = targetW / img.width;
                     img.set({
                         left: 80,
-                        top: 40,
+                        top: 125,
+                        originY: 'bottom',
                         scaleX: scale, scaleY: scale,
                         selectable: true, evented: true,
                         customType: 'header-asset'
