@@ -524,12 +524,22 @@ function syncFabricCanvasToCurrentSlide() {
     if (objects.length === 0) return;
     let updated = false;
     objects.forEach(obj => {
-        if ((obj.isPlaceholder === 'title' || obj.customType === 'title') && obj.text !== undefined) {
-            currentSlides[currentSlideIndex].title = obj.text;
+        if (obj.isPlaceholder === 'title' || obj.customType === 'title') {
+            if (obj.text !== undefined) currentSlides[currentSlideIndex].title = obj.text;
+            currentSlides[currentSlideIndex].titleStyle = {
+                left: obj.left, top: obj.top, width: obj.width, fontSize: obj.fontSize,
+                fill: obj.fill, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
+                fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign
+            };
             updated = true;
         }
-        if ((obj.isPlaceholder === 'body' || obj.customType === 'body') && obj.text !== undefined) {
-            currentSlides[currentSlideIndex].content = obj.text;
+        if (obj.isPlaceholder === 'body' || obj.customType === 'body') {
+            if (obj.text !== undefined) currentSlides[currentSlideIndex].content = obj.text;
+            currentSlides[currentSlideIndex].bodyStyle = {
+                left: obj.left, top: obj.top, width: obj.width, fontSize: obj.fontSize,
+                fill: obj.fill, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
+                fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign
+            };
             updated = true;
         }
     });
@@ -697,11 +707,12 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    const targetH = 55;
+                    const targetH = 165;
                     const scale = targetH / (img.height || targetH);
+                    // Use saved styling if it exists for header asset? Currently not persisting it, but default is top-left
                     img.set({
-                        left: CANVAS_W - Math.round(img.width * scale) - 70,
-                        top: selectedPreset === 'template-minimal' ? 38 : 32,
+                        left: 80,
+                        top: 40,
                         scaleX: scale, scaleY: scale,
                         selectable: true, evented: true,
                         customType: 'header-asset', isPlaceholder: 'header-asset'
@@ -742,23 +753,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             fabricCanvas.add(ctaLabel);
 
             const ctaTitleTop = ctaLabelTop + ctaLabel.getScaledHeight() + 30;
-            const ctaTitle = new fabric.Textbox(slideData.title || 'Follow for More! 🔥', {
+            const ctaTitleDef = {
                 left: 80, top: ctaTitleTop, width: CANVAS_W - 160,
                 fontSize: 84, fontWeight: '900', fill: '#ffffff',
                 fontFamily: headingFont, textAlign: 'center', lineHeight: 1.15,
                 selectable: true, isPlaceholder: 'title', customType: 'title'
-            });
+            };
+            const ctaTitle = new fabric.Textbox(slideData.title || 'Follow for More! 🔥', { ...ctaTitleDef, ...(slideData.titleStyle || {}) });
             fabricCanvas.add(ctaTitle);
 
             const ctaTitleHeight = ctaTitle.getScaledHeight();
-            const ctaBodyTop = ctaTitleTop + ctaTitleHeight + 35;
+            const ctaBodyTop = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + ctaTitleHeight + 35 : ctaTitleTop + ctaTitleHeight + 35;
 
-            const ctaBody = new fabric.Textbox(slideData.content || `Read the caption for the full breakdown ↓\n\nFollow ${handle} for daily prep & insights.`, {
+            const ctaBodyDef = {
                 left: 80, top: ctaBodyTop, width: CANVAS_W - 160,
                 fontSize: 44, fill: 'rgba(255,255,255,0.88)',
                 fontFamily: bodyFont, textAlign: 'center', lineHeight: 1.5,
                 selectable: true, isPlaceholder: 'body', customType: 'body'
-            });
+            };
+            const ctaBody = new fabric.Textbox(slideData.content || `Read the caption for the full breakdown ↓\n\nFollow ${handle} for daily prep & insights.`, { ...ctaBodyDef, ...(slideData.bodyStyle || {}) });
             fabricCanvas.add(ctaBody);
 
             const ctaBodyHeight = ctaBody.getScaledHeight();
@@ -796,21 +809,23 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 });
                 fabricCanvas.add(glassCard);
 
-                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                const titleDef = {
                     left: 100, top: 230, width: CANVAS_W - 200,
                     fontSize: 80, fontWeight: '800', fill: '#ffffff',
                     fontFamily: headingFont, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
-                });
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 fabricCanvas.add(slideTitle);
 
-                const titleBottom = 230 + slideTitle.getScaledHeight() + 35;
-                const slideBody = new fabric.Textbox(slideData.content || '', {
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
+                const bodyDef = {
                     left: 100, top: Math.max(titleBottom, 420), width: CANVAS_W - 200,
                     fontSize: 48, fill: '#f8fafc',
                     fontFamily: bodyFont, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
-                });
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-bold') {
@@ -823,21 +838,23 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 });
                 fabricCanvas.add(verticalBar);
 
-                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                const titleDef = {
                     left: 105, top: 210, width: CANVAS_W - 185,
                     fontSize: 92, fontWeight: '900', fill: '#ffd700',
                     fontFamily: headingFont, lineHeight: 1.1,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
-                });
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 fabricCanvas.add(slideTitle);
 
-                const titleBottom = 210 + slideTitle.getScaledHeight() + 35;
-                const slideBody = new fabric.Textbox(slideData.content || '', {
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 210 + slideTitle.getScaledHeight() + 35;
+                const bodyDef = {
                     left: 105, top: Math.max(titleBottom, 450), width: CANVAS_W - 185,
                     fontSize: 50, fontWeight: '600', fill: '#ffffff',
                     fontFamily: bodyFont, lineHeight: 1.5,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
-                });
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-visual') {
@@ -851,39 +868,43 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 });
                 fabricCanvas.add(bottomPanel);
 
-                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                const titleDef = {
                     left: 80, top: 840, width: CANVAS_W - 160,
                     fontSize: 72, fontWeight: '800', fill: '#ffffff',
                     fontFamily: headingFont, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
-                });
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 fabricCanvas.add(slideTitle);
 
-                const titleBottom = 840 + slideTitle.getScaledHeight() + 25;
-                const slideBody = new fabric.Textbox(slideData.content || '', {
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 25 : 840 + slideTitle.getScaledHeight() + 25;
+                const bodyDef = {
                     left: 80, top: Math.max(titleBottom, 960), width: CANVAS_W - 160,
                     fontSize: 44, fill: '#cbd5e1',
                     fontFamily: bodyFont, lineHeight: 1.5,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
-                });
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-minimal') {
-                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                const titleDef = {
                     left: 80, top: 230, width: CANVAS_W - 160,
                     fontSize: 84, fontWeight: '700', fill: '#ffffff',
                     fontFamily: headingFont, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
-                });
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 fabricCanvas.add(slideTitle);
 
-                const titleBottom = 230 + slideTitle.getScaledHeight() + 35;
-                const slideBody = new fabric.Textbox(slideData.content || '', {
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
+                const bodyDef = {
                     left: 80, top: Math.max(titleBottom, 460), width: CANVAS_W - 160,
                     fontSize: 48, fontWeight: '400', fill: '#cbd5e1',
                     fontFamily: bodyFont, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
-                });
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-custom') {
@@ -891,39 +912,43 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 const customTitleY = 210 + (parseFloat(brand?.customTitleY || 50) - 50) * 2;
                 const customContentY = (parseFloat(brand?.customContentY || 70) / 100) * CANVAS_H;
 
-                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                const titleDef = {
                     left: 80, top: customTitleY, width: CANVAS_W - 160,
                     fontSize: customTitleSize, fontWeight: '900', fill: '#ffffff',
                     fontFamily: headingFont, lineHeight: 1.1,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
-                });
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 fabricCanvas.add(slideTitle);
 
-                const slideBody = new fabric.Textbox(slideData.content || '', {
+                const bodyDef = {
                     left: 80, top: customContentY, width: CANVAS_W - 160,
                     fontSize: 52, fill: 'rgba(255,255,255,0.90)',
                     fontFamily: bodyFont, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
-                });
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
             } else {
                 // Default / Classic Template
-                const slideTitle = new fabric.Textbox(slideData.title || '', {
+                const titleDef = {
                     left: 80, top: 210, width: CANVAS_W - 160,
                     fontSize: 88, fontWeight: '900', fill: '#ffffff',
                     fontFamily: headingFont, lineHeight: 1.1,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
-                });
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 fabricCanvas.add(slideTitle);
 
-                const titleBottom = 210 + slideTitle.getScaledHeight() + 40;
-                const slideBody = new fabric.Textbox(slideData.content || '', {
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 40 : 210 + slideTitle.getScaledHeight() + 40;
+                const bodyDef = {
                     left: 80, top: Math.max(titleBottom, 450), width: CANVAS_W - 160,
                     fontSize: 52, fill: 'rgba(255,255,255,0.90)',
                     fontFamily: bodyFont, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
-                });
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
             }
 

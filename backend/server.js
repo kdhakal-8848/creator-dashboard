@@ -136,9 +136,9 @@ Topic: ${topic}
 Content Type: ${contentType}
 
 CAROUSEL NARRATIVE FRAMEWORK (STRICT):
-- Slide 1: HIGH-CONTRAST HOOK — title creates a curiosity gap (e.g., "How Nepal's Rivers Shape Its Economy"). Content is the most compelling single takeaway. image_prompt: dramatic wide-angle visual related to topic.
-- Slides 2-N-1: ONE idea per slide, max 40 words body, scannable bullet-style. Include a unique image_prompt for each.
-- FINAL SLIDE: CTA only. Set "is_cta": true. Title: "Save This for Your Exam! 📌". Content: "Read the caption for the full breakdown ↓\\n\\nFollow ${brand_context?.handle || '@CreatorsDen'} for daily Loksewa prep." NO image_prompt on this slide.
+- Slide 1: HOOK — high-contrast statement or bold question. Include a highly descriptive image_prompt for this hook.
+- Slides 2-N-1: ONE idea per slide, max 40 words body, scannable bullet-style. CRITICAL: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE TEXT (DO NOT REPEAT CONTENT) AND A COMPLETELY UNIQUE image_prompt.
+- FINAL SLIDE: CTA only. Set "is_cta": true. Title: "Save This for Your Exam! 📌". Content: "Read the caption for the full breakdown ↓\n\nFollow ${brand_context?.handle || '@CreatorsDen'} for daily Loksewa prep." NO image_prompt on this slide.
 
 Return ONLY valid JSON, no markdown. Use this exact schema:
 ${SLIDE_SCHEMA}`;
@@ -326,7 +326,7 @@ Source Link: ${storyLink}
 
 CAROUSEL NARRATIVE FRAMEWORK (STRICT):
 - Slide 1: HOOK — shocking or intriguing headline on this story. image_prompt: photojournalistic realistic scene related to story.
-- Slides 2-3: KEY FACTS — key breakdown or timeline per slide, max 40 words. Unique image_prompt per slide.
+- Slides 2-3: KEY FACTS — key breakdown or timeline per slide, max 40 words. CRITICAL: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE TEXT (DO NOT REPEAT CONTENT) AND A COMPLETELY UNIQUE image_prompt.
 - Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily world news." NO image_prompt.
 
 Write all slide text in ${targetLanguage}.
