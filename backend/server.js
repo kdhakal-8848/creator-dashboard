@@ -280,6 +280,83 @@ IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be 
     }
 });
 
+// --- Generate Facts Lab Endpoint ---
+app.post('/generate-facts', async (req, res) => {
+    const { topic, language, slide_count, brand_id } = req.body;
+    const targetLanguage = language || "English";
+    const count = parseInt(slide_count) || 5;
+    const factTopic = topic || "Sharks are older than trees";
+
+    try {
+        console.log(`Generating Facts Lab carousel for: ${factTopic}`);
+        
+        let text = "";
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        
+        const prompt = `You are an expert social media facts content creator for Instagram. Create a viral, high-converting facts carousel on the topic: "${factTopic}".
+
+CRITICAL SLIDE STRUCTURE REQUIREMENT:
+- Slide 1 MUST be a high-converting cover hook. The title MUST be "Did You Know?" or "Mind-Blowing Fact:" and the content MUST be a bold hook statement (e.g., "Sharks are 100 million years older than trees!").
+- Slides 2 to ${count - 1} MUST break down the topic with fascinating details, evolutionary context, timeline, or mind-blowing stats.
+- Slide ${count} MUST be an engaging call to action asking users to double tap, share, or follow for daily facts.
+
+Format the output strictly as a JSON object with the following schema:
+{
+  "slides": [
+    {
+      "title": "Short catchy title for slide",
+      "content": "Content for the slide"
+    }
+  ],
+  "caption": "Engaging Instagram caption summarizing the fact, asking a question to boost comments, and including 10 high-ranking hashtags."
+}
+Do NOT include markdown formatting like \`\`\`json around the response. Return ONLY valid JSON.
+IMPORTANT: The generated text inside the JSON (both slides and caption) MUST be written in ${targetLanguage}.`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        text = response.text();
+
+        // Try to parse to ensure it's valid JSON
+        try {
+            JSON.parse(text);
+        } catch (e) {
+            console.error("Gemini returned invalid JSON for facts", text);
+            return res.status(500).json({ error: "AI generated invalid JSON" });
+        }
+
+        // Generate AI image URL using pollinations.ai
+        const cleanTopic = factTopic.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 100);
+        const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanTopic + " stunning high resolution photography detailed vibrant cinematic 8k")}`;
+
+        // Insert into Supabase
+        const { data, error } = await supabase
+            .from('posts')
+            .insert([
+                { 
+                    topic: `[Facts Lab] ${factTopic.substring(0, 50)}`, 
+                    text: text, 
+                    status: 'Draft',
+                    image_url: generatedImageUrl,
+                    brand_id: brand_id || null
+                }
+            ])
+            .select();
+
+        if (error) {
+            console.error("Supabase Error:", error);
+            return res.json({ success: true, text: text, image_url: generatedImageUrl, db_error: error.message });
+        }
+
+        console.log("Successfully generated and saved Facts Lab post:", data[0].id);
+        res.json({ success: true, post: data[0] });
+
+    } catch (err) {
+        console.error("Facts Lab Error:", err);
+        res.status(500).json({ error: "Internal server error: " + err.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Loksewa Backend is running on port ${port}`);
     console.log(`Ready to generate content!`);

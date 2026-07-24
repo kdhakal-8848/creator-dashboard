@@ -995,3 +995,24 @@ input:focus, select:focus, textarea:focus {
         display: block !important;
     }
 }
+
+/* Figma-Style Direct Canvas Editable Elements */
+[contenteditable="true"] {
+    outline: none;
+    border: 2px dashed transparent;
+    border-radius: 4px;
+    padding: 2px 4px;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+    cursor: text;
+}
+
+[contenteditable="true"]:hover {
+    border-color: rgba(9, 105, 218, 0.4);
+    background-color: rgba(9, 105, 218, 0.05);
+}
+
+[contenteditable="true"]:focus {
+    border-color: #0969da;
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.25);
+}

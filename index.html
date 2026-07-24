@@ -15,7 +15,7 @@
 <body>
     <!-- Login Container -->
     <div id="login-container" style="display: flex; height: 100vh; align-items: center; justify-content: center; background-color: #f6f8fa;">
-        <div style="width: 340px; padding: 24px; text-align: center; background: #fff; border: 1px solid #d0d7de; border-radius: 12px;">
+        <div id="signin-card" style="width: 340px; padding: 24px; text-align: center; background: #fff; border: 1px solid #d0d7de; border-radius: 12px;">
             <div style="width: 48px; height: 48px; border-radius: 50%; background: #1f883d; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
                 <i data-feather="cpu" style="width: 24px; height: 24px; color: white;"></i>
             </div>
@@ -26,12 +26,33 @@
                 <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Email address</label>
                 <input type="email" id="login-email" style="width: 100%; padding: 5px 12px; margin-bottom: 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
                 
-                <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Password</label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="font-size: 14px; font-weight: 600;">Password</label>
+                    <a href="#" id="forgot-password-link" style="font-size: 12px; color: #0969da; text-decoration: none;">Forgot password?</a>
+                </div>
                 <input type="password" id="login-password" style="width: 100%; padding: 5px 12px; margin-bottom: 16px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
             </div>
             
             <button id="login-btn" style="width: 100%; padding: 8px 16px; background: #1f883d; color: white; border: 1px solid rgba(27,31,36,0.15); border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Sign in</button>
             <p id="login-feedback" style="margin-top: 12px; font-size: 14px; color: #d1242f;"></p>
+        </div>
+
+        <!-- Forgot / Reset Password Card -->
+        <div id="reset-password-card" style="display: none; width: 340px; padding: 24px; text-align: center; background: #fff; border: 1px solid #d0d7de; border-radius: 12px;">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background: #0969da; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+                <i data-feather="key" style="width: 24px; height: 24px; color: white;"></i>
+            </div>
+            <h2 style="margin-bottom: 4px; font-size: 20px;">Reset Password</h2>
+            <p style="color: #656d76; margin-bottom: 20px; font-size: 13px;">Enter your email to receive a password reset link.</p>
+            
+            <div style="text-align: left;">
+                <label style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Account Email</label>
+                <input type="email" id="reset-email" placeholder="name@example.com" style="width: 100%; padding: 5px 12px; margin-bottom: 16px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; background: #f6f8fa;">
+            </div>
+            
+            <button id="send-reset-btn" style="width: 100%; padding: 8px 16px; background: #0969da; color: white; border: 1px solid rgba(27,31,36,0.15); border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">Send Reset Link</button>
+            <button id="back-to-signin-btn" style="width: 100%; padding: 6px 12px; background: transparent; color: #656d76; border: 1px solid #d0d7de; border-radius: 6px; font-size: 13px; cursor: pointer;">Back to Sign In</button>
+            <p id="reset-feedback" style="margin-top: 12px; font-size: 14px; color: #d1242f;"></p>
         </div>
     </div>
 
@@ -47,6 +68,7 @@
                 <li><a href="#" data-target="queue-view"><i data-feather="list"></i> Content Queue</a></li>
                 <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
                 <li><a href="#" data-target="news-view"><i data-feather="globe"></i> News Lab</a></li>
+                <li><a href="#" data-target="facts-view"><i data-feather="zap"></i> Facts Lab</a></li>
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Branding</a></li>
                 <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Account Settings</a></li>
@@ -175,14 +197,26 @@
                             <input type="color" id="brand-secondary-color-input" style="height: 36px; width: 100%; border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;">
                         </div>
                     </div>
-                    <div class="setting-item">
-                        <label>Brand Logo</label>
-                        <div style="display: flex; align-items: center; gap: 16px;">
-                            <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="width: 64px; height: 64px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px;">
-                            <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
-                                <i data-feather="upload"></i> Upload Logo
-                                <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
-                            </label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="setting-item">
+                            <label>Brand Logo</label>
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <img id="brand-logo-preview" src="assets/images/logo.png" alt="Logo Preview" style="width: 64px; height: 64px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px;">
+                                <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
+                                    <i data-feather="upload"></i> Upload Logo
+                                    <input type="file" id="brand-logo-upload" style="display:none;" accept="image/*">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <label>Brand Header Asset (Handle & Badge)</label>
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <img id="brand-header-asset-preview" src="assets/images/logo.png" alt="Header Asset Preview" style="max-width: 140px; height: 50px; object-fit: contain; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px; background: #fafafa;">
+                                <label class="btn-secondary" style="display: inline-flex; cursor: pointer; margin-bottom: 0;">
+                                    <i data-feather="upload"></i> Upload Header Asset
+                                    <input type="file" id="brand-header-asset-upload" style="display:none;" accept="image/*">
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -266,12 +300,16 @@
                                 <div class="slide-card" id="slide-render-target">
                                     <img id="slide-bg-img" src="" alt="Background" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:1;">
                                     <div class="slide-bg-overlay"></div>
-                                    <div class="slide-header">
-                                        <img id="slide-brand-logo" src="assets/images/logo.png" alt="Brand Logo" style="height: 48px; margin-right: 16px;"> <span id="slide-brand-name">CREATOR'S DEN</span>
+                                    <div class="slide-header" id="slide-header-container">
+                                        <img id="slide-brand-header-asset" src="" alt="Header Asset" style="display:none; height: 52px; max-width: 80%; object-fit: contain; z-index: 2;">
+                                        <div id="slide-brand-default-header" style="display: flex; align-items: center;">
+                                            <img id="slide-brand-logo" src="assets/images/logo.png" alt="Brand Logo" style="height: 48px; margin-right: 16px;">
+                                            <span id="slide-brand-name">CREATOR'S DEN</span>
+                                        </div>
                                     </div>
                                     <div class="slide-content">
-                                        <h1 id="preview-title">Slide Title</h1>
-                                        <p id="preview-body">Slide content goes here...</p>
+                                        <h1 id="preview-title" contenteditable="true" spellcheck="false" title="Click directly to edit text (Figma style)">Slide Title</h1>
+                                        <p id="preview-body" contenteditable="true" spellcheck="false" title="Click directly to edit text (Figma style)">Slide content goes here...</p>
                                     </div>
                                     <div class="slide-footer">
                                         <span id="slide-brand-handle">@CreatorsDen</span>
@@ -418,6 +456,59 @@
                         <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
                         <h3 style="margin-bottom: 8px; font-size: 16px;">Fetching & Generating Content...</h3>
                         <p style="color: #656d76; font-size: 13px;">This usually takes 15–45 seconds.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Facts Lab View -->
+            <div id="facts-view" class="view">
+                <h2 style="margin-bottom: 4px;">Facts Lab (Instagram Carousel Creator)</h2>
+                <p style="color: #656d76; margin-bottom: 20px;">Generate high-converting, amazing facts carousels complete with AI images, "Did you know?" cover hook, and customizable slide details.</p>
+                <div style="max-width: 600px;">
+                    <div class="form-group">
+                        <label>Fact Topic / Niche</label>
+                        <input type="text" id="facts-topic" placeholder="e.g., Sharks vs Trees, Space Curiosities, Deep Ocean Secrets" class="full-width" style="margin-bottom: 8px;">
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                            <button class="btn-secondary fact-niche-preset" data-niche="Sharks are older than trees & ocean wonders" style="font-size: 11px; padding: 4px 8px;">🦈 Ocean Mysteries</button>
+                            <button class="btn-secondary fact-niche-preset" data-niche="Mind-bending space & astronomy facts" style="font-size: 11px; padding: 4px 8px;">🚀 Space Facts</button>
+                            <button class="btn-secondary fact-niche-preset" data-niche="Unbelievable animal kingdom powers" style="font-size: 11px; padding: 4px 8px;">🦁 Animal Kingdom</button>
+                            <button class="btn-secondary fact-niche-preset" data-niche="Ancient history secrets & weird truths" style="font-size: 11px; padding: 4px 8px;">🏛️ Ancient History</button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="form-group">
+                            <label>Language</label>
+                            <select id="facts-language" class="full-width">
+                                <option value="English">English</option>
+                                <option value="Nepali">Nepali</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Number of Slides</label>
+                            <select id="facts-slide-count" class="full-width">
+                                <option value="3">3 Slides (Quick Fact)</option>
+                                <option value="5" selected>5 Slides (Standard Fact)</option>
+                                <option value="7">7 Slides (Deep Dive)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Target Brand</label>
+                        <select id="facts-brand" class="full-width">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <button class="btn-primary full-width" id="trigger-facts" style="padding: 12px; font-size: 15px;"><i data-feather="zap"></i> Generate Amazing Facts Carousel</button>
+                    
+                    <div id="facts-feedback" class="feedback-msg"></div>
+                    
+                    <div id="facts-loading-overlay" style="display: none; margin-top: 20px; background: #f6f8fa; padding: 24px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de;">
+                        <i data-feather="loader" class="spin" style="width: 32px; height: 32px; color: #0969da; margin-bottom: 12px;"></i>
+                        <h3 style="margin-bottom: 8px; font-size: 16px;">Crafting Facts & AI Images...</h3>
+                        <p style="color: #656d76; font-size: 13px;">Writing hook cover, detailing fact slides, and generating AI visuals. Taking 15–30 seconds...</p>
                     </div>
                 </div>
             </div>

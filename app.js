@@ -114,6 +114,65 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     }
 });
 
+// Password Reset Flow Handlers
+const forgotLink = document.getElementById('forgot-password-link');
+const backToSigninBtn = document.getElementById('back-to-signin-btn');
+const sendResetBtn = document.getElementById('send-reset-btn');
+const signinCard = document.getElementById('signin-card');
+const resetCard = document.getElementById('reset-password-card');
+
+if (forgotLink) {
+    forgotLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (signinCard) signinCard.style.display = 'none';
+        if (resetCard) resetCard.style.display = 'block';
+    });
+}
+
+if (backToSigninBtn) {
+    backToSigninBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (resetCard) resetCard.style.display = 'none';
+        if (signinCard) signinCard.style.display = 'block';
+    });
+}
+
+if (sendResetBtn) {
+    sendResetBtn.addEventListener('click', async () => {
+        const email = document.getElementById('reset-email').value.trim();
+        const resetFeedback = document.getElementById('reset-feedback');
+        
+        if (!email) {
+            resetFeedback.innerText = "Please enter your email address.";
+            resetFeedback.style.color = "var(--danger)";
+            return;
+        }
+        
+        resetFeedback.innerText = "Sending reset link...";
+        resetFeedback.style.color = "var(--text-main)";
+        
+        if (isMockMode) {
+            setTimeout(() => {
+                resetFeedback.innerText = "Mock Mode: Password reset email sent!";
+                resetFeedback.style.color = "var(--success)";
+            }, 600);
+            return;
+        }
+        
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + window.location.pathname
+        });
+        
+        if (error) {
+            resetFeedback.innerText = error.message;
+            resetFeedback.style.color = "var(--danger)";
+        } else {
+            resetFeedback.innerText = "Password reset link sent! Check your inbox.";
+            resetFeedback.style.color = "var(--success)";
+        }
+    });
+}
+
 document.getElementById('logout-btn').addEventListener('click', async (e) => {
     e.preventDefault();
     if (isMockMode) {
@@ -177,6 +236,7 @@ let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
         name: "CREATOR'S DEN",
         handle: "@CreatorsDen",
         logoUrl: "assets/images/logo.png",
+        headerAssetUrl: "",
         facebookUrl: "https://business.facebook.com",
         instagramUrl: "https://instagram.com",
         tiktokUrl: "https://tiktok.com",
@@ -207,6 +267,7 @@ async function fetchBrands() {
                 primaryColor: dbBrand.primary_color,
                 secondaryColor: dbBrand.secondary_color,
                 logoUrl: dbBrand.logo_url,
+                headerAssetUrl: dbBrand.header_asset_url || dbBrand.template_settings?.headerAssetUrl || '',
                 facebookUrl: dbBrand.social_links?.facebookUrl || '',
                 instagramUrl: dbBrand.social_links?.instagramUrl || '',
                 tiktokUrl: dbBrand.social_links?.tiktokUrl || '',
@@ -236,7 +297,8 @@ function populateBrandSelectors() {
         document.getElementById('brand-selector'),
         document.getElementById('manual-brand'),
         document.getElementById('queue-brand-filter'),
-        document.getElementById('news-brand')
+        document.getElementById('news-brand'),
+        document.getElementById('facts-brand')
     ];
     
     selectors.forEach(sel => {
@@ -258,7 +320,7 @@ function populateBrandSelectors() {
         
         if (sel.id === 'brand-selector') {
             sel.value = activeBrandId;
-        } else if (sel.id === 'manual-brand' || sel.id === 'news-brand') {
+        } else if (sel.id === 'manual-brand' || sel.id === 'news-brand' || sel.id === 'facts-brand') {
             sel.value = activeBrandId; // default to active brand
         } else if (currentVal) {
             sel.value = currentVal;
@@ -272,12 +334,31 @@ function updateBrandVisuals(brand = currentBranding) {
     const nameEl = document.getElementById('slide-brand-name');
     const handleEl = document.getElementById('slide-brand-handle');
     const logoEl = document.getElementById('slide-brand-logo');
+    const headerAssetImg = document.getElementById('slide-brand-header-asset');
+    const defaultHeader = document.getElementById('slide-brand-default-header');
+    const headerAssetPreview = document.getElementById('brand-header-asset-preview');
+    
     const sidebarNameEl = document.getElementById('sidebar-brand-name');
     const sidebarLogoEl = document.getElementById('sidebar-brand-logo');
     
     if(nameEl) nameEl.innerText = brand.name || '';
     if(handleEl) handleEl.innerText = brand.handle || '';
     if(logoEl) logoEl.src = brand.logoUrl || '';
+
+    if (headerAssetImg && defaultHeader) {
+        if (brand.headerAssetUrl) {
+            headerAssetImg.src = brand.headerAssetUrl;
+            headerAssetImg.style.display = 'block';
+            defaultHeader.style.display = 'none';
+        } else {
+            headerAssetImg.style.display = 'none';
+            defaultHeader.style.display = 'flex';
+        }
+    }
+
+    if (headerAssetPreview) {
+        headerAssetPreview.src = brand.headerAssetUrl || brand.logoUrl || 'assets/images/logo.png';
+    }
     
     if(sidebarNameEl) sidebarNameEl.innerText = brand.name || '';
     if(sidebarLogoEl) sidebarLogoEl.src = brand.logoUrl || '';
@@ -1097,6 +1178,145 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
     }
 });
 
+// --- Figma-Style Live Canvas Editing Listeners ---
+const previewTitleEl = document.getElementById('preview-title');
+const previewBodyEl = document.getElementById('preview-body');
+
+if (previewTitleEl) {
+    previewTitleEl.addEventListener('input', (e) => {
+        if (currentSlides && currentSlides[currentSlideIndex]) {
+            currentSlides[currentSlideIndex].title = e.target.innerText;
+            const formInputs = document.querySelectorAll('#slides-form-container input[type="text"]');
+            if (formInputs[currentSlideIndex]) {
+                formInputs[currentSlideIndex].value = e.target.innerText;
+            }
+        }
+    });
+}
+
+if (previewBodyEl) {
+    previewBodyEl.addEventListener('input', (e) => {
+        if (currentSlides && currentSlides[currentSlideIndex]) {
+            currentSlides[currentSlideIndex].content = e.target.innerText;
+            const formTextareas = document.querySelectorAll('#slides-form-container textarea');
+            if (formTextareas[currentSlideIndex]) {
+                formTextareas[currentSlideIndex].value = e.target.innerText;
+            }
+        }
+    });
+}
+
+// --- Facts Lab Logic ---
+document.querySelectorAll('.fact-niche-preset').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const niche = btn.getAttribute('data-niche');
+        const topicInput = document.getElementById('facts-topic');
+        if (topicInput) topicInput.value = niche;
+    });
+});
+
+const triggerFactsBtn = document.getElementById('trigger-facts');
+if (triggerFactsBtn) {
+    triggerFactsBtn.addEventListener('click', async () => {
+        const topic = document.getElementById('facts-topic').value.trim() || "Sharks are older than trees & ocean wonders";
+        const language = document.getElementById('facts-language').value;
+        const slideCount = parseInt(document.getElementById('facts-slide-count').value) || 5;
+        const brandId = document.getElementById('facts-brand').value;
+        
+        const feedback = document.getElementById('facts-feedback');
+        const overlay = document.getElementById('facts-loading-overlay');
+        
+        triggerFactsBtn.style.display = 'none';
+        feedback.style.display = 'none';
+        overlay.style.display = 'block';
+        
+        try {
+            const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic: topic,
+                    language: language,
+                    slide_count: slideCount,
+                    brand_id: brandId
+                })
+            });
+            
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Failed to generate facts carousel.");
+            
+            if (isMockMode) {
+                const newPost = data.post || {
+                    id: Date.now().toString(),
+                    topic: `[Facts Lab] ${topic}`,
+                    text: data.text,
+                    image_url: data.image_url,
+                    status: 'Draft',
+                    brand_id: brandId,
+                    updated_at: new Date().toISOString()
+                };
+                if (!mockPosts.find(p => p.id === newPost.id)) {
+                    mockPosts.unshift(newPost);
+                    saveMockPosts();
+                }
+            }
+            
+            feedback.innerText = "Facts carousel generated successfully!";
+            feedback.style.color = "var(--success)";
+            triggerFactsBtn.style.display = 'block';
+            overlay.style.display = 'none';
+            feedback.style.display = 'block';
+            
+            await loadQueue();
+            const postId = data.post ? data.post.id : (mockPosts[0] ? mockPosts[0].id : null);
+            if (postId) {
+                window.openEditor(postId);
+            } else {
+                document.querySelector('[data-target="queue-view"]').click();
+            }
+            
+        } catch (err) {
+            console.error(err);
+            // Mock fallback for Facts Lab
+            setTimeout(() => {
+                const mockFactPost = {
+                    id: Date.now().toString(),
+                    topic: `[Facts Lab] ${topic}`,
+                    text: JSON.stringify({
+                        slides: [
+                            { title: "Did You Know?", content: `${topic.split('&')[0].trim()}! Here is the amazing truth...` },
+                            { title: "Ancient Origins", content: "Sharks appeared in the fossil record around 450 million years ago, surviving four of the 'big five' mass extinctions!" },
+                            { title: "Trees Came Later", content: "The earliest species that we could classify as a tree (Archaeopteris) evolved roughly 350 million years ago—100 million years after sharks!" },
+                            { title: "Surviving Extinctions", content: "Sharks survived the Permian-Triassic extinction and the asteroid that wiped out the non-avian dinosaurs." },
+                            { title: "Share The Knowledge", content: "Double tap if you learned something mind-blowing today! Follow for daily amazing facts." }
+                        ],
+                        caption: `Did you know? ${topic}!\n\nTag a friend who needs to know this! 🦈🌲\n\n#DidYouKnow #AmazingFacts #MindBlowing #NatureFacts #InstagramCarousel`
+                    }),
+                    image_url: 'assets/images/geography_nepal.png',
+                    status: 'Draft',
+                    brand_id: brandId,
+                    updated_at: new Date().toISOString()
+                };
+                
+                if (isMockMode) {
+                    mockPosts.unshift(mockFactPost);
+                    saveMockPosts();
+                }
+                
+                feedback.innerText = "Facts generated successfully!";
+                feedback.style.color = "var(--success)";
+                triggerFactsBtn.style.display = 'block';
+                overlay.style.display = 'none';
+                feedback.style.display = 'block';
+                
+                loadQueue();
+                window.openEditor(mockFactPost.id);
+            }, 2000);
+        }
+    });
+}
+
 // Topic Suggestions
 const suggestedTopics = [
     "Geography of Nepal - Major Rivers",
@@ -1161,6 +1381,12 @@ function loadBrandingView() {
     const paginationToggle = document.getElementById('custom-show-pagination');
     if(paginationToggle) paginationToggle.checked = currentBranding.showPagination !== false;
     
+    // Header asset preview
+    const headerAssetPreview = document.getElementById('brand-header-asset-preview');
+    if (headerAssetPreview) {
+        headerAssetPreview.src = currentBranding.headerAssetUrl || currentBranding.logoUrl || "assets/images/logo.png";
+    }
+    
     // Prompt
     document.getElementById('prompt-template-input').value = currentPromptTemplate;
     
@@ -1197,12 +1423,48 @@ document.getElementById('brand-logo-upload').addEventListener('change', function
     }
 });
 
+// Brand Header Asset Upload (Handle & Verified Badge Image)
+const headerUpload = document.getElementById('brand-header-asset-upload');
+if (headerUpload) {
+    headerUpload.addEventListener('change', function(e) {
+        try {
+            if (e.target.files && e.target.files[0]) {
+                let file = e.target.files[0];
+                if (!file.type.match('image.*')) throw new Error("Selected file is not an image.");
+                let reader = new FileReader();
+                reader.onload = function(ev) {
+                    let img = new Image();
+                    img.onload = function() {
+                        let canvas = document.createElement('canvas');
+                        let ctx = canvas.getContext('2d');
+                        let maxW = 400, maxH = 120;
+                        let ratio = Math.min(maxW / img.width, maxH / img.height);
+                        canvas.width = img.width * ratio;
+                        canvas.height = img.height * ratio;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        let dataUrl = canvas.toDataURL('image/png');
+                        const preview = document.getElementById('brand-header-asset-preview');
+                        if (preview) preview.src = dataUrl;
+                        currentBranding.headerAssetUrl = dataUrl;
+                        updateBrandVisuals(currentBranding);
+                    };
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        } catch(err) {
+            alert("Oops, something went wrong: " + err.message);
+        }
+    });
+}
+
 // Save Branding
 
 document.getElementById('save-branding').addEventListener('click', async function() {
     const name = document.getElementById('brand-name-input').value;
     const handle = document.getElementById('brand-handle-input').value;
     const logoUrl = document.getElementById('brand-logo-preview').src;
+    const headerAssetUrl = document.getElementById('brand-header-asset-preview')?.src || currentBranding.headerAssetUrl || '';
     const facebookUrl = document.getElementById('facebook-url-input').value;
     const instagramUrl = document.getElementById('instagram-url-input').value;
     const tiktokUrl = document.getElementById('tiktok-url-input').value;
@@ -1222,7 +1484,7 @@ document.getElementById('save-branding').addEventListener('click', async functio
     const paginationToggle = document.getElementById('custom-show-pagination');
     const showPagination = paginationToggle ? paginationToggle.checked : true;
     
-    const templateSettings = { customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination };
+    const templateSettings = { customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination, headerAssetUrl };
     const socialLinks = { facebookUrl, instagramUrl, tiktokUrl, linkedinUrl };
     
     if (activeBrandId.startsWith('new-')) {
@@ -1235,14 +1497,14 @@ document.getElementById('save-branding').addEventListener('click', async functio
             if (data && data[0]) {
                 activeBrandId = data[0].id;
                 allBrands.push({
-                    id: activeBrandId, name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl,
+                    id: activeBrandId, name, handle, logoUrl, headerAssetUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl,
                     primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination
                 });
             }
         } else {
             activeBrandId = "mock-" + Date.now();
             allBrands.push({
-                id: activeBrandId, name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl,
+                id: activeBrandId, name, handle, logoUrl, headerAssetUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl,
                 primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination
             });
         }
@@ -1256,7 +1518,7 @@ document.getElementById('save-branding').addEventListener('click', async functio
         }
         const b = allBrands.find(br => br.id === activeBrandId);
         if (b) {
-            Object.assign(b, { name, handle, logoUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination });
+            Object.assign(b, { name, handle, logoUrl, headerAssetUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination });
         }
     }
     
