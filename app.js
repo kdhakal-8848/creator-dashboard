@@ -1332,7 +1332,10 @@ function renderSlidesForm() {
         div.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <h4 style="font-size:13px;font-weight:700;color:#656d76;">Slide ${index + 1}${isCTA?'<span style="font-size:10px;background:#10b981;color:#fff;padding:1px 7px;border-radius:20px;margin-left:8px;font-weight:600;">CTA</span>':''}</h4>
-                <button onclick="window.jumpToSlide(${index})" style="background:none;border:none;cursor:pointer;color:#0969da;font-size:12px;font-weight:600;">▶ Preview</button>
+                <div>
+                    <button onclick="window.jumpToSlide(${index})" style="background:none;border:none;cursor:pointer;color:#0969da;font-size:12px;font-weight:600;">▶ Preview</button>
+                    <button onclick="window.downloadSingleSlide(${index})" style="background:none;border:none;cursor:pointer;color:#10b981;font-size:12px;font-weight:600;margin-left:8px;" title="Download PNG for this slide">📥 PNG</button>
+                </div>
             </div>
             <input type="text" id="slide-title-${index}" class="full-width" style="margin-bottom:8px;padding:5px 10px;border:1px solid #d0d7de;border-radius:5px;font-size:13px;" value="${(slide.title||'').replace(/"/g, '&quot;')}" oninput="window.updateSlideData(${index},'title',this.value)">
             <textarea id="slide-content-${index}" class="rich-textarea" style="min-height:80px;font-size:13px;" oninput="window.updateSlideData(${index},'content',this.value)">${slide.content||''}</textarea>
@@ -1460,6 +1463,48 @@ async function downloadSlidesAsFabric() {
 }
 
 document.getElementById('download-slides').addEventListener('click', downloadSlidesAsFabric);
+
+window.downloadSingleSlide = function(index) {
+    const targetIdx = (index !== undefined && index !== null) ? index : currentSlideIndex;
+    if (!fabricCanvas) return;
+
+    syncFabricCanvasToCurrentSlide();
+    const originalIndex = currentSlideIndex;
+    
+    // If downloading current slide, directly export
+    if (targetIdx === currentSlideIndex) {
+        const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
+        const link = document.createElement('a');
+        link.download = `slide_${targetIdx + 1}.png`;
+        link.href = dataURL;
+        link.click();
+        showToast(`Downloaded Slide ${targetIdx + 1}`);
+        return;
+    }
+
+    // If downloading a different slide, render temporarily then export
+    currentSlideIndex = targetIdx;
+    const slide = currentSlides[targetIdx];
+    const imageUrl = currentImageUrls[targetIdx] || null;
+    renderFabricSlide(slide, targetIdx, imageUrl, currentBranding);
+
+    setTimeout(() => {
+        const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
+        const link = document.createElement('a');
+        link.download = `slide_${targetIdx + 1}.png`;
+        link.href = dataURL;
+        link.click();
+
+        // Restore view
+        currentSlideIndex = originalIndex;
+        updateSlidePreview();
+        showToast(`Downloaded Slide ${targetIdx + 1}`);
+    }, 400);
+};
+
+document.getElementById('download-current-slide')?.addEventListener('click', () => {
+    window.downloadSingleSlide(currentSlideIndex);
+});
 
 // ============================================================
 // 3e. SAVE POST
