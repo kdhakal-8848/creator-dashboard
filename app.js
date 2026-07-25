@@ -314,7 +314,7 @@ let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
     {
         id: "default-brand",
         name: "CREATOR'S DEN",
-        handle: "@CreatorsDen",
+        handle: "@ammaazzingg",
         logoUrl: "assets/images/logo.png",
         headerAssetUrl: "",
         facebookUrl: "https://business.facebook.com",
@@ -724,7 +724,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     const secondaryColor = brand?.secondaryColor || '#2a5298';
     const accentColor = brand?.accentColor || '#f59e0b';
     const brandName = brand?.name || "Creator's Den";
-    const handle = brand?.handle || '@CreatorsDen';
+    const handle = brand?.handle || '@ammaazzingg';
     const headingFont = brand?.headingFont || 'Inter';
     const bodyFont = brand?.bodyFont || 'Inter';
 
@@ -1643,6 +1643,8 @@ async function downloadSlidesAsFabric() {
     if (window.feather) feather.replace();
 
     const originalIndex = currentSlideIndex;
+    const isZipSupported = typeof JSZip !== 'undefined';
+    const zip = isZipSupported ? new JSZip() : null;
 
     for (let i = 0; i < currentSlides.length; i++) {
         currentSlideIndex = i;
@@ -1650,16 +1652,27 @@ async function downloadSlidesAsFabric() {
             const slide = currentSlides[i];
             const imageUrl = currentImageUrls[i] || null;
             renderFabricSlide(slide, i, imageUrl, currentBranding);
-            // Wait for image loading
             setTimeout(async () => {
                 if (!fabricCanvas) { resolve(); return; }
-                // Simpler: render current canvas at multiplied size
                 const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
-                await triggerFileDownload(dataURL, getSuggestiveFilename(i));
+                if (zip) {
+                    const base64Data = dataURL.replace(/^data:image\/png;base64,/, "");
+                    zip.file(getSuggestiveFilename(i), base64Data, { base64: true });
+                } else {
+                    await triggerFileDownload(dataURL, getSuggestiveFilename(i));
+                }
                 resolve();
-            }, 800);
+            }, 600);
         });
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    if (zip) {
+        btn.innerHTML = '<i data-feather="loader" class="spin"></i> Zipping...';
+        if (window.feather) feather.replace();
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const topicName = getSuggestiveFilename(0).replace('_slide1.png', '').replace('.png', '');
+        await triggerFileDownload(zipBlob, `${topicName}_all_slides.zip`);
     }
 
     currentSlideIndex = originalIndex;
@@ -1686,11 +1699,19 @@ function getSuggestiveFilename(slideIndex) {
     return `${cleanTopic || 'carousel'}_${dateStr}${slideNum}.png`;
 }
 
-async function triggerFileDownload(dataURL, filename) {
-    if ('showSaveFilePicker' in window) {
+async function triggerFileDownload(dataOrBlob, filename) {
+    let blob;
+    if (dataOrBlob instanceof Blob) {
+        blob = dataOrBlob;
+    } else if (typeof dataOrBlob === 'string' && dataOrBlob.startsWith('data:')) {
+        const res = await fetch(dataOrBlob);
+        blob = await res.blob();
+    }
+
+    const isZip = filename.endsWith('.zip');
+
+    if (!isZip && 'showSaveFilePicker' in window) {
         try {
-            const res = await fetch(dataURL);
-            const blob = await res.blob();
             const handle = await window.showSaveFilePicker({
                 suggestedName: filename,
                 types: [{
@@ -1704,17 +1725,23 @@ async function triggerFileDownload(dataURL, filename) {
             showToast(`Saved ${filename}`);
             return;
         } catch (err) {
-            if (err.name === 'AbortError') {
-                return; // User cancelled prompt
-            }
+            if (err.name === 'AbortError') return;
             console.warn('showSaveFilePicker error:', err);
         }
     }
 
+    const blobUrl = blob ? URL.createObjectURL(blob) : dataOrBlob;
     const link = document.createElement('a');
     link.download = filename;
-    link.href = dataURL;
+    link.href = blobUrl;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+        if (blob && blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
+    }, 2000);
+
     showToast(`Downloaded ${filename}`);
 }
 

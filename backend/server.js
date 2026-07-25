@@ -160,7 +160,7 @@ Content Type: ${contentType}
 CAROUSEL NARRATIVE FRAMEWORK (STRICT):
 - Slide 1: INTRODUCTION — Be creative and write something related to the topic in short. The body part on this first slide can be a bit longer. DO NOT just write a mind-blowing fact. Include a highly descriptive image_prompt.
 - Slides 2-N-1: CORE IDEAS — ONE distinct idea per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
-- FINAL SLIDE: CTA only. Set "is_cta": true. Title: "Save This for Your Exam! 📌". Content: "Read the caption for the full breakdown ↓\n\nFollow ${brand_context?.handle || '@CreatorsDen'} for daily Loksewa prep." NO image_prompt on this slide.
+- FINAL SLIDE: CTA only. Set "is_cta": true. Title: "Follow @ammaazzingg 📌". Content: "Read the caption for the full breakdown ↓\n\nFollow ${brand_context?.handle || '@ammaazzingg'} for daily updates." NO image_prompt on this slide.
 
 Return ONLY valid JSON, no markdown. Use this exact schema:
 ${SLIDE_SCHEMA}`;
@@ -336,13 +336,13 @@ app.post('/generate-news', async (req, res) => {
         console.log(`Final story focus: "${storyTitle}"`);
 
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const handle = brand_context?.handle || '@CreatorsDen';
+        const handle = brand_context?.handle || '@ammaazzingg';
 
         const narrativeFramework = requestedSlides === 1 ? `SINGLE SLIDE NEWS CARD FRAMEWORK (STRICT):
 - Slide 1: Complete 1-card News Flash. Include an attention-grabbing headline as "title", a comprehensive 2-3 sentence news breakdown as "content", a highly descriptive "image_prompt" related to the story.` : `CAROUSEL NARRATIVE FRAMEWORK (STRICT):
 - Slide 1: INTRODUCTION — Be creative and write something related to the news story in short. Include a highly descriptive image_prompt related to the story.
 - Slides 2-3: KEY FACTS — key breakdown or timeline per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
-- Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily world news." NO image_prompt.`;
+- Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily updates." NO image_prompt.`;
 
         const prompt = `You are an expert social media content creator.${brandCtx}
 
@@ -419,8 +419,8 @@ app.post('/generate-facts', async (req, res) => {
     const targetLanguage = language || "English";
     const count = parseInt(slide_count) || 5;
     const factTopic = topic || "Sharks are older than trees";
+    const handle = brand_context?.handle || '@ammaazzingg';
     const brandCtx = getBrandContextBlock(brand_context);
-    const handle = brand_context?.handle || '@CreatorsDen';
 
     try {
         console.log(`[/generate-facts] "${factTopic}", ${count} slides, ${targetLanguage}`);
@@ -437,7 +437,7 @@ Language: ${targetLanguage}
 MANDATORY SLIDE STRUCTURE:
 - Slide 1 (HOOK): Title MUST be a short, bold, fascinating statement about the topic itself (Example: "Sharks are older than trees!"). NEVER use generic clickbait titles. Content: the single most fascinating fact (max 15 words). image_prompt: dramatic wide-angle visual that makes the fact tangible.
 - Slides 2 to ${count - 1} (FACTS): ONE fascinating fact per slide. Max 35 words body. Bold key numbers/stats. Each must have a unique, specific image_prompt.
-- Slide ${count} (CTA — MANDATORY): Set "is_cta": true. Title: "Follow for Daily Facts! 🔥". Content: "Read caption for the full breakdown ↓\\n\\nFollow ${handle} for a new fascinating fact every day." DO NOT include image_prompt for this slide.
+- Slide ${count} (CTA — MANDATORY): Set "is_cta": true. Title: "Follow @ammaazzingg 🔥". Content: "Read caption for the full breakdown ↓\n\nFollow ${handle} for new fascinating facts every day." DO NOT include image_prompt for this slide.
 
 TYPOGRAPHY & COPY RULES:
 - Headlines: 80pt+ impact — short, punchy, high contrast
