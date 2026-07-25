@@ -308,6 +308,8 @@
                             <option value="template-glass">Glassmorphism</option>
                             <option value="template-bold">Bold Impact</option>
                             <option value="template-visual">Visual Heavy (75% Image)</option>
+                            <option value="template-news-image">📰 News Flash (Visual Image)</option>
+                            <option value="template-news-text">📰 News Editorial (Text Focus)</option>
                             <option value="template-custom">Custom Advanced</option>
                         </select>
                         <div id="saved-templates-section">
@@ -426,6 +428,14 @@
                             <option value="Comedic / Satirical">Comedic / Satirical</option>
                             <option value="Educational Deep Dive">Educational Deep Dive</option>
                             <option value="Gamified Quiz">Gamified Quiz</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Slide Format / Length</label>
+                        <select id="news-slide-format" class="full-width">
+                            <option value="4" selected>Multi-Slide Carousel (4 Slides)</option>
+                            <option value="1">Single Slide (1 News Card)</option>
                         </select>
                     </div>
 
@@ -934,7 +944,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="app.js?v=20260725_v5"></script>
+    <script type="module" src="app.js?v=20260725_v6"></script>
     <script>
         if (typeof feather !== 'undefined') feather.replace();
     </script>

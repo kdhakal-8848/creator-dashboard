@@ -98,6 +98,28 @@ function sanitizeBrandId(brand_id) {
     return brand_id;
 }
 
+async function generateAIContent(prompt) {
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash-latest"];
+    for (const m of models) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const modelObj = genAI.getGenerativeModel({ model: m });
+                return await modelObj.generateContent(prompt);
+            } catch (err) {
+                console.warn(`[AI Fallback] Model ${m} (attempt ${attempt + 1}) failed:`, err.message || err);
+                if ((err.status === 429 || err.message?.includes('429')) && attempt === 0) {
+                    console.log("[AI Fallback] Retrying after 4s delay...");
+                    await new Promise(r => setTimeout(r, 4000));
+                } else if (m === models[models.length - 1] && attempt === 1) {
+                    throw err;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+}
+
 // Health check
 app.get('/', (req, res) => {
     res.json({ status: 'ok', message: 'Loksewa Backend is running', version: '2.0.0' });
@@ -252,14 +274,15 @@ app.post('/generate-video', async (req, res) => {
 // POST /generate-news — News Lab
 // ============================================================
 app.post('/generate-news', async (req, res) => {
-    const { topic, category, brand_id, language, contentType, brand_context } = req.body;
+    const { topic, category, brand_id, language, contentType, brand_context, slide_count } = req.body;
     const targetLanguage = language || "English";
     const templateStyle = contentType || "Standard News Summary";
     const selectedCategory = category || "Weird & Bizarre News (Worldwide)";
     const brandCtx = getBrandContextBlock(brand_context);
+    const requestedSlides = parseInt(slide_count) === 1 ? 1 : 4;
 
     try {
-        console.log(`[/generate-news] topic: "${topic || 'auto'}", category: "${selectedCategory}", style: "${templateStyle}", lang: ${targetLanguage}`);
+        console.log(`[/generate-news] topic: "${topic || 'auto'}", category: "${selectedCategory}", style: "${templateStyle}", lang: ${targetLanguage}, slides: ${requestedSlides}`);
 
         let storyTitle = topic || "";
         let storyContent = "";
@@ -315,26 +338,29 @@ app.post('/generate-news', async (req, res) => {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const handle = brand_context?.handle || '@CreatorsDen';
 
+        const narrativeFramework = requestedSlides === 1 ? `SINGLE SLIDE NEWS CARD FRAMEWORK (STRICT):
+- Slide 1: Complete 1-card News Flash. Include an attention-grabbing headline as "title", a comprehensive 2-3 sentence news breakdown as "content", a highly descriptive "image_prompt" related to the story.` : `CAROUSEL NARRATIVE FRAMEWORK (STRICT):
+- Slide 1: INTRODUCTION — Be creative and write something related to the news story in short. Include a highly descriptive image_prompt related to the story.
+- Slides 2-3: KEY FACTS — key breakdown or timeline per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
+- Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily world news." NO image_prompt.`;
+
         const prompt = `You are an expert social media content creator.${brandCtx}
 
-Create an engaging news carousel post about this news story.
+Create an engaging news post (${requestedSlides} slide(s)) about this news story.
 Topic / Story Title: ${storyTitle}
 Category: ${selectedCategory}
 Summary Context: ${storyContent || 'Generate a compelling breakdown of this topic.'}
 Style: "${templateStyle}"
 Source Link: ${storyLink}
 
-CAROUSEL NARRATIVE FRAMEWORK (STRICT):
-- Slide 1: INTRODUCTION — Be creative and write something related to the news story in short. The body part on this first slide can be a bit longer. Include a highly descriptive image_prompt related to the story.
-- Slides 2-3: KEY FACTS — key breakdown or timeline per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
-- Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily world news." NO image_prompt.
+${narrativeFramework}
 
 Write all slide text in ${targetLanguage}.
 
 Return ONLY valid JSON (no markdown):
 ${SLIDE_SCHEMA}`;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateAIContent(prompt);
         let text = result.response.text().trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
 
         let parsed;
@@ -347,19 +373,30 @@ ${SLIDE_SCHEMA}`;
 
         const imageUrls = buildImageUrls(parsed.slides);
         const cleanBrandId = sanitizeBrandId(brand_id);
+        const insertObj = {
+            topic: `[News Lab] ${storyTitle.substring(0, 60)}`,
+            text: JSON.stringify(parsed),
+            status: 'Draft',
+            image_url: JSON.stringify(imageUrls)
+        };
+        if (cleanBrandId) insertObj.brand_id = cleanBrandId;
 
         const { data, error } = await supabase
             .from('posts')
-            .insert([{
-                topic: `[News Lab] ${storyTitle.substring(0, 60)}`,
-                text: JSON.stringify(parsed),
-                status: 'Draft',
-                image_url: JSON.stringify(imageUrls),
-                brand_id: cleanBrandId
-            }])
+            .insert([insertObj])
             .select();
 
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase news error:", error);
+            return res.json({
+                success: true,
+                topic: storyTitle,
+                category: selectedCategory,
+                text: JSON.stringify(parsed),
+                image_url: JSON.stringify(imageUrls),
+                db_error: error.message
+            });
+        }
 
         res.json({
             success: true,

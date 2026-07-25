@@ -734,6 +734,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (selectedPreset === 'template-glass') bgColor = '#0a192f';
     if (selectedPreset === 'template-visual') bgColor = '#0f172a';
     if (selectedPreset === 'template-minimal') bgColor = '#121218';
+    if (selectedPreset === 'template-news-image') bgColor = '#090d16';
+    if (selectedPreset === 'template-news-text') bgColor = '#0b1120';
     if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
 
     fabricCanvas.backgroundColor = bgColor;
@@ -751,6 +753,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         if (selectedPreset === 'template-glass') overlayFill = 'rgba(10, 25, 47, 0.75)';
         if (selectedPreset === 'template-visual') overlayFill = 'rgba(0,0,0,0.25)';
         if (selectedPreset === 'template-minimal') overlayFill = 'rgba(18,18,24,0.85)';
+        if (selectedPreset === 'template-news-image') overlayFill = 'rgba(9, 13, 22, 0.45)';
+        if (selectedPreset === 'template-news-text') overlayFill = 'rgba(11, 17, 32, 0.95)';
         if (selectedPreset === 'template-custom' && brand?.customBgOpacity) {
             const hex = (brand.customBgColor || '#000000').replace('#', '');
             const r = parseInt(hex.substring(0, 2), 16) || 0;
@@ -777,7 +781,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         fabricCanvas.add(overlay);
 
         // --- 2. Header Bar / Top Strip ---
-        if (selectedPreset !== 'template-minimal' && selectedPreset !== 'template-visual') {
+        if (selectedPreset !== 'template-minimal' && selectedPreset !== 'template-visual' && selectedPreset !== 'template-news-image' && selectedPreset !== 'template-news-text') {
             const headerBar = new fabric.Rect({
                 left: 0, top: 0,
                 width: CANVAS_W, height: 130,
@@ -1038,6 +1042,113 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 const bodyDef = {
                     left: 80, top: Math.max(titleBottom, 460), width: CANVAS_W - 160,
                     fontSize: 48, fontWeight: '400', fill: '#cbd5e1',
+                    fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-news-image') {
+                // --- Red Breaking News Badge ---
+                const badgeBg = new fabric.Rect({
+                    left: 80, top: 160,
+                    width: 250, height: 48,
+                    fill: '#dc2626', rx: 24, ry: 24,
+                    selectable: false, evented: false, customType: 'news-badge-bg'
+                });
+                fabricCanvas.add(badgeBg);
+
+                const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+                    left: 98, top: 172,
+                    fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                    fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+                });
+                fabricCanvas.add(badgeText);
+
+                const titleDef = {
+                    left: 80, top: 230, width: CANVAS_W - 160,
+                    fontSize: 84, fontWeight: '900', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.12,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 30 : 230 + slideTitle.getScaledHeight() + 30;
+                const cardTop = Math.max(titleBottom, 450);
+                const cardHeight = Math.min(CANVAS_H - cardTop - 120, 600);
+
+                const newsCard = new fabric.Rect({
+                    left: 60, top: cardTop,
+                    width: CANVAS_W - 120, height: cardHeight,
+                    fill: 'rgba(15, 23, 42, 0.85)',
+                    stroke: '#ef4444', strokeWidth: 2,
+                    rx: 24, ry: 24,
+                    selectable: false, evented: false, customType: 'news-card-bg'
+                });
+                fabricCanvas.add(newsCard);
+
+                const bodyDef = {
+                    left: 95, top: cardTop + 35, width: CANVAS_W - 190,
+                    fontSize: 46, fontWeight: '500', fill: '#f1f5f9',
+                    fontFamily: bodyFont, lineHeight: 1.5,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-news-text') {
+                // --- Blue News Editorial Badge ---
+                const badgeBg = new fabric.Rect({
+                    left: 80, top: 160,
+                    width: 250, height: 48,
+                    fill: '#0284c7', rx: 24, ry: 24,
+                    selectable: false, evented: false, customType: 'news-text-badge-bg'
+                });
+                fabricCanvas.add(badgeBg);
+
+                const badgeText = new fabric.IText('📰 NEWS ANALYSIS', {
+                    left: 98, top: 172,
+                    fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                    fontFamily: headingFont, selectable: false, evented: false, customType: 'news-text-badge-text'
+                });
+                fabricCanvas.add(badgeText);
+
+                // Left Cyan Accent Strip
+                const verticalBar = new fabric.Rect({
+                    left: 65, top: 230,
+                    width: 12, height: 790,
+                    fill: '#38bdf8', rx: 6, ry: 6,
+                    selectable: false, evented: false, customType: 'news-vertical-bar'
+                });
+                fabricCanvas.add(verticalBar);
+
+                const titleDef = {
+                    left: 100, top: 230, width: CANVAS_W - 180,
+                    fontSize: 88, fontWeight: '900', fill: '#f8fafc',
+                    fontFamily: headingFont, lineHeight: 1.12,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
+                const cardTop = Math.max(titleBottom, 460);
+                const cardHeight = Math.min(CANVAS_H - cardTop - 120, 580);
+
+                const newsCard = new fabric.Rect({
+                    left: 100, top: cardTop,
+                    width: CANVAS_W - 180, height: cardHeight,
+                    fill: 'rgba(30, 41, 59, 0.85)',
+                    stroke: 'rgba(56, 189, 248, 0.4)', strokeWidth: 2,
+                    rx: 20, ry: 20,
+                    selectable: false, evented: false, customType: 'news-text-card-bg'
+                });
+                fabricCanvas.add(newsCard);
+
+                const bodyDef = {
+                    left: 130, top: cardTop + 35, width: CANVAS_W - 240,
+                    fontSize: 48, fontWeight: '500', fill: '#e2e8f0',
                     fontFamily: bodyFont, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
@@ -1797,6 +1908,9 @@ document.getElementById('refresh-topic-btn').addEventListener('click', suggestRa
 // 5. NEWS LAB
 // ============================================================
 document.getElementById('trigger-news').addEventListener('click', async () => {
+    const topic = document.getElementById('news-topic-input')?.value.trim() || '';
+    const category = document.getElementById('news-category-select')?.value || '';
+    const slideCount = parseInt(document.getElementById('news-slide-format')?.value) || 4;
     const brandId = document.getElementById('news-brand').value;
     const language = document.getElementById('news-language').value;
     const contentType = document.getElementById('news-content-type').value;
@@ -1808,7 +1922,7 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-news'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ brand_id: brandId, language, contentType, brand_context: getBrandContext(activeBrand) })
+            body: JSON.stringify({ topic, category, slide_count: slideCount, brand_id: brandId, language, contentType, brand_context: getBrandContext(activeBrand) })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "News generation failed");
