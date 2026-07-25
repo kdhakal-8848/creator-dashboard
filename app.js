@@ -1446,10 +1446,7 @@ async function downloadSlidesAsFabric() {
                 });
                 // Simpler: render current canvas at multiplied size
                 const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
-                const link = document.createElement('a');
-                link.download = getSuggestiveFilename(i);
-                link.href = dataURL;
-                link.click();
+                await triggerFileDownload(dataURL, getSuggestiveFilename(i));
                 resolve();
             }, 800);
         });
@@ -1480,7 +1477,39 @@ function getSuggestiveFilename(slideIndex) {
     return `${cleanTopic || 'carousel'}_${dateStr}${slideNum}.png`;
 }
 
-window.downloadSingleSlide = function(index) {
+async function triggerFileDownload(dataURL, filename) {
+    if ('showSaveFilePicker' in window) {
+        try {
+            const res = await fetch(dataURL);
+            const blob = await res.blob();
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'PNG Image',
+                    accept: { 'image/png': ['.png'] }
+                }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            showToast(`Saved ${filename}`);
+            return;
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                return; // User cancelled prompt
+            }
+            console.warn('showSaveFilePicker error:', err);
+        }
+    }
+
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataURL;
+    link.click();
+    showToast(`Downloaded ${filename}`);
+}
+
+window.downloadSingleSlide = async function(index) {
     const targetIdx = (index !== undefined && index !== null) ? index : currentSlideIndex;
     if (!fabricCanvas) return;
 
@@ -1490,11 +1519,7 @@ window.downloadSingleSlide = function(index) {
     // If downloading current slide, directly export
     if (targetIdx === currentSlideIndex) {
         const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
-        const link = document.createElement('a');
-        link.download = getSuggestiveFilename(targetIdx);
-        link.href = dataURL;
-        link.click();
-        showToast(`Downloaded ${link.download}`);
+        await triggerFileDownload(dataURL, getSuggestiveFilename(targetIdx));
         return;
     }
 
@@ -1504,17 +1529,13 @@ window.downloadSingleSlide = function(index) {
     const imageUrl = currentImageUrls[targetIdx] || null;
     renderFabricSlide(slide, targetIdx, imageUrl, currentBranding);
 
-    setTimeout(() => {
+    setTimeout(async () => {
         const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
-        const link = document.createElement('a');
-        link.download = getSuggestiveFilename(targetIdx);
-        link.href = dataURL;
-        link.click();
+        await triggerFileDownload(dataURL, getSuggestiveFilename(targetIdx));
 
         // Restore view
         currentSlideIndex = originalIndex;
         updateSlidePreview();
-        showToast(`Downloaded ${link.download}`);
     }, 400);
 };
 
