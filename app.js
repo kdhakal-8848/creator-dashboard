@@ -92,8 +92,49 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     feedback.innerText = "Authenticating...";
     feedback.style.color = "var(--color-fg-muted)";
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { feedback.innerText = error.message; feedback.style.color = "var(--color-danger-fg)"; }
-    else { feedback.innerText = "Success!"; feedback.style.color = "var(--color-success-fg)"; }
+    if (error) { feedback.innerText = error.message; feedback.style.color = "#f87171"; }
+    else { feedback.innerText = "Success!"; feedback.style.color = "#34d399"; }
+});
+
+// Sign Up Handler
+document.getElementById('signup-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const feedback = document.getElementById('login-feedback');
+    if (!email || !password) {
+        feedback.innerText = "Please enter email & password to sign up.";
+        feedback.style.color = "#f87171";
+        return;
+    }
+    feedback.innerText = "Creating account...";
+    feedback.style.color = "rgba(255,255,255,0.7)";
+    if (isMockMode) {
+        setTimeout(() => {
+            feedback.innerText = "Mock Account created! Please click Sign In or Guest.";
+            feedback.style.color = "#34d399";
+        }, 500);
+        return;
+    }
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+        feedback.innerText = error.message;
+        feedback.style.color = "#f87171";
+    } else {
+        feedback.innerText = "Account created! You can now sign in.";
+        feedback.style.color = "#34d399";
+        if (data.session) {
+            handleAuthChange(data.session);
+        }
+    }
+});
+
+// Guest Mode Handler
+document.getElementById('guest-btn')?.addEventListener('click', () => {
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('app-container').style.display = 'flex';
+    document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=Guest&background=random`;
+    fetchBrands();
+    loadDashboardStats();
 });
 
 // Password Reset
