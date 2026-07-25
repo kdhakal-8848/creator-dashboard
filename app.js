@@ -190,6 +190,7 @@ document.getElementById('signup-btn')?.addEventListener('click', async () => {
 
 window.fetchBrands = fetchBrands;
 window.loadDashboardStats = loadDashboardStats;
+window.handleAuthChange = handleAuthChange;
 
 // Guest Mode Handler
 document.getElementById('guest-btn')?.addEventListener('click', () => {
@@ -836,14 +837,14 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
         // --- 5. Brand Header Asset (Moveable, ON/OFF toggleable) ---
-        // Note: data: URLs don't need crossOrigin — avoid passing it to prevent silent failures
-        if (showHeaderAsset && brand?.headerAssetUrl) {
-            const assetUrl = brand.headerAssetUrl;
+        const assetUrl = brand?.headerAssetUrl || brand?.logoUrl;
+        if (showHeaderAsset && assetUrl) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    // Vertically align header asset between top slide edge (0) and yellow line (135) at top: 67.5, left: 80 with 0.90 scale (no length restriction)
-                    const defaultScale = 0.90;
+                    const targetH = 65;
+                    const targetW = 350;
+                    const defaultScale = Math.min(targetH / img.height, targetW / img.width);
                     img.set({
                         left: 80,
                         top: 67.5,
@@ -857,11 +858,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         const customStyle = { ...slideData.headerAssetStyle };
                         customStyle.originX = 'left';
                         customStyle.originY = 'center';
-                        // Strictly prevent negative or off-edge left positioning
                         if (typeof customStyle.left !== 'number' || customStyle.left < 80 || customStyle.left > 600) {
                             customStyle.left = 80;
                         }
-                        // Ensure top is vertically centered between 0 and 135
                         if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
                             customStyle.top = 67.5;
                         }
