@@ -612,6 +612,7 @@ function initFabricCanvas() {
         preserveObjectStacking: true,
         backgroundColor: '#1a1a2e'
     });
+    window.fabricCanvas = fabricCanvas;
 
     // Scale all coordinates: objects are placed in virtual 1080x1350 space
     fabricCanvas.setZoom(CANVAS_ZOOM);
