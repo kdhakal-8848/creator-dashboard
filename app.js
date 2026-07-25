@@ -283,10 +283,10 @@ function saveMockPosts() { if (isMockMode) localStorage.setItem('loksewa_mock_po
 // ============================================================
 // BRANDING STATE — Expanded Model with Narrative/Tone/ICP
 // ============================================================
-let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
+let allBrands = [
     {
-        id: "gearup-loksewa",
-        name: "GearUp Loksewa",
+        id: "bfd851c5-2eb8-458f-af70-9c549896a5f8",
+        name: "AMMAAZZINGG",
         handle: "@ammaazzingg",
         logoUrl: "assets/images/logo.png",
         headerAssetUrl: "",
@@ -300,9 +300,9 @@ let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
         bgColor: "#0f0c29",
         headingFont: "Inter",
         bodyFont: "Inter",
-        narrative: "Empowering Loksewa aspirants in Nepal with high-yield study material, daily quizzes, and general knowledge carousels.",
-        toneOfVoice: "Educational & Authoritative",
-        icp: "Loksewa Examination Candidates in Nepal",
+        narrative: "Creating fascinating facts, news breakdowns, and viral daily carousels.",
+        toneOfVoice: "Engaging & Authoritative",
+        icp: "General Knowledge & Social Media Enthusiasts",
         customTitleSize: "100",
         customTitleY: "50",
         customContentY: "70",
@@ -460,7 +460,6 @@ async function getPosts() {
     const { data, error } = await supabase.from('posts').select('*').order('updated_at', { ascending: false });
     if (error) {
         console.error("DB error:", error.message);
-        isMockMode = true;
         return mockPosts;
     }
     return data;
