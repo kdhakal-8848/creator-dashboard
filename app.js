@@ -464,6 +464,7 @@ async function getPosts() {
     }
     return data;
 }
+window.getPosts = getPosts;
 
 function formatDate(isoString) { return new Date(isoString).toLocaleString(); }
 
