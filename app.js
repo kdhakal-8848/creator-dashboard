@@ -16,6 +16,7 @@ if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
 
 // --- Auth State & Logic ---
 let currentUser = null;
+let isGuest = false;
 
 if (!isMockMode) {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -30,6 +31,7 @@ if (!isMockMode) {
 }
 
 function handleAuthChange(session) {
+    if (isGuest) return;
     if (session) {
         currentUser = session.user;
         document.getElementById('login-container').style.display = 'none';
@@ -120,21 +122,34 @@ document.getElementById('signup-btn')?.addEventListener('click', async () => {
         feedback.innerText = error.message;
         feedback.style.color = "#f87171";
     } else {
-        feedback.innerText = "Account created! You can now sign in.";
-        feedback.style.color = "#34d399";
         if (data.session) {
+            feedback.innerText = "Account created & signed in!";
+            feedback.style.color = "#34d399";
             handleAuthChange(data.session);
+        } else {
+            feedback.innerText = "Account created! Please check your email to confirm, or click 'Continue as Guest'.";
+            feedback.style.color = "#34d399";
         }
     }
 });
 
 // Guest Mode Handler
 document.getElementById('guest-btn')?.addEventListener('click', () => {
+    isGuest = true;
     document.getElementById('login-container').style.display = 'none';
     document.getElementById('app-container').style.display = 'flex';
     document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=Guest&background=random`;
     fetchBrands();
     loadDashboardStats();
+});
+
+// Sign Out Handler
+document.getElementById('sign-out-btn')?.addEventListener('click', async () => {
+    isGuest = false;
+    if (!isMockMode && supabase) {
+        await supabase.auth.signOut();
+    }
+    handleAuthChange(null);
 });
 
 // Password Reset
