@@ -840,9 +840,10 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    // Make header asset 3x larger (~300px height)
-                    const targetH = 300; 
-                    const scale = targetH / img.height;
+                    // Fit header asset to fit cleanly within left side & top area of slide (left: 80, maxW: 920, maxH: 180)
+                    const maxW = 920;
+                    const maxH = 180;
+                    const scale = Math.min(maxW / img.width, maxH / img.height);
                     img.set({
                         left: 80,
                         top: 40,
