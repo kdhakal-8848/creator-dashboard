@@ -6,6 +6,9 @@ const SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY;
 
 let supabase = null;
 let isMockMode = false;
+let isGuest = false;
+let currentUser = null;
+window.isGuest = false;
 
 try {
     if (SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
@@ -1537,21 +1540,8 @@ async function downloadSlidesAsFabric() {
             const imageUrl = currentImageUrls[i] || null;
             renderFabricSlide(slide, i, imageUrl, currentBranding);
             // Wait for image loading
-            setTimeout(() => {
+            setTimeout(async () => {
                 if (!fabricCanvas) { resolve(); return; }
-                // Export at full 1080x1350 resolution
-                const tempCanvas = new fabric.Canvas(null, { width: CANVAS_W, height: CANVAS_H });
-                fabricCanvas.getObjects().forEach(obj => {
-                    const clone = fabric.util.object.clone(obj);
-                    // Scale back up from zoom
-                    clone.set({
-                        left: obj.left / CANVAS_ZOOM,
-                        top: obj.top / CANVAS_ZOOM,
-                        scaleX: (obj.scaleX || 1) / CANVAS_ZOOM,
-                        scaleY: (obj.scaleY || 1) / CANVAS_ZOOM,
-                    });
-                    // Actually: Fabric with zoom already handles this differently
-                });
                 // Simpler: render current canvas at multiplied size
                 const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
                 await triggerFileDownload(dataURL, getSuggestiveFilename(i));
