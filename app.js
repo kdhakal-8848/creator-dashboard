@@ -845,7 +845,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 if (img && img.width > 0) {
                     const targetH = 65;
                     const targetW = 350;
-                    const defaultScale = Math.min(targetH / img.height, targetW / img.width);
+                    const defaultScale = Math.min(targetH / img.height, targetW / img.width) * 0.90;
                     img.set({
                         left: 80,
                         top: 67.5,
@@ -857,6 +857,13 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     });
                     if (slideData.headerAssetStyle) {
                         const customStyle = { ...slideData.headerAssetStyle };
+                        
+                        // CRITICAL: Prevent cropped bounding boxes from being applied if they were saved previously
+                        delete customStyle.width;
+                        delete customStyle.height;
+                        delete customStyle.cropX;
+                        delete customStyle.cropY;
+
                         customStyle.originX = 'left';
                         customStyle.originY = 'center';
                         if (typeof customStyle.left !== 'number' || customStyle.left < 80 || customStyle.left > 600) {
@@ -865,17 +872,10 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
                             customStyle.top = 67.5;
                         }
-                        // Hard cap scale to fit within 350px width and 65px height in 1080p space
-                        const maxCapScaleX = 350 / img.width;
-                        const maxCapScaleY = 65 / img.height;
-                        const maxAllowedScale = Math.min(maxCapScaleX, maxCapScaleY);
-
-                        if (!customStyle.scaleX || customStyle.scaleX > maxAllowedScale) {
-                            customStyle.scaleX = defaultScale;
-                        }
-                        if (!customStyle.scaleY || customStyle.scaleY > maxAllowedScale) {
-                            customStyle.scaleY = defaultScale;
-                        }
+                        
+                        if (!customStyle.scaleX) customStyle.scaleX = defaultScale;
+                        if (!customStyle.scaleY) customStyle.scaleY = defaultScale;
+                        
                         img.set(customStyle);
                     }
                     fabricCanvas.add(img);
