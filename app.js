@@ -842,10 +842,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    // Vertically align header asset between top slide edge (0) and yellow line (135): center at top: 67.5, left: 80
-                    const maxW = 460;
-                    const maxH = 95;
-                    const defaultScale = Math.min(maxW / img.width, maxH / img.height);
+                    // Vertically align header asset between top slide edge (0) and yellow line (135) at top: 67.5, left: 80 with 0.90 scale (no length restriction)
+                    const defaultScale = 0.90;
                     img.set({
                         left: 80,
                         top: 67.5,
@@ -867,12 +865,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
                             customStyle.top = 67.5;
                         }
-                        const savedScaleX = customStyle.scaleX || defaultScale;
-                        const savedScaleY = customStyle.scaleY || defaultScale;
-                        if ((img.width * savedScaleX > maxW) || (img.height * savedScaleY > maxH)) {
-                            customStyle.scaleX = defaultScale;
-                            customStyle.scaleY = defaultScale;
-                        }
+                        customStyle.scaleX = customStyle.scaleX || defaultScale;
+                        customStyle.scaleY = customStyle.scaleY || defaultScale;
                         img.set(customStyle);
                     }
                     fabricCanvas.add(img);
