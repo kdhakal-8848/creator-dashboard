@@ -865,8 +865,16 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
                             customStyle.top = 67.5;
                         }
-                        customStyle.scaleX = customStyle.scaleX || defaultScale;
-                        customStyle.scaleY = customStyle.scaleY || defaultScale;
+                        // Cap scale to defaultScale if saved scale exceeds target dimensions
+                        const checkScaleX = customStyle.scaleX || defaultScale;
+                        const checkScaleY = customStyle.scaleY || defaultScale;
+                        if ((img.width * checkScaleX > targetW) || (img.height * checkScaleY > targetH)) {
+                            customStyle.scaleX = defaultScale;
+                            customStyle.scaleY = defaultScale;
+                        } else {
+                            customStyle.scaleX = checkScaleX;
+                            customStyle.scaleY = checkScaleY;
+                        }
                         img.set(customStyle);
                     }
                     fabricCanvas.add(img);
