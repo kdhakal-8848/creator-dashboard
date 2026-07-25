@@ -68,8 +68,9 @@ function handleAuthChange(session) {
 }
 
 // --- Auth UI ---
-document.getElementById('login-btn').addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value;
+const handleLoginAction = async (e) => {
+    if (e) e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     const feedback = document.getElementById('login-feedback');
 
@@ -93,10 +94,23 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     }
     feedback.innerText = "Authenticating...";
     feedback.style.color = "var(--color-fg-muted)";
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { feedback.innerText = error.message; feedback.style.color = "#f87171"; }
-    else { feedback.innerText = "Success!"; feedback.style.color = "#34d399"; }
-});
+    try {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) { 
+            feedback.innerText = error.message; 
+            feedback.style.color = "#f87171"; 
+        } else { 
+            feedback.innerText = "Success!"; 
+            feedback.style.color = "#34d399"; 
+        }
+    } catch (err) {
+        feedback.innerText = "Connection issue. Click 'Continue as Guest' below.";
+        feedback.style.color = "#f87171";
+    }
+};
+
+document.getElementById('login-btn')?.addEventListener('click', handleLoginAction);
+document.getElementById('signin-form')?.addEventListener('submit', handleLoginAction);
 
 // Sign Up Handler
 document.getElementById('signup-btn')?.addEventListener('click', async () => {
