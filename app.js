@@ -842,7 +842,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    // Vertically align header asset between top slide edge (0) and yellow line (135): center at top: 67.5, originY: 'center'
+                    // Vertically align header asset between top slide edge (0) and yellow line (135): center at top: 67.5, left: 80
                     const maxW = 460;
                     const maxH = 95;
                     const defaultScale = Math.min(maxW / img.width, maxH / img.height);
@@ -857,9 +857,14 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     });
                     if (slideData.headerAssetStyle) {
                         const customStyle = { ...slideData.headerAssetStyle };
-                        // Ensure originY is center and top is within safe range (between 20 and 115)
+                        customStyle.originX = 'left';
                         customStyle.originY = 'center';
-                        if (!customStyle.top || customStyle.top < 20 || customStyle.top > 115) {
+                        // Strictly prevent negative or off-edge left positioning
+                        if (typeof customStyle.left !== 'number' || customStyle.left < 80 || customStyle.left > 600) {
+                            customStyle.left = 80;
+                        }
+                        // Ensure top is vertically centered between 0 and 135
+                        if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
                             customStyle.top = 67.5;
                         }
                         const savedScaleX = customStyle.scaleX || defaultScale;
