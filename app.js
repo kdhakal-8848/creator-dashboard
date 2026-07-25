@@ -7,24 +7,29 @@ const SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY;
 let supabase = null;
 let isMockMode = false;
 
-if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} else {
-    console.warn("Supabase credentials not set. Running in MOCK mode.");
+try {
+    if (SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } else {
+        isMockMode = true;
+    }
+} catch (err) {
+    console.warn("Supabase client init error, switching to mock mode:", err);
     isMockMode = true;
 }
 
-// --- Auth State & Logic ---
-let currentUser = null;
-let isGuest = false;
+if (!isMockMode && supabase) {
+    try {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            handleAuthChange(session);
+        }).catch(e => console.warn("getSession error:", e));
 
-if (!isMockMode) {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-        handleAuthChange(session);
-    });
-    supabase.auth.onAuthStateChange((_event, session) => {
-        handleAuthChange(session);
-    });
+        supabase.auth.onAuthStateChange((_event, session) => {
+            handleAuthChange(session);
+        });
+    } catch (e) {
+        console.warn("AuthStateChange error:", e);
+    }
 } else {
     document.getElementById('login-container').style.display = 'none';
     document.getElementById('app-container').style.display = 'flex';
@@ -147,14 +152,14 @@ document.getElementById('signup-btn')?.addEventListener('click', async () => {
     }
 });
 
+window.fetchBrands = fetchBrands;
+window.loadDashboardStats = loadDashboardStats;
+
 // Guest Mode Handler
 document.getElementById('guest-btn')?.addEventListener('click', () => {
+    window.isGuest = true;
     isGuest = true;
-    document.getElementById('login-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
-    document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=Guest&background=random`;
-    fetchBrands();
-    loadDashboardStats();
+    window.enableGuestMode();
 });
 
 // Sign Out Handler

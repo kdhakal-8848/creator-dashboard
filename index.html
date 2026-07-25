@@ -15,6 +15,17 @@
     <link rel="stylesheet" href="index.css?v=20260724_v2">
     <!-- html2canvas (fallback) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
+        window.enableGuestMode = function() {
+            var login = document.getElementById('login-container');
+            var app = document.getElementById('app-container');
+            if (login) login.style.display = 'none';
+            if (app) app.style.display = 'flex';
+            if (window.isGuest !== undefined) window.isGuest = true;
+            if (typeof window.fetchBrands === 'function') window.fetchBrands();
+            if (typeof window.loadDashboardStats === 'function') window.loadDashboardStats();
+        };
+    </script>
 </head>
 <body>
     <!-- Login Container -->
@@ -42,7 +53,7 @@
                     <button type="submit" id="login-btn" style="flex: 1; padding: 12px 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(99,102,241,0.4);">Sign In</button>
                     <button type="button" id="signup-btn" style="flex: 1; padding: 12px 14px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">Sign Up</button>
                 </div>
-                <button type="button" id="guest-btn" style="width: 100%; padding: 10px 14px; background: transparent; color: rgba(255,255,255,0.7); border: 1px dashed rgba(255,255,255,0.3); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">⚡ Continue as Guest (Skip Login)</button>
+                <button type="button" id="guest-btn" onclick="window.enableGuestMode()" style="width: 100%; padding: 10px 14px; background: transparent; color: rgba(255,255,255,0.7); border: 1px dashed rgba(255,255,255,0.3); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">⚡ Continue as Guest (Skip Login)</button>
             </form>
             <p id="login-feedback" style="margin-top: 14px; font-size: 13px; color: #f87171;"></p>
         </div>
