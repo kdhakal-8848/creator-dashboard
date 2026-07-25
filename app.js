@@ -287,7 +287,7 @@ let allBrands = JSON.parse(localStorage.getItem('loksewa_all_brands')) || [
     {
         id: "gearup-loksewa",
         name: "GearUp Loksewa",
-        handle: "@GearUpLoksewa",
+        handle: "@ammaazzingg",
         logoUrl: "assets/images/logo.png",
         headerAssetUrl: "",
         facebookUrl: "https://facebook.com",
