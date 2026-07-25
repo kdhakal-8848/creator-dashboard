@@ -843,17 +843,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     // Fit header asset strictly in top-left: edge corner (left: 80, top: 35), left half of slide (maxW: 460), and above yellow line (maxH: 95)
                     const maxW = 460;
                     const maxH = 95;
-                    const scale = Math.min(maxW / img.width, maxH / img.height);
+                    const defaultScale = Math.min(maxW / img.width, maxH / img.height);
                     img.set({
                         left: 80,
                         top: 35,
                         originY: 'top',
-                        scaleX: scale, scaleY: scale,
+                        scaleX: defaultScale, scaleY: defaultScale,
                         selectable: true, evented: true,
                         customType: 'header-asset'
                     });
                     if (slideData.headerAssetStyle) {
-                        img.set(slideData.headerAssetStyle);
+                        const customStyle = { ...slideData.headerAssetStyle };
+                        // Check if saved custom scale causes image to overflow max bounds
+                        const savedScaleX = customStyle.scaleX || defaultScale;
+                        const savedScaleY = customStyle.scaleY || defaultScale;
+                        if ((img.width * savedScaleX > maxW) || (img.height * savedScaleY > maxH)) {
+                            customStyle.scaleX = defaultScale;
+                            customStyle.scaleY = defaultScale;
+                        }
+                        img.set(customStyle);
                     }
                     fabricCanvas.add(img);
                     fabricCanvas.bringToFront(img);
