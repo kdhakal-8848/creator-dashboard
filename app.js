@@ -1447,7 +1447,7 @@ async function downloadSlidesAsFabric() {
                 // Simpler: render current canvas at multiplied size
                 const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
                 const link = document.createElement('a');
-                link.download = `slide_${i + 1}.png`;
+                link.download = getSuggestiveFilename(i);
                 link.href = dataURL;
                 link.click();
                 resolve();
@@ -1464,6 +1464,22 @@ async function downloadSlidesAsFabric() {
 
 document.getElementById('download-slides').addEventListener('click', downloadSlidesAsFabric);
 
+function getSuggestiveFilename(slideIndex) {
+    const topicEl = document.getElementById('editor-topic');
+    let rawTopic = topicEl ? topicEl.innerText.replace('Editing:', '').replace('[Facts Lab]', '').replace('[News Lab]', '').trim() : 'post';
+    let cleanTopic = rawTopic
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 24);
+
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    const slideNum = (slideIndex !== undefined && slideIndex !== null) ? `_slide${slideIndex + 1}` : '';
+
+    return `${cleanTopic || 'carousel'}_${dateStr}${slideNum}.png`;
+}
+
 window.downloadSingleSlide = function(index) {
     const targetIdx = (index !== undefined && index !== null) ? index : currentSlideIndex;
     if (!fabricCanvas) return;
@@ -1475,10 +1491,10 @@ window.downloadSingleSlide = function(index) {
     if (targetIdx === currentSlideIndex) {
         const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
         const link = document.createElement('a');
-        link.download = `slide_${targetIdx + 1}.png`;
+        link.download = getSuggestiveFilename(targetIdx);
         link.href = dataURL;
         link.click();
-        showToast(`Downloaded Slide ${targetIdx + 1}`);
+        showToast(`Downloaded ${link.download}`);
         return;
     }
 
@@ -1491,14 +1507,14 @@ window.downloadSingleSlide = function(index) {
     setTimeout(() => {
         const dataURL = fabricCanvas.toDataURL({ format: 'png', multiplier: 1 / CANVAS_ZOOM });
         const link = document.createElement('a');
-        link.download = `slide_${targetIdx + 1}.png`;
+        link.download = getSuggestiveFilename(targetIdx);
         link.href = dataURL;
         link.click();
 
         // Restore view
         currentSlideIndex = originalIndex;
         updateSlidePreview();
-        showToast(`Downloaded Slide ${targetIdx + 1}`);
+        showToast(`Downloaded ${link.download}`);
     }, 400);
 };
 
