@@ -873,8 +873,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                             customStyle.top = 67.5;
                         }
                         
-                        if (!customStyle.scaleX) customStyle.scaleX = defaultScale;
-                        if (!customStyle.scaleY) customStyle.scaleY = defaultScale;
+                        // Prevent the image from blowing up and covering the whole slide from previous bad state
+                        const maxAllowedScale = Math.min(450 / img.width, 100 / img.height);
+                        
+                        if (!customStyle.scaleX || customStyle.scaleX > maxAllowedScale) customStyle.scaleX = defaultScale;
+                        if (!customStyle.scaleY || customStyle.scaleY > maxAllowedScale) customStyle.scaleY = defaultScale;
                         
                         img.set(customStyle);
                     }
