@@ -9,6 +9,7 @@ import Parser from 'rss-parser';
 global.WebSocket = WebSocket;
 
 dotenv.config();
+dotenv.config({ path: '../.env' });
 
 const app = express();
 const port = process.env.PORT || 5680;
@@ -89,6 +90,71 @@ const SLIDE_SCHEMA = `{
   }
 }`;
 
+// Function to collect all configured Gemini API keys
+function getGeminiApiKeys() {
+    const keys = [];
+    if (process.env.GEMINI_API_KEYS) {
+        keys.push(...process.env.GEMINI_API_KEYS.split(',').map(k => k.trim()).filter(Boolean));
+    }
+    if (process.env.GEMINI_API_KEY) keys.push(process.env.GEMINI_API_KEY.trim());
+    if (process.env.GEMINI_API_KEY_2) keys.push(process.env.GEMINI_API_KEY_2.trim());
+    if (process.env.GEMINI_API_KEY_3) keys.push(process.env.GEMINI_API_KEY_3.trim());
+    if (process.env.GEMINI_API_KEY_4) keys.push(process.env.GEMINI_API_KEY_4.trim());
+    if (process.env.GEMINI_API_KEY_5) keys.push(process.env.GEMINI_API_KEY_5.trim());
+    return [...new Set(keys)].filter(Boolean);
+}
+
+async function generateAIContent(prompt) {
+    const apiKeys = getGeminiApiKeys();
+    if (apiKeys.length === 0) {
+        throw new Error("No GEMINI_API_KEY or GEMINI_API_KEYS found in environment variables.");
+    }
+
+    const models = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash-latest"];
+    let lastError = null;
+
+    for (let kIdx = 0; kIdx < apiKeys.length; kIdx++) {
+        const apiKey = apiKeys[kIdx];
+        const keyTag = `...${apiKey.slice(-4)}`;
+        const client = new GoogleGenerativeAI(apiKey);
+
+        for (const m of models) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    const modelObj = client.getGenerativeModel({ model: m });
+                    const result = await modelObj.generateContent(prompt);
+                    return result;
+                } catch (err) {
+                    lastError = err;
+                    const errMsg = err.message || '';
+                    console.warn(`[AI Failover] Key ${kIdx + 1}/${apiKeys.length} (${keyTag}) | Model ${m} | Attempt ${attempt + 1} failed: ${errMsg.substring(0, 120)}`);
+
+                    const isQuotaOrLimit = err.status === 429 || 
+                        errMsg.includes('429') || 
+                        errMsg.includes('Quota exceeded') || 
+                        errMsg.includes('quota') || 
+                        errMsg.includes('limit') || 
+                        errMsg.includes('token');
+
+                    if (isQuotaOrLimit) {
+                        console.warn(`[AI Failover] Quota/Token limit hit on key (${keyTag}). Switching to next available API key...`);
+                        break;
+                    } else if (attempt === 0) {
+                        await new Promise(r => setTimeout(r, 1500));
+                    }
+                }
+            }
+
+            const isQuotaError = lastError && (lastError.status === 429 || lastError.message?.includes('429') || lastError.message?.includes('Quota') || lastError.message?.includes('quota'));
+            if (isQuotaError) {
+                break;
+            }
+        }
+    }
+
+    throw lastError || new Error("All Gemini API keys and models failed.");
+}
+
 /**
  * Sanitize brand_id for Supabase — reject mock/default IDs
  */
@@ -96,28 +162,6 @@ function sanitizeBrandId(brand_id) {
     if (!brand_id || typeof brand_id !== 'string') return null;
     if (brand_id.startsWith('default') || brand_id.startsWith('mock') || brand_id.startsWith('new-')) return null;
     return brand_id;
-}
-
-async function generateAIContent(prompt) {
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash-latest"];
-    for (const m of models) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const modelObj = genAI.getGenerativeModel({ model: m });
-                return await modelObj.generateContent(prompt);
-            } catch (err) {
-                console.warn(`[AI Fallback] Model ${m} (attempt ${attempt + 1}) failed:`, err.message || err);
-                if ((err.status === 429 || err.message?.includes('429')) && attempt === 0) {
-                    console.log("[AI Fallback] Retrying after 4s delay...");
-                    await new Promise(r => setTimeout(r, 4000));
-                } else if (m === models[models.length - 1] && attempt === 1) {
-                    throw err;
-                } else {
-                    break;
-                }
-            }
-        }
-    }
 }
 
 // Health check
@@ -135,16 +179,10 @@ app.post('/generate', async (req, res) => {
         return res.status(400).json({ error: "Missing topic or contentType" });
     }
 
-    const brandCtx = getBrandContextBlock(brand_context);
-
     try {
         console.log(`[/generate] [${contentType}] topic: "${topic}"`);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
         let prompt;
-
         if (promptTemplate) {
-            // User's custom prompt — respect it but append brand context and structured format note
             prompt = promptTemplate
                 .replace(/\$\{topic\}/g, topic)
                 .replace(/\$\{contentType\}/g, contentType);
@@ -166,7 +204,7 @@ Return ONLY valid JSON, no markdown. Use this exact schema:
 ${SLIDE_SCHEMA}`;
         }
 
-        const result = await model.generateContent(prompt);
+        const result = await generateAIContent(prompt);
         let text = result.response.text().trim();
 
         // Strip markdown fences if present
@@ -221,8 +259,6 @@ app.post('/refine', async (req, res) => {
     const brandCtx = getBrandContextBlock(brand_context);
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
         const prompt = `You are an expert Loksewa content creator. Rewrite the following carousel content based on user feedback.${brandCtx}
 
 Topic: "${topic}"
@@ -232,7 +268,7 @@ User Feedback: "${note}"
 Incorporate the feedback precisely. Return ONLY valid JSON matching this schema (no markdown):
 ${SLIDE_SCHEMA}`;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateAIContent(prompt);
         let text = result.response.text().trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
 
         res.json({ text });
@@ -253,8 +289,6 @@ app.post('/generate-video', async (req, res) => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
         let prompt = `You are an expert AI Video Prompt Engineer. Convert the following research into video generation prompts for Sora or Runway.\n\nResearch:\n${originalResearch}\n\n`;
         if (format === 'single') {
             prompt += `Create one single, continuous, highly detailed prompt (visuals, lighting, motion, style).`;
@@ -262,7 +296,7 @@ app.post('/generate-video', async (req, res) => {
             prompt += `Create exactly ${splits || 4} separate scene prompts. Label them "Scene 1:", "Scene 2:", etc. For each: exact visuals, lighting, camera movement.`;
         }
 
-        const result = await model.generateContent(prompt);
+        const result = await generateAIContent(prompt);
         res.json({ prompts: result.response.text() });
     } catch (err) {
         console.error("Video generation error:", err);
@@ -280,11 +314,12 @@ app.post('/generate-news', async (req, res) => {
     const selectedCategory = category || "Weird & Bizarre News (Worldwide)";
     const brandCtx = getBrandContextBlock(brand_context);
     const requestedSlides = parseInt(slide_count) === 1 ? 1 : 4;
+    const handle = brand_context?.handle || '@ammaazzingg';
 
     try {
         console.log(`[/generate-news] topic: "${topic || 'auto'}", category: "${selectedCategory}", style: "${templateStyle}", lang: ${targetLanguage}, slides: ${requestedSlides}`);
 
-        let storyTitle = topic || "";
+        let storyTitle = topic ? topic.trim() : "";
         let storyContent = "";
         let storyLink = "https://news.google.com";
 
@@ -333,25 +368,26 @@ app.post('/generate-news', async (req, res) => {
             }
         }
 
-        console.log(`Final story focus: "${storyTitle}"`);
-
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const handle = brand_context?.handle || '@ammaazzingg';
+        console.log(`Final story focus: "${storyTitle}" (Requested Slides: ${requestedSlides})`);
 
         const narrativeFramework = requestedSlides === 1 ? `SINGLE SLIDE NEWS CARD FRAMEWORK (STRICT):
-- Slide 1: Complete 1-card News Flash. Include an attention-grabbing headline as "title", a comprehensive 2-3 sentence news breakdown as "content", a highly descriptive "image_prompt" related to the story.` : `CAROUSEL NARRATIVE FRAMEWORK (STRICT):
-- Slide 1: INTRODUCTION — Be creative and write something related to the news story in short. Include a highly descriptive image_prompt related to the story.
-- Slides 2-3: KEY FACTS — key breakdown or timeline per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a completely unique image_prompt for each slide.
+- Return EXACTLY 1 slide in the "slides" array.
+- Slide 1: Complete 1-card News Flash. Include an attention-grabbing headline as "title", a comprehensive 2-3 sentence news breakdown as "content", and a highly descriptive "image_prompt" related to the story.` : `CAROUSEL NARRATIVE FRAMEWORK (STRICT):
+- Return EXACTLY 4 slides in the "slides" array.
+- Slide 1: INTRODUCTION — Be creative and write something related to the news story in short. Include a highly descriptive image_prompt.
+- Slides 2-3: KEY FACTS — key breakdown or timeline per slide. CRITICAL RULE: EVERY SINGLE SLIDE MUST HAVE COMPLETELY UNIQUE AND DIFFERENT TEXT. DO NOT REPEAT TEXT. Include a unique image_prompt for each slide.
 - Slide 4 (FINAL CTA): Set "is_cta": true. Title: "What Do You Think? 🤔". Content: "Read caption for full story + source link ↓\n\nFollow ${handle} for daily updates." NO image_prompt.`;
 
-        const prompt = `You are an expert social media content creator.${brandCtx}
+        const topicDirective = topic ? `CRITICAL MANDATE: The user explicitly specified the topic: "${storyTitle}". The ENTIRE news post (titles, content, image prompts) MUST be 100% strictly about "${storyTitle}". DO NOT introduce unrelated news.` : `Topic / Story Title: ${storyTitle}`;
 
-Create an engaging news post (${requestedSlides} slide(s)) about this news story.
-Topic / Story Title: ${storyTitle}
-Category: ${selectedCategory}
+        const prompt = `You are an expert social media news content creator.${brandCtx}
+
+${topicDirective}
+Category / Context: ${selectedCategory}
 Summary Context: ${storyContent || 'Generate a compelling breakdown of this topic.'}
 Style: "${templateStyle}"
 Source Link: ${storyLink}
+Total Slides Required: EXACTLY ${requestedSlides} slide(s).
 
 ${narrativeFramework}
 
@@ -369,6 +405,21 @@ ${SLIDE_SCHEMA}`;
         } catch (e) {
             console.error("Gemini invalid JSON for /generate-news:", text.substring(0, 300));
             return res.status(500).json({ error: "AI returned invalid JSON" });
+        }
+
+        // STRICT ENFORCEMENT: Enforce exact slide count requested by user
+        if (parsed.slides && Array.isArray(parsed.slides)) {
+            if (requestedSlides === 1) {
+                parsed.slides = parsed.slides.slice(0, 1);
+                if (parsed.slides[0]) {
+                    parsed.slides[0].is_cta = false;
+                    if (!parsed.slides[0].image_prompt) {
+                        parsed.slides[0].image_prompt = `${storyTitle} news visual`;
+                    }
+                }
+            } else if (parsed.slides.length > 4) {
+                parsed.slides = parsed.slides.slice(0, 4);
+            }
         }
 
         const imageUrls = buildImageUrls(parsed.slides);
@@ -419,13 +470,9 @@ app.post('/generate-facts', async (req, res) => {
     const targetLanguage = language || "English";
     const count = parseInt(slide_count) || 5;
     const factTopic = topic || "Sharks are older than trees";
-    const handle = brand_context?.handle || '@ammaazzingg';
     const brandCtx = getBrandContextBlock(brand_context);
-
     try {
         console.log(`[/generate-facts] "${factTopic}", ${count} slides, ${targetLanguage}`);
-
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const prompt = `You are an expert Instagram facts content creator.${brandCtx}
 
@@ -449,7 +496,7 @@ ALL text (titles, content, caption) MUST be written in ${targetLanguage}.
 Return ONLY valid JSON (no markdown):
 ${SLIDE_SCHEMA}`;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateAIContent(prompt);
         let text = result.response.text().trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
 
         let parsed;
