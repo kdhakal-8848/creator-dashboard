@@ -132,15 +132,15 @@ const handleLoginAction = async (e) => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
             let msg = error.message;
-            if (msg.includes('Invalid login credentials')) msg = '❌ Wrong email or password. Try again or use Guest access below.';
-            else if (msg.includes('Email not confirmed')) msg = '📧 Please confirm your email first, or use Guest access below.';
+            if (msg.includes('Invalid login credentials')) msg = '❌ Wrong email or password. Please try again.';
+            else if (msg.includes('Email not confirmed')) msg = '📧 Please confirm your email first before signing in.';
             else if (msg.includes('User not found')) msg = '❌ No account found with that email. Click Sign Up to create one.';
             showLoginError(msg);
         } else {
             showLoginSuccess('✅ Signed in! Loading...');
         }
     } catch (err) {
-        showLoginError('⚠️ Network error: ' + err.message + '. Use Guest access below.');
+        showLoginError('⚠️ Network error: ' + err.message);
     } finally {
         setLoginLoading(false);
     }
