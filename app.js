@@ -72,6 +72,29 @@ function handleAuthChange(session) {
     }
 }
 
+// --- Auth UI Helpers ---
+function showLoginError(msg) {
+    const fb = document.getElementById('login-feedback');
+    if (!fb) return;
+    fb.innerHTML = msg;
+    fb.style.cssText = 'color:#f87171;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.4);padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;display:block;';
+}
+function showLoginSuccess(msg) {
+    const fb = document.getElementById('login-feedback');
+    if (!fb) return;
+    fb.innerHTML = msg;
+    fb.style.cssText = 'color:#34d399;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.4);padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;display:block;';
+}
+function setLoginLoading(on) {
+    const btn = document.getElementById('login-btn');
+    const fb = document.getElementById('login-feedback');
+    if (btn) btn.disabled = on;
+    if (on && fb) {
+        fb.innerHTML = '⏳ Signing in...';
+        fb.style.cssText = 'color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;display:block;';
+    }
+}
+
 // --- Auth UI ---
 const handleLoginAction = async (e) => {
     if (e) e.preventDefault();
@@ -97,20 +120,26 @@ const handleLoginAction = async (e) => {
         }
         return;
     }
-    feedback.innerText = "Authenticating...";
-    feedback.style.color = "var(--color-fg-muted)";
+    if (!email || !password) {
+        showLoginError('Please enter your email and password.');
+        return;
+    }
+    setLoginLoading(true);
     try {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) { 
-            feedback.innerText = error.message; 
-            feedback.style.color = "#f87171"; 
-        } else { 
-            feedback.innerText = "Success!"; 
-            feedback.style.color = "#34d399"; 
+        if (error) {
+            let msg = error.message;
+            if (msg.includes('Invalid login credentials')) msg = '❌ Wrong email or password. Try again or use Guest access below.';
+            else if (msg.includes('Email not confirmed')) msg = '📧 Please confirm your email first, or use Guest access below.';
+            else if (msg.includes('User not found')) msg = '❌ No account found with that email. Click Sign Up to create one.';
+            showLoginError(msg);
+        } else {
+            showLoginSuccess('✅ Signed in! Loading...');
         }
     } catch (err) {
-        feedback.innerText = "Connection issue. Click 'Continue as Guest' below.";
-        feedback.style.color = "#f87171";
+        showLoginError('⚠️ Network error: ' + err.message + '. Use Guest access below.');
+    } finally {
+        setLoginLoading(false);
     }
 };
 
@@ -121,34 +150,38 @@ document.getElementById('signin-form')?.addEventListener('submit', handleLoginAc
 document.getElementById('signup-btn')?.addEventListener('click', async () => {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    const feedback = document.getElementById('login-feedback');
     if (!email || !password) {
-        feedback.innerText = "Please enter email & password to sign up.";
-        feedback.style.color = "#f87171";
+        showLoginError('Please enter your email & password to sign up.');
         return;
     }
-    feedback.innerText = "Creating account...";
-    feedback.style.color = "rgba(255,255,255,0.7)";
+    if (password.length < 6) {
+        showLoginError('❌ Password must be at least 6 characters.');
+        return;
+    }
+    setLoginLoading(true);
     if (isMockMode) {
         setTimeout(() => {
-            feedback.innerText = "Mock Account created! Please click Sign In or Guest.";
-            feedback.style.color = "#34d399";
+            showLoginSuccess('✅ Mock account created! Click Sign In.');
+            setLoginLoading(false);
         }, 500);
         return;
     }
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-        feedback.innerText = error.message;
-        feedback.style.color = "#f87171";
-    } else {
-        if (data.session) {
-            feedback.innerText = "Account created & signed in!";
-            feedback.style.color = "#34d399";
-            handleAuthChange(data.session);
+    try {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) {
+            showLoginError('❌ ' + error.message);
         } else {
-            feedback.innerText = "Account created! Please check your email to confirm, or click 'Continue as Guest'.";
-            feedback.style.color = "#34d399";
+            if (data.session) {
+                showLoginSuccess('✅ Account created & signed in!');
+                handleAuthChange(data.session);
+            } else {
+                showLoginSuccess('✅ Account created! Check your email to confirm, then Sign In.');
+            }
         }
+    } catch (err) {
+        showLoginError('⚠️ Network error: ' + err.message);
+    } finally {
+        setLoginLoading(false);
     }
 });
 
