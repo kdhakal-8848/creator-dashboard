@@ -865,15 +865,16 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
                             customStyle.top = 67.5;
                         }
-                        // Cap scale to defaultScale if saved scale exceeds target dimensions
-                        const checkScaleX = customStyle.scaleX || defaultScale;
-                        const checkScaleY = customStyle.scaleY || defaultScale;
-                        if ((img.width * checkScaleX > targetW) || (img.height * checkScaleY > targetH)) {
+                        // Hard cap scale to fit within 350px width and 65px height in 1080p space
+                        const maxCapScaleX = 350 / img.width;
+                        const maxCapScaleY = 65 / img.height;
+                        const maxAllowedScale = Math.min(maxCapScaleX, maxCapScaleY);
+
+                        if (!customStyle.scaleX || customStyle.scaleX > maxAllowedScale) {
                             customStyle.scaleX = defaultScale;
+                        }
+                        if (!customStyle.scaleY || customStyle.scaleY > maxAllowedScale) {
                             customStyle.scaleY = defaultScale;
-                        } else {
-                            customStyle.scaleX = checkScaleX;
-                            customStyle.scaleY = checkScaleY;
                         }
                         img.set(customStyle);
                     }
