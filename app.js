@@ -191,6 +191,7 @@ document.getElementById('signup-btn')?.addEventListener('click', async () => {
 window.fetchBrands = fetchBrands;
 window.loadDashboardStats = loadDashboardStats;
 window.handleAuthChange = handleAuthChange;
+window.renderFabricSlide = renderFabricSlide;
 
 // Guest Mode Handler
 document.getElementById('guest-btn')?.addEventListener('click', () => {
