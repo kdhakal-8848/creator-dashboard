@@ -840,21 +840,26 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const loadOpts = assetUrl.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
             fabric.Image.fromURL(assetUrl, (img) => {
                 if (img && img.width > 0) {
-                    // Fit header asset strictly in top-left: edge corner (left: 80, top: 35), left half of slide (maxW: 460), and above yellow line (maxH: 95)
+                    // Vertically align header asset between top slide edge (0) and yellow line (135): center at top: 67.5, originY: 'center'
                     const maxW = 460;
                     const maxH = 95;
                     const defaultScale = Math.min(maxW / img.width, maxH / img.height);
                     img.set({
                         left: 80,
-                        top: 35,
-                        originY: 'top',
+                        top: 67.5,
+                        originX: 'left',
+                        originY: 'center',
                         scaleX: defaultScale, scaleY: defaultScale,
                         selectable: true, evented: true,
                         customType: 'header-asset'
                     });
                     if (slideData.headerAssetStyle) {
                         const customStyle = { ...slideData.headerAssetStyle };
-                        // Check if saved custom scale causes image to overflow max bounds
+                        // Ensure originY is center and top is within safe range (between 20 and 115)
+                        customStyle.originY = 'center';
+                        if (!customStyle.top || customStyle.top < 20 || customStyle.top > 115) {
+                            customStyle.top = 67.5;
+                        }
                         const savedScaleX = customStyle.scaleX || defaultScale;
                         const savedScaleY = customStyle.scaleY || defaultScale;
                         if ((img.width * savedScaleX > maxW) || (img.height * savedScaleY > maxH)) {
