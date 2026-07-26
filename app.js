@@ -512,7 +512,124 @@ navLinks.forEach(link => {
         // removed initTemplateStudio
         if (targetViewId === 'canvas-view') {
             initDesignStudio();
-            loadCanvasBrandOptions();
+            syncTemplateDropdowns();
+        
+        // Save As New Template
+        document.getElementById('canvas-save-new-template')?.addEventListener('click', () => {
+            const customTemplates = JSON.parse(localStorage.getItem('loksewa_custom_templates') || '[]');
+            const name = prompt("Enter a name for your new template:", "Custom Template " + (customTemplates.length + 1));
+            if (!name || !name.trim()) return;
+
+            const templateId = 'custom_tmpl_' + Date.now();
+            const templateNames = JSON.parse(localStorage.getItem('loksewa_template_names') || '{}');
+            const overrides = JSON.parse(localStorage.getItem('loksewa_template_overrides') || '{}');
+
+            const tmplOverrides = { extraObjects: [] };
+            freeformCanvas.getObjects().forEach(obj => {
+                if (obj.customType && !obj.isExtraOverride) {
+                    tmplOverrides[obj.customType] = {
+                        left: obj.left, top: obj.top, scaleX: obj.scaleX, scaleY: obj.scaleY,
+                        width: obj.width, height: obj.height, fill: obj.fill, fontSize: obj.fontSize,
+                        opacity: obj.opacity, angle: obj.angle
+                    };
+                } else if (obj.isExtraOverride) {
+                    tmplOverrides.extraObjects.push(obj.toObject(['isExtraOverride', 'customType']));
+                }
+            });
+
+            const basePreset = document.getElementById('canvas-base-template')?.value || 'template-classic';
+            customTemplates.push({ id: templateId, name: name.trim(), basePreset });
+            templateNames[templateId] = name.trim();
+            overrides[templateId] = tmplOverrides;
+
+            localStorage.setItem('loksewa_custom_templates', JSON.stringify(customTemplates));
+            localStorage.setItem('loksewa_template_names', JSON.stringify(templateNames));
+            localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
+
+            syncTemplateDropdowns();
+            document.getElementById('canvas-base-template').value = templateId;
+            showToast(`Template "${name.trim()}" saved!`);
+        });
+
+        // Rename Template
+        document.getElementById('canvas-rename-template')?.addEventListener('click', () => {
+            const selectEl = document.getElementById('canvas-base-template');
+            const templateId = selectEl?.value;
+            if (!templateId) {
+                alert("Please select a template to rename.");
+                return;
+            }
+
+            const templateNames = JSON.parse(localStorage.getItem('loksewa_template_names') || '{}');
+            const defaultObj = DEFAULT_PRESETS.find(p => p.id === templateId);
+            const currentName = templateNames[templateId] || (defaultObj ? defaultObj.defaultName : templateId);
+
+            const newName = prompt("Rename template:", currentName);
+            if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+            templateNames[templateId] = newName.trim();
+            localStorage.setItem('loksewa_template_names', JSON.stringify(templateNames));
+
+            const customTemplates = JSON.parse(localStorage.getItem('loksewa_custom_templates') || '[]');
+            const ct = customTemplates.find(t => t.id === templateId);
+            if (ct) {
+                ct.name = newName.trim();
+                localStorage.setItem('loksewa_custom_templates', JSON.stringify(customTemplates));
+            }
+
+            syncTemplateDropdowns();
+            selectEl.value = templateId;
+            showToast(`Renamed template to "${newName.trim()}"`);
+        });
+
+        // Delete Template / Reset Overrides
+        document.getElementById('canvas-delete-template')?.addEventListener('click', () => {
+            const selectEl = document.getElementById('canvas-base-template');
+            const templateId = selectEl?.value;
+            if (!templateId) {
+                alert("Please select a template to delete.");
+                return;
+            }
+
+            const customTemplates = JSON.parse(localStorage.getItem('loksewa_custom_templates') || '[]');
+            const templateNames = JSON.parse(localStorage.getItem('loksewa_template_names') || '{}');
+            const overrides = JSON.parse(localStorage.getItem('loksewa_template_overrides') || '{}');
+            const defaultObj = DEFAULT_PRESETS.find(p => p.id === templateId);
+            const currentName = templateNames[templateId] || (defaultObj ? defaultObj.defaultName : templateId);
+
+            const isCustom = customTemplates.some(t => t.id === templateId);
+
+            if (isCustom) {
+                if (confirm(`Are you sure you want to delete custom template "${currentName}" permanently?`)) {
+                    const updatedCustom = customTemplates.filter(t => t.id !== templateId);
+                    delete templateNames[templateId];
+                    delete overrides[templateId];
+
+                    localStorage.setItem('loksewa_custom_templates', JSON.stringify(updatedCustom));
+                    localStorage.setItem('loksewa_template_names', JSON.stringify(templateNames));
+                    localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
+
+                    syncTemplateDropdowns();
+                    selectEl.value = 'template-classic';
+                    selectEl.dispatchEvent(new Event('change'));
+                    showToast(`Deleted template "${currentName}"`);
+                }
+            } else {
+                if (confirm(`Reset custom overrides for built-in template "${currentName}" back to factory defaults?`)) {
+                    delete overrides[templateId];
+                    delete templateNames[templateId];
+                    localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
+                    localStorage.setItem('loksewa_template_names', JSON.stringify(templateNames));
+
+                    syncTemplateDropdowns();
+                    selectEl.value = templateId;
+                    selectEl.dispatchEvent(new Event('change'));
+                    showToast(`Reset overrides for "${currentName}"`);
+                }
+            }
+        });
+
+        loadCanvasBrandOptions();
         }
         if (window.feather) feather.replace();
     });
@@ -801,6 +918,71 @@ function initFabricCanvas() {
             }
         });
     }
+}
+
+
+// ============================================================
+// TEMPLATE MANAGEMENT SYSTEM (Save As New, Rename, Delete & Sync)
+// ============================================================
+const DEFAULT_PRESETS = [
+    { id: 'template-classic', defaultName: 'Classic Template' },
+    { id: 'template-bold', defaultName: 'Bold Typography' },
+    { id: 'template-glass', defaultName: 'Glassmorphism' },
+    { id: 'template-visual', defaultName: 'Visual Centric' },
+    { id: 'template-minimal', defaultName: 'Dark Minimal' },
+    { id: 'template-bright-minimal', defaultName: 'Bright Minimal' },
+    { id: 'template-blue-border', defaultName: 'Blue Border' },
+    { id: 'template-news-image', defaultName: 'News (Image)' },
+    { id: 'template-news-text', defaultName: 'News (Text)' },
+    { id: 'template-news-single-image', defaultName: 'News (Single Image)' },
+    { id: 'template-facts-single', defaultName: 'Facts (Single Statement)' }
+];
+
+function syncTemplateDropdowns() {
+    const customTemplates = JSON.parse(localStorage.getItem('loksewa_custom_templates') || '[]');
+    const customNames = JSON.parse(localStorage.getItem('loksewa_template_names') || '{}');
+
+    const selectors = [
+        document.getElementById('canvas-base-template'),
+        document.getElementById('template-selector')
+    ];
+
+    selectors.forEach(selectEl => {
+        if (!selectEl) return;
+        const currentVal = selectEl.value;
+        selectEl.innerHTML = '';
+
+        if (selectEl.id === 'canvas-base-template') {
+            const blankOpt = document.createElement('option');
+            blankOpt.value = '';
+            blankOpt.textContent = 'None (Blank)';
+            selectEl.appendChild(blankOpt);
+        }
+
+        const groupBuiltin = document.createElement('optgroup');
+        groupBuiltin.label = 'Built-in Presets';
+        DEFAULT_PRESETS.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = customNames[p.id] || p.defaultName;
+            groupBuiltin.appendChild(opt);
+        });
+        selectEl.appendChild(groupBuiltin);
+
+        if (customTemplates.length > 0) {
+            const groupCustom = document.createElement('optgroup');
+            groupCustom.label = 'Custom Saved Templates';
+            customTemplates.forEach(ct => {
+                const opt = document.createElement('option');
+                opt.value = ct.id;
+                opt.textContent = customNames[ct.id] || ct.name || ct.id;
+                groupCustom.appendChild(opt);
+            });
+            selectEl.appendChild(groupCustom);
+        }
+
+        if (currentVal) selectEl.value = currentVal;
+    });
 }
 
 function initDesignStudio() {
