@@ -411,20 +411,12 @@ function populateBrandSelectors() {
         else if (['manual-brand', 'news-brand', 'facts-brand'].includes(id)) sel.value = activeBrandId;
         else if (currentVal) sel.value = currentVal;
     });
-    const chip = document.getElementById('active-brand-chip');
-    if (chip) chip.innerText = currentBranding.name || "Creator's Den";
 }
 
 function updateBrandVisuals(brand = currentBranding) {
     if (!brand) return;
-    const sidebarNameEl = document.getElementById('sidebar-brand-name');
-    const sidebarLogoEl = document.getElementById('sidebar-brand-logo');
-    if (sidebarNameEl) sidebarNameEl.innerText = brand.name || '';
-    if (sidebarLogoEl && brand.logoUrl) sidebarLogoEl.src = brand.logoUrl;
     if (brand.primaryColor) document.documentElement.style.setProperty('--brand-primary', brand.primaryColor);
     if (brand.secondaryColor) document.documentElement.style.setProperty('--brand-secondary', brand.secondaryColor);
-    const chip = document.getElementById('active-brand-chip');
-    if (chip) chip.innerText = brand.name || "Creator's Den";
 }
 
 // ============================================================
