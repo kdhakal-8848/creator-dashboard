@@ -347,8 +347,10 @@ app.post('/generate-news', async (req, res) => {
                 feedUrls = ['https://www.sciencedaily.com/rss/all.xml', 'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml'];
             } else if (selectedCategory.includes('Health')) {
                 feedUrls = ['https://rss.nytimes.com/services/xml/rss/nyt/Health.xml'];
-            } else if (selectedCategory.includes('Tech')) {
+            } else if (selectedCategory.includes('Tech') || selectedCategory.includes('Information')) {
                 feedUrls = ['https://feeds.feedburner.com/TechCrunch/', 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml'];
+            } else if (selectedCategory.includes('Economy') || selectedCategory.includes('Finance')) {
+                feedUrls = ['https://rss.nytimes.com/services/xml/rss/nyt/Business.xml', 'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml'];
             }
 
             let feed = null;

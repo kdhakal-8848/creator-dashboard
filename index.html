@@ -196,7 +196,17 @@
                                     <label><input type="checkbox" id="toggle-brand-header-asset" checked> Header Asset</label>
                                     <label><input type="checkbox" id="toggle-slide-numbers-tb" checked> Numbers</label>
                                     <label><input type="checkbox" id="toggle-swipe-indicator" checked> Swipe Tab</label>
-                                    <label><input type="checkbox" id="toggle-news-breaking"> "Breaking"</label>
+                                    <label><input type="checkbox" id="toggle-news-breaking"> Badge</label>
+                                    <select id="canvas-badge-selector" style="font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border-default); background: var(--color-canvas-default); color: var(--color-fg-default);">
+                                        <option value="🔴 BREAKING NEWS">🔴 Breaking</option>
+                                        <option value="🇳🇵 NEPAL TODAY">🇳🇵 Nepal</option>
+                                        <option value="🌍 INTERNATIONAL NEWS">🌍 International</option>
+                                        <option value="📈 GLOBAL ECONOMY">📈 Economy</option>
+                                        <option value="💻 INFO & TECH">💻 Tech</option>
+                                        <option value="❤️ HEALTH">❤️ Health</option>
+                                        <option value="🤪 INTERESTING NEWS">🤪 Interesting</option>
+                                        <option value="🌟 GOOD NEWS">🌟 Good News</option>
+                                    </select>
                                 </div>
                                 <div style="display: flex; gap: 6px; align-items: center;">
                                     <select id="canvas-theme-selector" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border-default); background: var(--color-canvas-default); color: var(--color-fg-default); height: 24px;">
@@ -417,13 +427,15 @@
                     <div class="form-group">
                         <label>News Category / Auto-Search Focus</label>
                         <select id="news-category-select" class="full-width">
+                            <option value="Breaking News (Worldwide)">🔴 Breaking News (Worldwide)</option>
                             <option value="Nepal Today (Latest Nepal News)">🇳🇵 Nepal Today (News in Nepal today)</option>
+                            <option value="International News (Worldwide)">🌍 International News (Worldwide)</option>
+                            <option value="Global Economy & Finance">📈 Global Economy & Finance</option>
+                            <option value="Information Technology">💻 Information Technology</option>
+                            <option value="Health & Human Wellness">❤️ Health & Human Wellness</option>
                             <option value="Good News (Worldwide)">🌟 Good News (Worldwide)</option>
                             <option value="Weird & Bizarre News (Worldwide)" selected>🤪 Weird & Bizarre News (Worldwide)</option>
                             <option value="Important Discoveries & Science">🔬 Important Discoveries & Science</option>
-                            <option value="Health & Human Wellness">❤️ Health & Human Wellness</option>
-                            <option value="Tech & Artificial Intelligence">💻 Tech & Artificial Intelligence</option>
-                            <option value="Global Economy & Finance">📈 Global Economy & Finance</option>
                         </select>
                     </div>
 

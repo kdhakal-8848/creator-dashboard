@@ -1195,15 +1195,18 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 // --- Red Breaking News Badge ---
                 let titleY = 180;
                 if (showNewsBreaking) {
+                    const badgeString = document.getElementById('canvas-badge-selector')?.value || '🔴 BREAKING NEWS';
+                    const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
+                    
                     const badgeBg = new fabric.Rect({
                         left: 80, top: 160,
-                        width: 250, height: 48,
+                        width: estimatedWidth, height: 48,
                         fill: '#dc2626', rx: 24, ry: 24,
                         selectable: false, evented: false, customType: 'news-badge-bg'
                     });
                     fabricCanvas.add(badgeBg);
 
-                    const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+                    const badgeText = new fabric.IText(badgeString, {
                         left: 98, top: 172,
                         fontSize: 22, fontWeight: '800', fill: '#ffffff',
                         fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
@@ -1309,13 +1312,16 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             } else if (selectedPreset === 'template-news-single-image') {
                 let currentY = 160;
                 if (showNewsBreaking) {
+                    const badgeString = document.getElementById('canvas-badge-selector')?.value || '🔴 BREAKING NEWS';
+                    const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
+
                     const badgeBg = new fabric.Rect({
-                        left: 80, top: currentY, width: 250, height: 48,
+                        left: 80, top: currentY, width: estimatedWidth, height: 48,
                         fill: '#dc2626', rx: 24, ry: 24,
                         selectable: false, evented: false, customType: 'news-badge-bg'
                     });
                     fabricCanvas.add(badgeBg);
-                    const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+                    const badgeText = new fabric.IText(badgeString, {
                         left: 98, top: currentY + 12,
                         fontSize: 22, fontWeight: '800', fill: '#ffffff',
                         fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
@@ -1461,13 +1467,18 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
         if (showNewsBreaking && !selectedPreset.startsWith('template-news-')) {
+            const badgeString = document.getElementById('canvas-badge-selector')?.value || '🔴 BREAKING NEWS';
+            // Adjust width based on text length roughly. '🔴 BREAKING NEWS' is 16 chars ~ 250px. 
+            // 250 + (length - 16) * 12
+            const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
+            
             const badgeBg = new fabric.Rect({
-                left: 80, top: 140, width: 250, height: 48,
+                left: 80, top: 140, width: estimatedWidth, height: 48,
                 fill: '#dc2626', rx: 24, ry: 24,
                 selectable: true, evented: true, customType: 'news-badge-bg'
             });
             fabricCanvas.add(badgeBg);
-            const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+            const badgeText = new fabric.IText(badgeString, {
                 left: 98, top: 152,
                 fontSize: 22, fontWeight: '800', fill: '#ffffff',
                 fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
@@ -1954,7 +1965,14 @@ document.getElementById('toggle-brand-handle')?.addEventListener('change', () =>
 document.getElementById('toggle-brand-header-asset')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-slide-numbers')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-swipe-indicator')?.addEventListener('change', () => updateSlidePreview());
-document.getElementById('toggle-news-breaking')?.addEventListener('change', () => updateSlidePreview());
+document.getElementById('toggle-news-breaking')?.addEventListener('change', (e) => {
+    const selector = document.getElementById('canvas-badge-selector');
+    if (selector) {
+        selector.style.display = e.target.checked ? 'inline-block' : 'none';
+    }
+    updateSlidePreview();
+});
+document.getElementById('canvas-badge-selector')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('canvas-theme-selector')?.addEventListener('change', () => { updateSlidePreview(); if (fabricCanvas) saveCanvasState(); });
 
 document.getElementById('toggle-brand-logo-tb')?.addEventListener('change', (e) => {
@@ -2314,6 +2332,20 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
         if (data.db_error && !isMockMode) { isMockMode = true; }
         const newPost = data.post || { id: Date.now().toString(), topic: `[News Lab] Generated`, text: data.text, image_url: data.image_url, status: 'Draft', brand_id: brandId, updated_at: new Date().toISOString() };
         if (isMockMode && !mockPosts.find(p => p.id === newPost.id)) { mockPosts.unshift(newPost); saveMockPosts(); }
+        
+        // Auto-select badge based on category
+        const badgeSelector = document.getElementById('canvas-badge-selector');
+        if (badgeSelector) {
+            if (category.includes('Nepal')) badgeSelector.value = '🇳🇵 NEPAL TODAY';
+            else if (category.includes('International')) badgeSelector.value = '🌍 INTERNATIONAL NEWS';
+            else if (category.includes('Economy')) badgeSelector.value = '📈 GLOBAL ECONOMY';
+            else if (category.includes('Technology')) badgeSelector.value = '💻 INFO & TECH';
+            else if (category.includes('Health')) badgeSelector.value = '❤️ HEALTH';
+            else if (category.includes('Weird') || category.includes('Interesting')) badgeSelector.value = '🤪 INTERESTING NEWS';
+            else if (category.includes('Good News')) badgeSelector.value = '🌟 GOOD NEWS';
+            else badgeSelector.value = '🔴 BREAKING NEWS';
+        }
+
         await loadQueue();
         window.openEditor(data.post?.id || newPost.id);
     } catch (err) {
