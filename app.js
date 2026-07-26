@@ -2121,15 +2121,61 @@ document.querySelectorAll('.fact-niche-preset').forEach(btn => {
     btn.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('facts-topic').value = btn.getAttribute('data-niche'); });
 });
 
+document.getElementById('trigger-facts-single')?.addEventListener('click', async () => {
+    const topic = document.getElementById('facts-topic').value.trim() || "Sharks are older than trees";
+    const language = document.getElementById('facts-language').value;
+    const brandId = document.getElementById('facts-brand').value;
+    const feedback = document.getElementById('facts-feedback');
+    const btnSingle = document.getElementById('trigger-facts-single');
+    const btnCarousel = document.getElementById('trigger-facts');
+    const overlay = document.getElementById('facts-loading-overlay');
+    
+    btnSingle.style.display = 'none'; btnCarousel.style.display = 'none'; feedback.style.display = 'none'; overlay.style.display = 'block';
+    
+    try {
+        const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
+        const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            // Using slide_count 1 and a hint for single slide fact
+            body: JSON.stringify({ topic, language, slide_count: 1, brand_id: brandId, brand_context: getBrandContext(activeBrand) })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Facts generation failed");
+        if (data.db_error && !isMockMode) { isMockMode = true; alert(`DB Error: ${data.db_error}`); }
+        
+        const newPost = data.post || { id: Date.now().toString(), topic: `[Single Fact] ${topic.substring(0, 50)}`, text: data.text, image_url: data.image_url, status: 'Draft', brand_id: brandId, updated_at: new Date().toISOString() };
+        if (isMockMode && !mockPosts.find(p => p.id === newPost.id)) { mockPosts.unshift(newPost); saveMockPosts(); }
+        
+        ['queue-brand-filter', 'status-filter'].forEach(id => { const el = document.getElementById(id); if (el) el.value = el.id === 'queue-brand-filter' ? 'All' : 'All'; });
+        await loadQueue();
+        
+        const ts = document.getElementById('template-selector');
+        if (ts) {
+            ts.value = 'template-facts-single';
+            // Also update the legacy one if it exists
+            const tsOld = document.getElementById('template-selector-old');
+            if (tsOld) tsOld.value = 'template-facts-single';
+        }
+        window.openEditor(data.post?.id || newPost.id);
+    } catch (err) {
+        feedback.innerText = "Error: " + err.message; feedback.style.color = "var(--color-danger-fg)"; feedback.style.display = 'block';
+    } finally { 
+        btnSingle.style.display = 'block'; btnCarousel.style.display = 'block'; overlay.style.display = 'none'; 
+    }
+});
+
 document.getElementById('trigger-facts')?.addEventListener('click', async () => {
     const topic = document.getElementById('facts-topic').value.trim() || "Sharks are older than trees";
     const language = document.getElementById('facts-language').value;
     const slideCount = parseInt(document.getElementById('facts-slide-count').value) || 5;
     const brandId = document.getElementById('facts-brand').value;
     const feedback = document.getElementById('facts-feedback');
-    const btn = document.getElementById('trigger-facts');
+    const btnCarousel = document.getElementById('trigger-facts');
+    const btnSingle = document.getElementById('trigger-facts-single');
     const overlay = document.getElementById('facts-loading-overlay');
-    btn.style.display = 'none'; feedback.style.display = 'none'; overlay.style.display = 'block';
+    
+    btnCarousel.style.display = 'none'; btnSingle.style.display = 'none'; feedback.style.display = 'none'; overlay.style.display = 'block';
+    
     try {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
@@ -2146,7 +2192,7 @@ document.getElementById('trigger-facts')?.addEventListener('click', async () => 
         window.openEditor(data.post?.id || newPost.id);
     } catch (err) {
         feedback.innerText = "Error: " + err.message; feedback.style.color = "var(--color-danger-fg)"; feedback.style.display = 'block';
-    } finally { btn.style.display = 'block'; overlay.style.display = 'none'; }
+    } finally { btnCarousel.style.display = 'block'; btnSingle.style.display = 'block'; overlay.style.display = 'none'; }
 });
 
 // ============================================================
