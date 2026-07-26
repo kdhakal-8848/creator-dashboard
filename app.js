@@ -441,7 +441,7 @@ navLinks.forEach(link => {
         if (targetViewId === 'video-view') loadVideoQueue();
         if (targetViewId === 'settings-view') loadSettings();
         if (targetViewId === 'branding-view') loadBrandingView();
-        if (targetViewId === 'template-studio-view') initTemplateStudio();
+        // removed initTemplateStudio
         if (targetViewId === 'canvas-view') {
             initFreeformCanvas();
             loadCanvasBrandOptions();
@@ -661,7 +661,7 @@ function initFabricCanvas() {
     }
 }
 
-function initFreeformCanvas() {
+function initDesignStudio() {
     if (freeformCanvas) { freeformCanvas.dispose(); freeformCanvas = null; }
     const canvasEl = document.getElementById('freeform-canvas');
     if (!canvasEl) return;
@@ -682,6 +682,64 @@ function initFreeformCanvas() {
         const empty = document.getElementById('canvas-props-empty');
         if (panel && empty) { panel.style.display = 'none'; empty.style.display = 'block'; }
     });
+
+    document.getElementById('canvas-base-template')?.addEventListener('change', (e) => {
+        const baseTemplate = e.target.value;
+        const brandId = document.getElementById('canvas-brand-selector')?.value;
+        const brand = brandData.find(b => b.id === brandId) || brandData[0];
+        
+        if (baseTemplate) {
+            const realSelector = document.getElementById('template-selector');
+            const oldVal = realSelector ? realSelector.value : null;
+            if (realSelector) {
+                // temporarily mock the selectedPreset for the generator
+                const opt = document.createElement('option');
+                opt.value = baseTemplate;
+                realSelector.appendChild(opt);
+                realSelector.value = baseTemplate;
+            }
+            
+            const dummyData = {
+                title: "Your Catchy Headline Here",
+                content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
+                is_cta: false
+            };
+            
+            renderFabricSlide(dummyData, 0, null, brand, freeformCanvas).then(() => {
+                if (realSelector && oldVal !== null) realSelector.value = oldVal;
+            });
+        }
+    });
+
+    document.getElementById('canvas-save-overrides')?.addEventListener('click', () => {
+        const baseTemplate = document.getElementById('canvas-base-template')?.value;
+        if (!baseTemplate) {
+            alert("Please select a Base Template from the dropdown first to save overrides for it.");
+            return;
+        }
+        
+        const overridesStr = localStorage.getItem('loksewa_template_overrides');
+        const overrides = overridesStr ? JSON.parse(overridesStr) : {};
+        const tmplOverrides = { extraObjects: [] };
+        
+        freeformCanvas.getObjects().forEach(obj => {
+            if (obj.customType && !obj.isExtraOverride) {
+                tmplOverrides[obj.customType] = {
+                    left: obj.left, top: obj.top, scaleX: obj.scaleX, scaleY: obj.scaleY,
+                    width: obj.width, height: obj.height, fill: obj.fill, fontSize: obj.fontSize,
+                    opacity: obj.opacity, angle: obj.angle
+                };
+            } else if (obj.type !== 'rect' || (obj.type === 'rect' && obj.customType !== 'background-image')) {
+                // If it's a completely custom object drawn by the user and not the default background filler
+                tmplOverrides.extraObjects.push(obj.toJSON(['customType']));
+            }
+        });
+        
+        overrides[baseTemplate] = tmplOverrides;
+        localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
+        alert("Template Overrides saved successfully! They will now be applied when you generate posts with " + baseTemplate + ".");
+    });
+
 }
 
 function syncFabricCanvasToCurrentSlide() {
@@ -768,14 +826,14 @@ function fabricColorToHex(color) {
 
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
-async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
-    if (!fabricCanvas) initFabricCanvas();
-    if (!fabricCanvas) return;
+async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetCanvas = fabricCanvas) {
+    if (!targetCanvas) initFabricCanvas();
+    if (!targetCanvas) return;
 
     // We do NOT sync here anymore, because it would overwrite the new target slide
     // with the old slide's canvas state just before we draw the new one!
     // Sync is now strictly handled in the nav button click handlers and UI updaters BEFORE currentSlideIndex changes.
-    fabricCanvas.clear();
+    targetCanvas.clear();
 
     const templateSelector = document.getElementById('template-selector');
     const selectedPreset = templateSelector?.value || brand?.themePreset || 'template-classic';
@@ -807,7 +865,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         bgColor = brand.bgColor;
     }
 
-    fabricCanvas.backgroundColor = bgColor;
+    targetCanvas.backgroundColor = bgColor;
     const bgPicker = document.getElementById('editor-bg-color');
     if (bgPicker && bgColor) bgPicker.value = fabricColorToHex(bgColor);
     
@@ -853,7 +911,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             fill: overlayFill,
             selectable: false, evented: false, customType: 'overlay'
         });
-        fabricCanvas.add(overlay);
+        targetCanvas.add(overlay);
 
         // --- 2. Header Bar / Top Strip ---
         const minimalPresets = ['template-minimal', 'template-bright-minimal', 'template-blue-border', 'template-fb-minimal-1', 'template-fb-minimal-2'];
@@ -864,7 +922,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 fill: selectedPreset === 'template-bold' ? '#141414' : 'rgba(0,0,0,0.4)',
                 selectable: false, evented: false, customType: 'header-bar'
             });
-            fabricCanvas.add(headerBar);
+            targetCanvas.add(headerBar);
         }
 
 
@@ -884,9 +942,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         customType: 'brand-logo',
                         isPlaceholder: 'brand-logo'
                     });
-                    fabricCanvas.add(img);
-                    fabricCanvas.bringToFront(img);
-                    fabricCanvas.renderAll();
+                    targetCanvas.add(img);
+                    targetCanvas.bringToFront(img);
+                    targetCanvas.renderAll();
                 }
             }, { crossOrigin: 'anonymous' });
         }
@@ -908,7 +966,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             if (slideData.brandHandleStyle) {
                 brandText.set(slideData.brandHandleStyle);
             }
-            fabricCanvas.add(brandText);
+            targetCanvas.add(brandText);
         }
 
         // --- 5. Brand Header Asset (Moveable, ON/OFF toggleable) ---
@@ -955,9 +1013,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         
                         img.set(customStyle);
                     }
-                    fabricCanvas.add(img);
-                    fabricCanvas.bringToFront(img);
-                    fabricCanvas.renderAll();
+                    targetCanvas.add(img);
+                    targetCanvas.bringToFront(img);
+                    targetCanvas.renderAll();
                 } else {
                     console.warn('[Header Asset] Image loaded but has no width, URL starts with:', assetUrl.substring(0, 40));
                 }
@@ -974,7 +1032,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 fill: selectedPreset === 'template-bold' ? '#ffd700' : (selectedPreset === 'template-bright-minimal' ? '#2563eb' : accentColor),
                 selectable: false, evented: false, customType: 'top-accent'
             });
-            fabricCanvas.add(topAccent);
+            targetCanvas.add(topAccent);
         }
 
         if (isCTA) {
@@ -988,7 +1046,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 selectable: true, customType: 'cta-label'
             });
             if (slideData.ctaLabelStyle) ctaLabel.set(slideData.ctaLabelStyle);
-            fabricCanvas.add(ctaLabel);
+            targetCanvas.add(ctaLabel);
 
             const ctaTitleTop = ctaLabelTop + ctaLabel.getScaledHeight() + 30;
             const ctaTitleDef = {
@@ -998,7 +1056,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 selectable: true, isPlaceholder: 'title', customType: 'title'
             };
             const ctaTitle = new fabric.Textbox(slideData.title || 'Follow for More! 🔥', { ...ctaTitleDef, ...(slideData.titleStyle || {}) });
-            fabricCanvas.add(ctaTitle);
+            targetCanvas.add(ctaTitle);
 
             const ctaTitleHeight = ctaTitle.getScaledHeight();
             const ctaBodyTop = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + ctaTitleHeight + 35 : ctaTitleTop + ctaTitleHeight + 35;
@@ -1010,7 +1068,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 selectable: true, isPlaceholder: 'body', customType: 'body'
             };
             const ctaBody = new fabric.Textbox(slideData.content || `Read the caption for the full breakdown ↓\n\nFollow ${handle} for daily prep & insights.`, { ...ctaBodyDef, ...(slideData.bodyStyle || {}) });
-            fabricCanvas.add(ctaBody);
+            targetCanvas.add(ctaBody);
 
             const ctaBodyHeight = ctaBody.getScaledHeight();
             const ctaBtnTop = Math.max(ctaBodyTop + ctaBodyHeight + 45, 1050);
@@ -1022,7 +1080,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 selectable: true, evented: true, customType: 'cta-btn-bg'
             });
             if (slideData.ctaBtnBgStyle) ctaBtnRect.set(slideData.ctaBtnBgStyle);
-            fabricCanvas.add(ctaBtnRect);
+            targetCanvas.add(ctaBtnRect);
 
             const ctaBtnText = new fabric.IText('FOLLOW NOW', {
                 left: CANVAS_W / 2, top: ctaBtnTop + 25,
@@ -1031,7 +1089,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 selectable: true, evented: true, customType: 'cta-btn-text'
             });
             if (slideData.ctaBtnTextStyle) ctaBtnText.set(slideData.ctaBtnTextStyle);
-            fabricCanvas.add(ctaBtnText);
+            targetCanvas.add(ctaBtnText);
 
         } else {
             // ===== CONTENT SLIDE LAYOUT BY PRESET =====
@@ -1047,7 +1105,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     rx: 36, ry: 36,
                     selectable: false, evented: false, customType: 'glass-card'
                 });
-                fabricCanvas.add(glassCard);
+                targetCanvas.add(glassCard);
 
                 const titleDef = {
                     left: 100, top: 230, width: CANVAS_W - 200,
@@ -1056,7 +1114,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
                 const bodyDef = {
@@ -1066,7 +1124,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-bold') {
                 // Bold Yellow Vertical Left Bar
@@ -1076,7 +1134,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fill: '#ffd700', rx: 7, ry: 7,
                     selectable: false, evented: false, customType: 'bold-vertical-bar'
                 });
-                fabricCanvas.add(verticalBar);
+                targetCanvas.add(verticalBar);
 
                 const titleDef = {
                     left: 105, top: 210, width: CANVAS_W - 185,
@@ -1085,7 +1143,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 210 + slideTitle.getScaledHeight() + 35;
                 const bodyDef = {
@@ -1095,7 +1153,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-visual') {
                 // Bottom Solid Panel
@@ -1106,7 +1164,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     stroke: accentColor, strokeWidth: 4,
                     selectable: false, evented: false, customType: 'bottom-panel'
                 });
-                fabricCanvas.add(bottomPanel);
+                targetCanvas.add(bottomPanel);
 
                 const titleDef = {
                     left: 80, top: 840, width: CANVAS_W - 160,
@@ -1115,7 +1173,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 25 : 840 + slideTitle.getScaledHeight() + 25;
                 const bodyDef = {
@@ -1125,7 +1183,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-minimal' || selectedPreset === 'template-bright-minimal') {
                 const titleColor = selectedPreset === 'template-bright-minimal' ? '#111827' : '#ffffff';
@@ -1138,7 +1196,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
                 const bodyDef = {
@@ -1148,7 +1206,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-blue-border') {
                 // Blue line border
@@ -1157,7 +1215,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fill: 'transparent', stroke: '#1e40af', strokeWidth: 4,
                     selectable: false, evented: false, customType: 'blue-border'
                 });
-                fabricCanvas.add(borderRect);
+                targetCanvas.add(borderRect);
 
                 // Red line separating brand identity and slide body
                 const redLine = new fabric.Rect({
@@ -1165,7 +1223,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fill: '#ef4444',
                     selectable: true, isPlaceholder: 'accent', customType: 'red-line'
                 });
-                fabricCanvas.add(redLine);
+                targetCanvas.add(redLine);
 
                 const titleDef = {
                     left: 80, top: 200, width: CANVAS_W - 160,
@@ -1174,7 +1232,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 40 : 200 + slideTitle.getScaledHeight() + 40;
                 const bodyDef = {
@@ -1184,7 +1242,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-fb-minimal-1') {
                 const titleDef = {
@@ -1194,7 +1252,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 50 : 320 + slideTitle.getScaledHeight() + 50;
                 const bodyDef = {
@@ -1204,7 +1262,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-fb-minimal-2') {
                 const titleDef = {
@@ -1214,7 +1272,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 40 : 320 + slideTitle.getScaledHeight() + 40;
                 
@@ -1225,7 +1283,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fill: 'rgba(0, 0, 0, 0.4)',
                     selectable: false, evented: false, customType: 'fb-card-bg'
                 });
-                fabricCanvas.add(fbCard);
+                targetCanvas.add(fbCard);
 
                 const bodyDef = {
                     left: 80, top: cardTop + 60, width: CANVAS_W - 160,
@@ -1234,7 +1292,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-facts-single') {
                 const titleDef = {
@@ -1244,7 +1302,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const bodyDef = {
                     left: 100, top: 940, width: CANVAS_W - 200,
@@ -1253,7 +1311,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-news-image') {
                 // --- Red Breaking News Badge ---
@@ -1276,7 +1334,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         left: 80, top: 160,
                         selectable: true, evented: true, customType: 'news-badge-group'
                     });
-                    fabricCanvas.add(badgeGroup);
+                    targetCanvas.add(badgeGroup);
                     titleY = 230;
                 }
 
@@ -1287,7 +1345,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 30 : 230 + slideTitle.getScaledHeight() + 30;
                 const cardTop = Math.max(titleBottom, 450);
@@ -1301,7 +1359,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     rx: 24, ry: 24,
                     selectable: false, evented: false, customType: 'news-card-bg'
                 });
-                fabricCanvas.add(newsCard);
+                targetCanvas.add(newsCard);
 
                 const bodyDef = {
                     left: 95, top: cardTop + 35, width: CANVAS_W - 190,
@@ -1310,7 +1368,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-news-text') {
                 // --- Blue News Editorial Badge ---
@@ -1334,7 +1392,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         left: 80, top: 160,
                         selectable: true, evented: true, customType: 'news-badge-group'
                     });
-                    fabricCanvas.add(badgeGroup);
+                    targetCanvas.add(badgeGroup);
                     titleY = 230;
                 }
 
@@ -1345,7 +1403,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     fill: '#38bdf8', rx: 6, ry: 6,
                     selectable: false, evented: false, customType: 'vertical-accent-bar'
                 });
-                fabricCanvas.add(verticalBar);
+                targetCanvas.add(verticalBar);
 
                 const titleDef = {
                     left: 100, top: titleY, width: CANVAS_W - 180,
@@ -1354,7 +1412,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
                 const cardTop = Math.max(titleBottom, 460);
@@ -1368,7 +1426,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     rx: 20, ry: 20,
                     selectable: false, evented: false, customType: 'news-text-card-bg'
                 });
-                fabricCanvas.add(newsCard);
+                targetCanvas.add(newsCard);
 
                 const bodyDef = {
                     left: 130, top: cardTop + 35, width: CANVAS_W - 240,
@@ -1377,7 +1435,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-news-single-image') {
                 let currentY = 160;
@@ -1399,7 +1457,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         left: 80, top: currentY,
                         selectable: true, evented: true, customType: 'news-badge-group'
                     });
-                    fabricCanvas.add(badgeGroup);
+                    targetCanvas.add(badgeGroup);
                     currentY += 70;
                 }
 
@@ -1417,7 +1475,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         rx: 16, ry: 16, selectable: true, customType: 'image-placeholder-bg',
                         ...phStyle
                     });
-                    fabricCanvas.add(placeholderBg);
+                    targetCanvas.add(placeholderBg);
                     const placeholderText = new fabric.IText('Drop or Upload Image Here', {
                         left: phStyle.left + (phStyle.width * (phStyle.scaleX || 1)) / 2, 
                         top: phStyle.top + (phStyle.height * (phStyle.scaleY || 1)) / 2, 
@@ -1425,7 +1483,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         fontSize: 28, fontWeight: '600', fill: '#94a3b8',
                         fontFamily: headingFont, selectable: false, evented: false, customType: 'image-placeholder-text'
                     });
-                    fabricCanvas.add(placeholderText);
+                    targetCanvas.add(placeholderText);
                 }
                 
                 // Always advance currentY by the default layout height so subsequent elements are positioned correctly on initial layout
@@ -1438,7 +1496,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 30 : currentY + slideTitle.getScaledHeight() + 30;
 
@@ -1449,7 +1507,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else if (selectedPreset === 'template-custom') {
                 const customTitleSize = parseFloat(brand?.customTitleSize || 100) * 0.88;
@@ -1463,7 +1521,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const bodyDef = {
                     left: 80, top: customContentY, width: CANVAS_W - 160,
@@ -1472,7 +1530,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
 
             } else {
                 // Default / Classic Template
@@ -1483,7 +1541,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
-                fabricCanvas.add(slideTitle);
+                targetCanvas.add(slideTitle);
 
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 40 : 210 + slideTitle.getScaledHeight() + 40;
                 const bodyDef = {
@@ -1493,7 +1551,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
-                fabricCanvas.add(slideBody);
+                targetCanvas.add(slideBody);
             }
 
             // Slide number badge
@@ -1513,8 +1571,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             });
             slideNumBadge.set('opacity', showPagination ? 1 : 0);
             slideNumText.set('opacity', showPagination ? 1 : 0);
-            fabricCanvas.add(slideNumBadge);
-            fabricCanvas.add(slideNumText);
+            targetCanvas.add(slideNumBadge);
+            targetCanvas.add(slideNumText);
 
             // Swipe indicator — show on non-final slides only when there are multiple slides
             const isLastSlide = slideIndex === currentSlides.length - 1;
@@ -1533,8 +1591,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 });
                 swipeBg.set('opacity', showSwipe ? 1 : 0);
                 swipeText.set('opacity', showSwipe ? 1 : 0);
-                fabricCanvas.add(swipeBg);
-                fabricCanvas.add(swipeText);
+                targetCanvas.add(swipeBg);
+                targetCanvas.add(swipeText);
             }
         }
 
@@ -1549,7 +1607,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 evented: true,
                 customType: 'footer-handle'
             });
-            fabricCanvas.add(footerHandle);
+            targetCanvas.add(footerHandle);
         }
 
         if (showNewsBreaking && !selectedPreset.startsWith('template-news-')) {
@@ -1572,7 +1630,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 left: 80, top: 140,
                 selectable: true, evented: true, customType: 'news-badge-group'
             });
-            fabricCanvas.add(badgeGroup);
+            targetCanvas.add(badgeGroup);
         }
 
         const canvasTheme = document.getElementById('canvas-theme-selector')?.value || 'none';
@@ -1598,11 +1656,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 tHeader = '#1e293b';
             }
             
-            fabricCanvas.backgroundColor = tBg;
+            targetCanvas.backgroundColor = tBg;
             const bgPicker = document.getElementById('editor-bg-color');
             if (bgPicker) bgPicker.value = fabricColorToHex(tBg);
 
-            fabricCanvas.getObjects().forEach(obj => {
+            targetCanvas.getObjects().forEach(obj => {
                 if (obj.customType === 'title' || obj.isPlaceholder === 'title' || obj.customType === 'brand-handle') {
                     if (!slideData.titleStyle?.fill || obj.customType === 'brand-handle') obj.set('fill', tTitle);
                 }
@@ -1642,7 +1700,36 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
 
-        fabricCanvas.renderAll();
+        
+        // --- APPLY TEMPLATE OVERRIDES ---
+        const overrideStr = localStorage.getItem('loksewa_template_overrides');
+        if (overrideStr) {
+            try {
+                const overrides = JSON.parse(overrideStr);
+                const tmplOverrides = overrides[selectedPreset];
+                if (tmplOverrides) {
+                    targetCanvas.getObjects().forEach(obj => {
+                        if (obj.customType && tmplOverrides[obj.customType]) {
+                            obj.set(tmplOverrides[obj.customType]);
+                        }
+                    });
+                    
+                    if (tmplOverrides.extraObjects && tmplOverrides.extraObjects.length > 0) {
+                        fabric.util.enlargeArray(tmplOverrides.extraObjects, function(enlargedObjs) {
+                            enlargedObjs.forEach(function(obj) {
+                                obj.set('isExtraOverride', true);
+                                targetCanvas.add(obj);
+                            });
+                            targetCanvas.renderAll();
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to parse template overrides", e);
+            }
+        }
+
+        targetCanvas.renderAll();
         saveCanvasHistory();
     };
 
@@ -1688,7 +1775,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         offsetX: 0,
                         offsetY: 10
                     });
-                    fabricCanvas.add(img);
+                    targetCanvas.add(img);
                 } else if (selectedPreset === 'template-news-single-image') {
                     // Use saved image style if available, otherwise default placeholder style
                     let currentY = 160;
@@ -1718,8 +1805,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         })
                     });
                     
-                    fabricCanvas.add(img);
-                    fabricCanvas.sendToBack(img);
+                    targetCanvas.add(img);
+                    targetCanvas.sendToBack(img);
                 } else {
                     const scaleX = CANVAS_W / img.width;
                     const scaleY = CANVAS_H / img.height;
@@ -1732,8 +1819,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         customType: 'background-image',
                         opacity: 1
                     });
-                    fabricCanvas.add(img);
-                    fabricCanvas.sendToBack(img);
+                    targetCanvas.add(img);
+                    targetCanvas.sendToBack(img);
                 }
             }
             addObjects();

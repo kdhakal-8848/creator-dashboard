@@ -80,8 +80,7 @@
                 <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
                 <li><a href="#" data-target="news-view"><i data-feather="globe"></i> News Lab</a></li>
                 <li><a href="#" data-target="facts-view"><i data-feather="zap"></i> Facts Lab</a></li>
-                <li><a href="#" data-target="canvas-view"><i data-feather="pen-tool"></i> Canvas Lab</a></li>
-                <li><a href="#" data-target="template-studio-view"><i data-feather="layout"></i> Template Studio</a></li>
+                <li><a href="#" data-target="canvas-view"><i data-feather="layout"></i> Design Studio</a></li>
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Brand Identity</a></li>
                 <li><a href="#" data-target="settings-view"><i data-feather="settings"></i> Account Settings</a></li>
@@ -538,154 +537,40 @@
             </div>
 
             <!-- ============================================================ -->
-            <!-- Template Studio View -->
-            <!-- ============================================================ -->
-            <div id="template-studio-view" class="view">
-                <div class="view-header">
-                    <div>
-                        <h2>Template Studio</h2>
-                        <p style="color: #656d76; font-size: 14px; margin-top: 4px;">Design reusable slide layouts. Save them to apply instantly in the editor.</p>
-                    </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="studio-template-name" placeholder="Template name..." style="width: 200px;">
-                        <button class="btn-primary" id="save-studio-template"><i data-feather="save"></i> Save Template</button>
-                    </div>
-                </div>
-
-                <div class="studio-layout">
-                    <!-- Element Palette -->
-                    <div class="studio-palette">
-                        <h4 style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-fg-muted);">Elements</h4>
-                        <div class="palette-elements">
-                            <div class="palette-item" data-element="bg-color" draggable="true">
-                                <i data-feather="square"></i>
-                                <span>Background</span>
-                            </div>
-                            <div class="palette-item" data-element="brand-logo" draggable="true">
-                                <i data-feather="image"></i>
-                                <span>Brand Logo</span>
-                            </div>
-                            <div class="palette-item" data-element="header-image" draggable="true">
-                                <i data-feather="layout"></i>
-                                <span>Header Image</span>
-                            </div>
-                            <div class="palette-item" data-element="title-block" draggable="true">
-                                <i data-feather="type"></i>
-                                <span>Title Block</span>
-                            </div>
-                            <div class="palette-item" data-element="body-block" draggable="true">
-                                <i data-feather="align-left"></i>
-                                <span>Body Text</span>
-                            </div>
-                            <div class="palette-item" data-element="watermark" draggable="true">
-                                <i data-feather="shield"></i>
-                                <span>Watermark</span>
-                            </div>
-                            <div class="palette-item" data-element="image-frame" draggable="true">
-                                <i data-feather="camera"></i>
-                                <span>Image Frame</span>
-                            </div>
-                            <div class="palette-item" data-element="divider-line" draggable="true">
-                                <i data-feather="minus"></i>
-                                <span>Divider Line</span>
-                            </div>
-                            <div class="palette-item" data-element="handle-text" draggable="true">
-                                <i data-feather="at-sign"></i>
-                                <span>Handle / Footer</span>
-                            </div>
-                        </div>
-
-                        <hr style="margin: 16px 0; border: 0; border-top: 1px solid var(--color-border-muted);">
-
-                        <h4 style="margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-fg-muted);">Saved Templates</h4>
-                        <div id="studio-saved-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;"></div>
-                        
-                        <hr style="margin: 16px 0; border: 0; border-top: 1px solid var(--color-border-muted);">
-
-                        <h4 style="margin-bottom: 10px; font-size: 13px; color: var(--color-fg-muted);">Canvas BG Color</h4>
-                        <input type="color" id="studio-bg-color" value="#1a1a2e" style="width: 100%; height: 36px; border-radius: 6px; cursor: pointer; border: 1px solid var(--color-border-default);">
-                    </div>
-
-                    <!-- Studio Canvas -->
-                    <div class="studio-canvas-wrapper">
-                        <div class="studio-canvas-stage">
-                            <canvas id="studio-canvas"></canvas>
-                        </div>
-                        <div style="display: flex; gap: 8px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">
-                            <button class="btn-secondary" id="studio-clear"><i data-feather="trash-2"></i> Clear Canvas</button>
-                            <button class="btn-secondary" id="studio-delete-selected"><i data-feather="x"></i> Delete Selected</button>
-                            <button class="btn-secondary" id="studio-bring-front"><i data-feather="chevrons-up"></i> Bring Front</button>
-                            <button class="btn-secondary" id="studio-send-back"><i data-feather="chevrons-down"></i> Send Back</button>
-                        </div>
-                    </div>
-
-                    <!-- Properties Panel -->
-                    <div class="studio-properties">
-                        <h4 style="margin-bottom: 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-fg-muted);">Properties</h4>
-                        <div id="studio-props-empty" style="color: var(--color-fg-muted); font-size: 13px;">Select an element to edit its properties.</div>
-                        <div id="studio-props-panel" style="display: none;">
-                            <div class="form-group">
-                                <label style="font-size: 12px;">X Position</label>
-                                <input type="number" id="prop-x" style="font-size: 13px; padding: 4px 8px;">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 12px;">Y Position</label>
-                                <input type="number" id="prop-y" style="font-size: 13px; padding: 4px 8px;">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 12px;">Width</label>
-                                <input type="number" id="prop-width" style="font-size: 13px; padding: 4px 8px;">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 12px;">Height</label>
-                                <input type="number" id="prop-height" style="font-size: 13px; padding: 4px 8px;">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 12px;">Opacity</label>
-                                <input type="range" id="prop-opacity" min="0" max="1" step="0.05" value="1">
-                            </div>
-                            <div class="form-group">
-                                <label style="font-size: 12px;">Rotation (°)</label>
-                                <input type="number" id="prop-rotation" style="font-size: 13px; padding: 4px 8px;" min="-360" max="360">
-                            </div>
-                            <div class="form-group" id="prop-color-group">
-                                <label style="font-size: 12px;">Color / Fill</label>
-                                <input type="color" id="prop-color" style="height: 30px; width: 100%; border-radius: 4px; cursor: pointer;">
-                            </div>
-                            <div class="form-group" id="prop-fontsize-group" style="display:none;">
-                                <label style="font-size: 12px;">Font Size</label>
-                                <input type="number" id="prop-fontsize" style="font-size: 13px; padding: 4px 8px;">
-                            </div>
-                            <div class="form-group" id="prop-text-group" style="display:none;">
-                                <label style="font-size: 12px;">Text Content</label>
-                                <textarea id="prop-text" rows="3" style="font-size: 13px; padding: 4px 8px;"></textarea>
-                            </div>
-                            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; font-size: 13px; cursor: pointer; margin-bottom: 12px;">
-                                <input type="checkbox" id="prop-lock"> Lock Position
-                            </label>
-                            <button class="btn-primary full-width" id="prop-apply"><i data-feather="check"></i> Apply</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================================ -->
-            <!-- Canvas Lab View (Independent Visual Editor) -->
+            <!-- Design Studio View (Unified Editor & Templates) -->
             <!-- ============================================================ -->
             <div id="canvas-view" class="view">
                 <div class="view-header">
                     <div>
-                        <h2>Canvas Lab</h2>
-                        <p style="color: #656d76; font-size: 14px; margin-top: 4px;">Freeform graphic editor. Generate AI images, use brand assets, and design custom posts.</p>
+                        <h2>Design Studio</h2>
+                        <p style="color: #656d76; font-size: 14px; margin-top: 4px;">Freeform graphic editor and automatic template customizer.</p>
                     </div>
                     <div style="display: flex; gap: 12px; align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 12px;">Base Template</label>
+                            <select id="canvas-base-template" style="height: 36px; border-radius: 6px; padding: 0 12px; font-size: 14px; min-width: 150px;">
+                                <option value="">None (Blank)</option>
+                                <option value="template-classic">Classic Template</option>
+                                <option value="template-bold">Bold Typography</option>
+                                <option value="template-glass">Glassmorphism</option>
+                                <option value="template-visual">Visual Centric</option>
+                                <option value="template-minimal">Dark Minimal</option>
+                                <option value="template-bright-minimal">Bright Minimal</option>
+                                <option value="template-blue-border">Blue Border</option>
+                                <option value="template-news-image">News (Image)</option>
+                                <option value="template-news-text">News (Text)</option>
+                                <option value="template-news-single-image">News (Single Image)</option>
+                                <option value="template-facts-single">Facts (Single Statement)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
                             <label style="font-size: 12px;">Active Brand</label>
-                            <select id="canvas-brand-selector" style="height: 36px; border-radius: 6px; padding: 0 12px; font-size: 14px; min-width: 150px;"></select>
+                            <select id="canvas-brand-selector" style="height: 36px; border-radius: 6px; padding: 0 12px; font-size: 14px; min-width: 120px;"></select>
                         </div>
                         <input type="text" id="canvas-ai-prompt" placeholder="Image prompt..." style="width: 250px; height: 36px; padding: 0 12px; font-size: 14px;">
                         <button class="btn-primary" id="canvas-generate-ai" style="height: 36px;"><i data-feather="image"></i> Generate</button>
-                        <button class="btn-primary" id="canvas-export-btn" style="height: 36px; background: var(--color-success-fg);"><i data-feather="download"></i> Export PNG</button>
+                        <button class="btn-primary" id="canvas-save-overrides" style="height: 36px; background: var(--color-success-fg);"><i data-feather="save"></i> Save Layout</button>
+                        <button class="btn-primary" id="canvas-export-btn" style="height: 36px; background: var(--color-accent-fg);"><i data-feather="download"></i> Export</button>
                     </div>
                 </div>
 
