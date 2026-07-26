@@ -199,6 +199,12 @@
                                     <label><input type="checkbox" id="toggle-news-breaking"> "Breaking"</label>
                                 </div>
                                 <div style="display: flex; gap: 6px; align-items: center;">
+                                    <select id="canvas-theme-selector" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border-default); background: var(--color-canvas-default); color: var(--color-fg-default); height: 24px;">
+                                        <option value="none">Custom / Brand Colors</option>
+                                        <option value="theme-claude">Theme: Claude (Light)</option>
+                                        <option value="theme-facebook">Theme: Facebook (Light)</option>
+                                        <option value="theme-slate">Theme: Slate (Dark)</option>
+                                    </select>
                                     <input type="color" id="editor-bg-color" title="Canvas Background Color" value="#ffffff" style="width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer;">
                                     <input type="color" id="editor-font-color" title="Selected Text Font Color" value="#000000" style="width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer;">
                                     <button class="btn-secondary" id="canvas-delete" style="padding: 3px 8px; font-size: 12px; color: var(--color-danger-fg);" title="Delete Selected"><i data-feather="trash-2" style="width:13px;height:13px;"></i></button>

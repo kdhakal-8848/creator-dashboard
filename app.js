@@ -1422,6 +1422,73 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             fabricCanvas.add(footerHandle);
         }
 
+        if (showNewsBreaking && !selectedPreset.startsWith('template-news-')) {
+            const badgeBg = new fabric.Rect({
+                left: 80, top: 140, width: 250, height: 48,
+                fill: '#dc2626', rx: 24, ry: 24,
+                selectable: true, evented: true, customType: 'news-badge-bg'
+            });
+            fabricCanvas.add(badgeBg);
+            const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+                left: 98, top: 152,
+                fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+            });
+            fabricCanvas.add(badgeText);
+        }
+
+        const canvasTheme = document.getElementById('canvas-theme-selector')?.value || 'none';
+        if (canvasTheme !== 'none') {
+            let tBg, tTitle, tBody, tAccent;
+            if (canvasTheme === 'theme-claude') {
+                tBg = '#eceeed';
+                tTitle = '#2c2c2c';
+                tBody = '#4a4a4a';
+                tAccent = '#d97757';
+            } else if (canvasTheme === 'theme-facebook') {
+                tBg = '#f0f2f5';
+                tTitle = '#1c1e21';
+                tBody = '#65676b';
+                tAccent = '#1877f2';
+            } else if (canvasTheme === 'theme-slate') {
+                tBg = '#0f172a';
+                tTitle = '#f8fafc';
+                tBody = '#94a3b8';
+                tAccent = '#38bdf8';
+            }
+            
+            fabricCanvas.backgroundColor = tBg;
+            const bgPicker = document.getElementById('editor-bg-color');
+            if (bgPicker) bgPicker.value = fabricColorToHex(tBg);
+
+            fabricCanvas.getObjects().forEach(obj => {
+                if (obj.customType === 'title' || obj.isPlaceholder === 'title') {
+                    if (!slideData.titleStyle?.fill) obj.set('fill', tTitle);
+                }
+                if (obj.customType === 'body' || obj.isPlaceholder === 'body') {
+                    if (!slideData.bodyStyle?.fill) obj.set('fill', tBody);
+                }
+                if (obj.customType === 'news-badge-bg' || obj.customType === 'news-text-badge-bg' || obj.customType === 'vertical-accent-bar') {
+                    obj.set('fill', tAccent);
+                }
+                if (obj.customType === 'image-placeholder-bg') {
+                    obj.set('fill', canvasTheme === 'theme-slate' ? '#1e293b' : '#ffffff');
+                    obj.set('stroke', tAccent);
+                }
+                if (obj.customType === 'image-placeholder-text') {
+                    obj.set('fill', tBody);
+                }
+                if (obj.customType === 'news-card-bg' || obj.customType === 'news-text-card-bg' || obj.customType === 'bottom-panel') {
+                    obj.set('fill', canvasTheme === 'theme-slate' ? 'rgba(30,41,59,0.85)' : 'rgba(255,255,255,0.85)');
+                    obj.set('stroke', tAccent);
+                }
+                if (obj.customType === 'slide-num' || obj.customType === 'footer-handle' || obj.customType === 'slide-num-bg') {
+                    if (obj.type === 'rect') obj.set('fill', tBg === '#0f172a' ? '#1e293b' : '#ffffff');
+                    else obj.set('fill', tBody);
+                }
+            });
+        }
+
         fabricCanvas.renderAll();
         saveCanvasHistory();
     };
@@ -1850,6 +1917,7 @@ document.getElementById('toggle-brand-header-asset')?.addEventListener('change',
 document.getElementById('toggle-slide-numbers')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-swipe-indicator')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-news-breaking')?.addEventListener('change', () => updateSlidePreview());
+document.getElementById('canvas-theme-selector')?.addEventListener('change', () => { updateSlidePreview(); if (fabricCanvas) saveCanvasState(); });
 
 document.getElementById('toggle-brand-logo-tb')?.addEventListener('change', (e) => {
     const el = document.getElementById('toggle-brand-logo'); if (el) el.checked = e.target.checked;
