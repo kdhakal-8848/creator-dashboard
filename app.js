@@ -737,6 +737,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (selectedPreset === 'template-glass') bgColor = '#0a192f';
     if (selectedPreset === 'template-visual') bgColor = '#0f172a';
     if (selectedPreset === 'template-minimal') bgColor = '#121218';
+    if (selectedPreset === 'template-bright-minimal') bgColor = '#f8f9fa';
     if (selectedPreset === 'template-news-image') bgColor = '#090d16';
     if (selectedPreset === 'template-news-text') bgColor = '#0b1120';
     if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
@@ -748,6 +749,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     const showHeaderAsset = document.getElementById('toggle-brand-header-asset')?.checked !== false;
     const showPagination = document.getElementById('toggle-slide-numbers')?.checked !== false;
     const showSwipe = document.getElementById('toggle-swipe-indicator')?.checked !== false;
+    const showNewsBreaking = document.getElementById('toggle-news-breaking')?.checked !== false;
 
     const addObjects = () => {
         // --- 1. Overlay Layer ---
@@ -756,6 +758,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         if (selectedPreset === 'template-glass') overlayFill = 'rgba(10, 25, 47, 0.75)';
         if (selectedPreset === 'template-visual') overlayFill = 'rgba(0,0,0,0.25)';
         if (selectedPreset === 'template-minimal') overlayFill = 'rgba(18,18,24,0.85)';
+        if (selectedPreset === 'template-bright-minimal') overlayFill = 'rgba(255,255,255,0.05)';
+        if (selectedPreset === 'template-fb-minimal-1' || selectedPreset === 'template-fb-minimal-2') overlayFill = 'rgba(0,0,0,0.45)';
         if (selectedPreset === 'template-news-image') overlayFill = 'rgba(9, 13, 22, 0.45)';
         if (selectedPreset === 'template-news-text') overlayFill = 'rgba(11, 17, 32, 0.95)';
         if (selectedPreset === 'template-custom' && brand?.customBgOpacity) {
@@ -784,7 +788,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         fabricCanvas.add(overlay);
 
         // --- 2. Header Bar / Top Strip ---
-        if (selectedPreset !== 'template-minimal' && selectedPreset !== 'template-visual' && selectedPreset !== 'template-news-image' && selectedPreset !== 'template-news-text') {
+        const minimalPresets = ['template-minimal', 'template-bright-minimal', 'template-fb-minimal-1', 'template-fb-minimal-2'];
+        if (!minimalPresets.includes(selectedPreset) && selectedPreset !== 'template-visual' && selectedPreset !== 'template-news-image' && selectedPreset !== 'template-news-text') {
             const headerBar = new fabric.Rect({
                 left: 0, top: 0,
                 width: CANVAS_W, height: 130,
@@ -802,7 +807,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     const scale = targetSize / (img.height || targetSize);
                     img.set({
                         left: 80,
-                        top: selectedPreset === 'template-minimal' ? 42 : 36,
+                        top: (minimalPresets.includes(selectedPreset)) ? 42 : 36,
                         scaleX: scale,
                         scaleY: scale,
                         selectable: true,
@@ -822,10 +827,10 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const brandTextLeft = (showLogo && brand?.logoUrl) ? 150 : (selectedPreset === 'template-bold' ? 90 : 80);
             const brandText = new fabric.IText(brandName, {
                 left: brandTextLeft,
-                top: selectedPreset === 'template-minimal' ? 52 : 44,
+                top: (minimalPresets.includes(selectedPreset)) ? 52 : 44,
                 fontSize: selectedPreset === 'template-bold' ? 38 : 36,
-                fontWeight: '800',
-                fill: selectedPreset === 'template-bold' ? '#ffd700' : '#ffffff',
+                fontWeight: '700',
+                fill: selectedPreset === 'template-bold' ? '#ffd700' : (selectedPreset === 'template-bright-minimal' ? '#111827' : '#ffffff'),
                 fontFamily: headingFont,
                 selectable: true,
                 evented: true,
@@ -891,17 +896,16 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         }
 
         // --- 6. Accent Line ---
-        if (selectedPreset !== 'template-minimal') {
-            const accentLine = new fabric.Rect({
-                left: 80,
-                top: selectedPreset === 'template-minimal' ? 110 : 135,
-                width: selectedPreset === 'template-bold' ? 260 : 200,
-                height: selectedPreset === 'template-bold' ? 8 : 6,
-                fill: selectedPreset === 'template-bold' ? '#ffd700' : accentColor,
-                rx: 3, ry: 3,
-                selectable: false, evented: false, customType: 'accent-line'
+        if (selectedPreset !== 'template-minimal' && selectedPreset !== 'template-fb-minimal-1' && selectedPreset !== 'template-fb-minimal-2') {
+            const topAccent = new fabric.Rect({
+                left: selectedPreset === 'template-bold' ? 90 : 80,
+                top: selectedPreset === 'template-bright-minimal' ? 110 : 135,
+                width: selectedPreset === 'template-bold' ? 260 : (selectedPreset === 'template-bright-minimal' ? CANVAS_W - 160 : 200),
+                height: selectedPreset === 'template-bold' ? 8 : (selectedPreset === 'template-bright-minimal' ? 4 : 6),
+                fill: selectedPreset === 'template-bold' ? '#ffd700' : (selectedPreset === 'template-bright-minimal' ? '#2563eb' : accentColor),
+                selectable: false, evented: false, customType: 'top-accent'
             });
-            fabricCanvas.add(accentLine);
+            fabricCanvas.add(topAccent);
         }
 
         if (isCTA) {
@@ -1054,10 +1058,13 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
-            } else if (selectedPreset === 'template-minimal') {
+            } else if (selectedPreset === 'template-minimal' || selectedPreset === 'template-bright-minimal') {
+                const titleColor = selectedPreset === 'template-bright-minimal' ? '#111827' : '#ffffff';
+                const bodyColor = selectedPreset === 'template-bright-minimal' ? '#4b5563' : '#cbd5e1';
+                
                 const titleDef = {
                     left: 80, top: 230, width: CANVAS_W - 160,
-                    fontSize: 84, fontWeight: '700', fill: '#ffffff',
+                    fontSize: 84, fontWeight: '700', fill: titleColor,
                     fontFamily: headingFont, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
@@ -1067,8 +1074,58 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
                 const bodyDef = {
                     left: 80, top: Math.max(titleBottom, 460), width: CANVAS_W - 160,
-                    fontSize: 48, fontWeight: '400', fill: '#cbd5e1',
+                    fontSize: 48, fontWeight: '400', fill: bodyColor,
                     fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-fb-minimal-1') {
+                const titleDef = {
+                    left: 120, top: 320, width: CANVAS_W - 240,
+                    fontSize: 88, fontWeight: '900', fill: '#ffffff', textAlign: 'center',
+                    fontFamily: headingFont, lineHeight: 1.1,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 50 : 320 + slideTitle.getScaledHeight() + 50;
+                const bodyDef = {
+                    left: 120, top: Math.max(titleBottom, 580), width: CANVAS_W - 240,
+                    fontSize: 52, fontWeight: '500', fill: '#f1f5f9', textAlign: 'center',
+                    fontFamily: bodyFont, lineHeight: 1.45,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                fabricCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'template-fb-minimal-2') {
+                const titleDef = {
+                    left: 80, top: 320, width: CANVAS_W - 160,
+                    fontSize: 92, fontWeight: '800', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.12,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 40 : 320 + slideTitle.getScaledHeight() + 40;
+                
+                const cardTop = Math.max(titleBottom, 600);
+                const fbCard = new fabric.Rect({
+                    left: 0, top: cardTop,
+                    width: CANVAS_W, height: CANVAS_H - cardTop,
+                    fill: 'rgba(0, 0, 0, 0.4)',
+                    selectable: false, evented: false, customType: 'fb-card-bg'
+                });
+                fabricCanvas.add(fbCard);
+
+                const bodyDef = {
+                    left: 80, top: cardTop + 60, width: CANVAS_W - 160,
+                    fontSize: 48, fontWeight: '500', fill: '#f8fafc',
+                    fontFamily: bodyFont, lineHeight: 1.5,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
@@ -1076,23 +1133,27 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
 
             } else if (selectedPreset === 'template-news-image') {
                 // --- Red Breaking News Badge ---
-                const badgeBg = new fabric.Rect({
-                    left: 80, top: 160,
-                    width: 250, height: 48,
-                    fill: '#dc2626', rx: 24, ry: 24,
-                    selectable: false, evented: false, customType: 'news-badge-bg'
-                });
-                fabricCanvas.add(badgeBg);
+                let titleY = 180;
+                if (showNewsBreaking) {
+                    const badgeBg = new fabric.Rect({
+                        left: 80, top: 160,
+                        width: 250, height: 48,
+                        fill: '#dc2626', rx: 24, ry: 24,
+                        selectable: false, evented: false, customType: 'news-badge-bg'
+                    });
+                    fabricCanvas.add(badgeBg);
 
-                const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
-                    left: 98, top: 172,
-                    fontSize: 22, fontWeight: '800', fill: '#ffffff',
-                    fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
-                });
-                fabricCanvas.add(badgeText);
+                    const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+                        left: 98, top: 172,
+                        fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                        fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+                    });
+                    fabricCanvas.add(badgeText);
+                    titleY = 230;
+                }
 
                 const titleDef = {
-                    left: 80, top: 230, width: CANVAS_W - 160,
+                    left: 80, top: titleY, width: CANVAS_W - 160,
                     fontSize: 84, fontWeight: '900', fill: '#ffffff',
                     fontFamily: headingFont, lineHeight: 1.12,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
@@ -1125,32 +1186,36 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
 
             } else if (selectedPreset === 'template-news-text') {
                 // --- Blue News Editorial Badge ---
-                const badgeBg = new fabric.Rect({
-                    left: 80, top: 160,
-                    width: 250, height: 48,
-                    fill: '#0284c7', rx: 24, ry: 24,
-                    selectable: false, evented: false, customType: 'news-text-badge-bg'
-                });
-                fabricCanvas.add(badgeBg);
+                let titleY = 180;
+                if (showNewsBreaking) {
+                    const badgeBg = new fabric.Rect({
+                        left: 80, top: 160,
+                        width: 250, height: 48,
+                        fill: '#0284c7', rx: 24, ry: 24,
+                        selectable: false, evented: false, customType: 'news-text-badge-bg'
+                    });
+                    fabricCanvas.add(badgeBg);
 
-                const badgeText = new fabric.IText('📰 NEWS ANALYSIS', {
-                    left: 98, top: 172,
-                    fontSize: 22, fontWeight: '800', fill: '#ffffff',
-                    fontFamily: headingFont, selectable: false, evented: false, customType: 'news-text-badge-text'
-                });
-                fabricCanvas.add(badgeText);
+                    const badgeText = new fabric.IText('📰 NEWS ANALYSIS', {
+                        left: 98, top: 172,
+                        fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                        fontFamily: headingFont, selectable: false, evented: false, customType: 'news-text-badge-text'
+                    });
+                    fabricCanvas.add(badgeText);
+                    titleY = 230;
+                }
 
                 // Left Cyan Accent Strip
                 const verticalBar = new fabric.Rect({
-                    left: 65, top: 230,
-                    width: 12, height: 790,
+                    left: 65, top: titleY,
+                    width: 12, height: 790 + (230 - titleY),
                     fill: '#38bdf8', rx: 6, ry: 6,
-                    selectable: false, evented: false, customType: 'news-vertical-bar'
+                    selectable: false, evented: false, customType: 'vertical-accent-bar'
                 });
                 fabricCanvas.add(verticalBar);
 
                 const titleDef = {
-                    left: 100, top: 230, width: CANVAS_W - 180,
+                    left: 100, top: titleY, width: CANVAS_W - 180,
                     fontSize: 88, fontWeight: '900', fill: '#f8fafc',
                     fontFamily: headingFont, lineHeight: 1.12,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
@@ -1637,6 +1702,7 @@ document.getElementById('toggle-brand-handle')?.addEventListener('change', () =>
 document.getElementById('toggle-brand-header-asset')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-slide-numbers')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-swipe-indicator')?.addEventListener('change', () => updateSlidePreview());
+document.getElementById('toggle-news-breaking')?.addEventListener('change', () => updateSlidePreview());
 
 document.getElementById('back-to-queue').addEventListener('click', () => {
     document.querySelector('[data-target="queue-view"]')?.click();
@@ -2350,7 +2416,7 @@ document.getElementById('save-branding').addEventListener('click', async functio
     const promptInput = document.getElementById('prompt-template-input');
     if (promptInput) {
         currentPromptTemplate = promptInput.value || DEFAULT_PROMPT_TEMPLATE;
-        localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
+        localStorage.setItem(`loksewa_prompt_template_${activeBrandId}`, currentPromptTemplate);
     }
 
     updateBrandVisuals(currentBranding);
@@ -2407,13 +2473,17 @@ function loadBrandingForm(brand) {
     const ts = document.getElementById('custom-theme-preset'); if (ts) ts.value = brand.themePreset || 'theme-default';
     const pt = document.getElementById('custom-show-pagination'); if (pt) pt.checked = brand.showPagination !== false;
     const hp = document.getElementById('brand-header-asset-preview'); if (hp) hp.src = brand.headerAssetUrl || brand.logoUrl || 'assets/images/logo.png';
+    
+    currentPromptTemplate = localStorage.getItem(`loksewa_prompt_template_${brand.id}`) || localStorage.getItem('loksewa_prompt_template') || DEFAULT_PROMPT_TEMPLATE;
+    const promptInput = document.getElementById('prompt-template-input');
+    if (promptInput) promptInput.value = currentPromptTemplate;
 }
 
 document.getElementById('reset-prompt-btn').addEventListener('click', () => {
     if (!confirm("Reset to default prompt?")) return;
     currentPromptTemplate = DEFAULT_PROMPT_TEMPLATE;
     document.getElementById('prompt-template-input').value = currentPromptTemplate;
-    localStorage.setItem('loksewa_prompt_template', currentPromptTemplate);
+    localStorage.setItem(`loksewa_prompt_template_${activeBrandId}`, currentPromptTemplate);
     const fb = document.getElementById('branding-feedback');
     fb.innerText = "Prompt reset to default."; fb.style.color = "var(--color-fg-muted)";
     setTimeout(() => { fb.innerText = ''; }, 3000);
