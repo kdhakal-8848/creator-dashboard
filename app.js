@@ -740,6 +740,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (selectedPreset === 'template-bright-minimal') bgColor = '#f8f9fa';
     if (selectedPreset === 'template-news-image') bgColor = '#090d16';
     if (selectedPreset === 'template-news-text') bgColor = '#0b1120';
+    if (selectedPreset === 'template-facts-single') bgColor = '#f8f9fa';
     if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
 
     fabricCanvas.backgroundColor = bgColor;
@@ -759,6 +760,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
         if (selectedPreset === 'template-visual') overlayFill = 'rgba(0,0,0,0.25)';
         if (selectedPreset === 'template-minimal') overlayFill = 'rgba(18,18,24,0.85)';
         if (selectedPreset === 'template-bright-minimal') overlayFill = 'rgba(255,255,255,0.05)';
+        if (selectedPreset === 'template-facts-single') overlayFill = 'rgba(255,255,255,0)';
         if (selectedPreset === 'template-fb-minimal-1' || selectedPreset === 'template-fb-minimal-2') overlayFill = 'rgba(0,0,0,0.45)';
         if (selectedPreset === 'template-news-image') overlayFill = 'rgba(9, 13, 22, 0.45)';
         if (selectedPreset === 'template-news-text') overlayFill = 'rgba(11, 17, 32, 0.95)';
@@ -1131,6 +1133,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
+            } else if (selectedPreset === 'template-facts-single') {
+                const titleDef = {
+                    left: 100, top: 200, width: CANVAS_W - 200,
+                    fontSize: 76, fontWeight: '800', fill: '#0f172a', textAlign: 'center',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                fabricCanvas.add(slideTitle);
+
+                const bodyDef = {
+                    left: 100, top: 940, width: CANVAS_W - 200,
+                    fontSize: 46, fontWeight: '500', fill: '#334155', textAlign: 'center',
+                    fontFamily: bodyFont, lineHeight: 1.45,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                fabricCanvas.add(slideBody);
+
             } else if (selectedPreset === 'template-news-image') {
                 // --- Red Breaking News Badge ---
                 let titleY = 180;
@@ -1371,19 +1392,44 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             imgLoaded = true;
             clearTimeout(imgTimeout);
             if (img && img.width > 0) {
-                const scaleX = CANVAS_W / img.width;
-                const scaleY = CANVAS_H / img.height;
-                const scale = Math.max(scaleX, scaleY);
-                img.set({
-                    left: 0, top: 0,
-                    scaleX: scale, scaleY: scale,
-                    selectable: true,
-                    evented: true,
-                    customType: 'background-image',
-                    opacity: 1
-                });
-                fabricCanvas.add(img);
-                fabricCanvas.sendToBack(img);
+                if (selectedPreset === 'template-facts-single') {
+                    const targetW = CANVAS_W - 200;
+                    const targetH = 480;
+                    const scale = Math.min(targetW / img.width, targetH / img.height);
+                    
+                    img.set({
+                        originX: 'center',
+                        originY: 'center',
+                        left: CANVAS_W / 2, 
+                        top: 420 + targetH / 2,
+                        scaleX: scale, scaleY: scale,
+                        selectable: true,
+                        evented: true,
+                        customType: 'facts-image',
+                        opacity: 1
+                    });
+                    img.setShadow({
+                        color: 'rgba(0,0,0,0.15)',
+                        blur: 20,
+                        offsetX: 0,
+                        offsetY: 10
+                    });
+                    fabricCanvas.add(img);
+                } else {
+                    const scaleX = CANVAS_W / img.width;
+                    const scaleY = CANVAS_H / img.height;
+                    const scale = Math.max(scaleX, scaleY);
+                    img.set({
+                        left: 0, top: 0,
+                        scaleX: scale, scaleY: scale,
+                        selectable: true,
+                        evented: true,
+                        customType: 'background-image',
+                        opacity: 1
+                    });
+                    fabricCanvas.add(img);
+                    fabricCanvas.sendToBack(img);
+                }
             }
             addObjects();
         }, { crossOrigin: 'anonymous' });
