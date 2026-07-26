@@ -810,6 +810,52 @@ function initDesignStudio() {
     }
 
     loadCanvasBrandOptions();
+    
+    // Attach dragover and drop listeners to canvas wrapper for Drag & Drop
+    const wrapper = document.querySelector('.studio-canvas-wrapper');
+    if (wrapper && !wrapper.__dropBound) {
+        wrapper.__dropBound = true;
+        wrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        wrapper.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!freeformCanvas) return;
+
+            const rect = wrapper.getBoundingClientRect();
+            const clientX = e.clientX - rect.left;
+            const clientY = e.clientY - rect.top;
+            const pointer = freeformCanvas.getPointer(e);
+            const pointerX = pointer ? pointer.x : CANVAS_W / 2;
+            const pointerY = pointer ? pointer.y : CANVAS_H / 2;
+
+            // Handle dropped local files (Image Files)
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        fabric.Image.fromURL(evt.target.result, (img) => {
+                            img.set({ left: pointerX, top: pointerY, originX: 'center', originY: 'center', isExtraOverride: true });
+                            img.scaleToWidth(350);
+                            freeformCanvas.add(img);
+                            freeformCanvas.setActiveObject(img);
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                    return;
+                }
+            }
+
+            // Handle dropped palette items
+            const elemType = e.dataTransfer.getData('text/plain');
+            if (elemType) {
+                addCanvasElement(elemType, pointerX, pointerY);
+            }
+        });
+    }
+
     setTimeout(() => {
         const baseSelector = document.getElementById('canvas-base-template');
         if (baseSelector) {
@@ -996,13 +1042,37 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
         // --- 2. Header Bar / Top Strip ---
         const minimalPresets = ['template-minimal', 'template-bright-minimal', 'template-blue-border', 'template-fb-minimal-1', 'template-fb-minimal-2'];
         if (!minimalPresets.includes(selectedPreset) && selectedPreset !== 'template-visual' && selectedPreset !== 'template-news-image' && selectedPreset !== 'template-news-text' && selectedPreset !== 'template-facts-single') {
+            const defaultHeaderFill = selectedPreset === 'template-bold' ? '#141414' : 'rgba(0,0,0,0.4)';
             const headerBar = new fabric.Rect({
                 left: 0, top: 0,
                 width: CANVAS_W, height: 135,
-                fill: selectedPreset === 'template-bold' ? '#141414' : 'rgba(0,0,0,0.4)',
-                selectable: false, evented: false, customType: 'header-bar'
+                fill: defaultHeaderFill,
+                selectable: true, evented: true, customType: 'header-bar'
             });
+
+            // Check template overrides for header-bar
+            const overridesStr = localStorage.getItem('loksewa_template_overrides');
+            if (overridesStr) {
+                try {
+                    const overrides = JSON.parse(overridesStr);
+                    if (overrides[selectedPreset] && overrides[selectedPreset]['header-bar']) {
+                        const hStyle = overrides[selectedPreset]['header-bar'];
+                        headerBar.set({
+                            left: hStyle.left ?? 0,
+                            top: hStyle.top ?? 0,
+                            width: hStyle.width ?? CANVAS_W,
+                            height: hStyle.height ?? 135,
+                            scaleX: hStyle.scaleX ?? 1,
+                            scaleY: hStyle.scaleY ?? 1,
+                            fill: hStyle.fill || defaultHeaderFill
+                        });
+                    }
+                } catch(e) {}
+            }
             targetCanvas.add(headerBar);
+            
+            const headerPicker = document.getElementById('canvas-header-bg-color');
+            if (headerPicker) headerPicker.value = fabricColorToHex(headerBar.fill);
         }
 
 
@@ -1011,12 +1081,31 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
             fabric.Image.fromURL(brand.logoUrl, (img) => {
                 if (img && img.width > 0) {
                     const targetSize = 56;
-                    const scale = targetSize / (img.height || targetSize);
+                    let scaleX = targetSize / (img.height || targetSize);
+                    let scaleY = scaleX;
+                    let left = 80;
+                    let top = (minimalPresets.includes(selectedPreset)) ? 42 : 36;
+
+                    // Apply saved overrides for brand-logo
+                    const overridesStr = localStorage.getItem('loksewa_template_overrides');
+                    if (overridesStr) {
+                        try {
+                            const overrides = JSON.parse(overridesStr);
+                            if (overrides[selectedPreset] && overrides[selectedPreset]['brand-logo']) {
+                                const lStyle = overrides[selectedPreset]['brand-logo'];
+                                if (typeof lStyle.left === 'number') left = lStyle.left;
+                                if (typeof lStyle.top === 'number') top = lStyle.top;
+                                if (typeof lStyle.scaleX === 'number') scaleX = lStyle.scaleX;
+                                if (typeof lStyle.scaleY === 'number') scaleY = lStyle.scaleY;
+                            }
+                        } catch(e) {}
+                    }
+
                     img.set({
-                        left: 80,
-                        top: (minimalPresets.includes(selectedPreset)) ? 42 : 36,
-                        scaleX: scale,
-                        scaleY: scale,
+                        left: left,
+                        top: top,
+                        scaleX: scaleX,
+                        scaleY: scaleY,
                         selectable: true,
                         evented: true,
                         customType: 'brand-logo',
@@ -3412,11 +3501,49 @@ document.getElementById('canvas-prop-text')?.addEventListener('input', (e) => {
     if (obj && obj.type === 'i-text') { obj.set('text', e.target.value); freeformCanvas.renderAll(); }
 });
 
+// Header Background Color
+document.getElementById('canvas-header-bg-color')?.addEventListener('input', (e) => {
+    if (freeformCanvas) {
+        const headerObj = freeformCanvas.getObjects().find(o => o.customType === 'header-bar');
+        if (headerObj) {
+            headerObj.set('fill', e.target.value);
+            freeformCanvas.renderAll();
+        }
+    }
+});
+
 // Canvas Background Color
 document.getElementById('canvas-bg-color')?.addEventListener('input', (e) => {
     if (freeformCanvas) {
         freeformCanvas.backgroundColor = e.target.value;
         freeformCanvas.renderAll();
+    }
+});
+
+// Duplicate and Delete Property Actions
+document.getElementById('canvas-prop-duplicate')?.addEventListener('click', () => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) {
+        obj.clone((cloned) => {
+            cloned.set({
+                left: obj.left + 20,
+                top: obj.top + 20,
+                isExtraOverride: true
+            });
+            freeformCanvas.add(cloned);
+            freeformCanvas.setActiveObject(cloned);
+        });
+    }
+});
+
+document.getElementById('canvas-prop-delete')?.addEventListener('click', () => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) {
+        freeformCanvas.remove(obj);
+        freeformCanvas.discardActiveObject();
+        freeformCanvas.renderAll();
+        document.getElementById('canvas-props-panel').style.display = 'none';
+        document.getElementById('canvas-props-empty').style.display = 'block';
     }
 });
 
