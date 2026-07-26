@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Creator's Den — Content Engine</title>
     <meta name="description" content="Creator's Den multi-brand content creation and management platform">
+    <meta name="theme-color" content="#0f0c29">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Feather Icons -->
@@ -14,7 +20,7 @@
     <!-- JSZip for reliable mobile batch downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Styles -->
-    <link rel="stylesheet" href="index.css?v=20260726_v1785091182582">
+    <link rel="stylesheet" href="index.css?v=20260726_v1785091599429">
     <!-- html2canvas (fallback) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
@@ -987,9 +993,18 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="app.js?v=20260726_v1785091182582"></script>
+    <script type="module" src="app.js?v=20260726_v1785091599429"></script>
     <script>
         if (typeof feather !== 'undefined') feather.replace();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+                    .catch(err => console.warn('[PWA] Service Worker registration failed:', err));
+            });
+        }
     </script>
 </body>
 </html>
