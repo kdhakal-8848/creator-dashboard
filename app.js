@@ -667,6 +667,79 @@ let currentImageUrls = [];
 let canvasHistory = [];
 let canvasHistoryPointer = -1;
 
+
+// ============================================================
+// TEXT SCALING & ASPECT RATIO PROTECTION (Prevent Elongation)
+// ============================================================
+function attachTextScalingProtection(canvas) {
+    if (!canvas) return;
+
+    const protectObject = (obj) => {
+        if (!obj) return;
+        if (obj.type === 'textbox' || obj.type === 'i-text') {
+            obj.setControlVisible('mt', false);
+            obj.setControlVisible('mb', false);
+            if (obj.scaleX !== 1 || obj.scaleY !== 1) {
+                const scale = Math.max(obj.scaleX || 1, obj.scaleY || 1);
+                obj.set({
+                    fontSize: Math.max(10, Math.round((obj.fontSize || 30) * scale)),
+                    width: Math.max(50, (obj.width || 300) * (obj.scaleX || 1)),
+                    scaleX: 1,
+                    scaleY: 1
+                });
+                obj.setCoords();
+            }
+        }
+    };
+
+    canvas.getObjects().forEach(protectObject);
+    canvas.on('object:added', (e) => protectObject(e.target));
+
+    canvas.on('object:scaling', (e) => {
+        const obj = e.target;
+        if (obj && (obj.type === 'textbox' || obj.type === 'i-text')) {
+            const corner = e.transform ? e.transform.corner : null;
+            if (corner === 'ml' || corner === 'mr') {
+                const newWidth = Math.max(50, obj.width * obj.scaleX);
+                obj.set({
+                    width: newWidth,
+                    scaleX: 1,
+                    scaleY: 1
+                });
+            } else {
+                const scale = Math.max(obj.scaleX, obj.scaleY);
+                const newFontSize = Math.max(10, Math.round((obj.fontSize || 30) * scale));
+                const newWidth = Math.max(50, obj.width * scale);
+                obj.set({
+                    fontSize: newFontSize,
+                    width: newWidth,
+                    scaleX: 1,
+                    scaleY: 1
+                });
+            }
+            obj.setCoords();
+            canvas.renderAll();
+        }
+    });
+
+    canvas.on('object:modified', (e) => {
+        const obj = e.target;
+        if (obj && (obj.type === 'textbox' || obj.type === 'i-text')) {
+            if (obj.scaleX !== 1 || obj.scaleY !== 1) {
+                const scale = Math.max(obj.scaleX, obj.scaleY);
+                obj.set({
+                    fontSize: Math.max(10, Math.round((obj.fontSize || 30) * scale)),
+                    width: Math.max(50, obj.width * scale),
+                    scaleX: 1,
+                    scaleY: 1
+                });
+                obj.setCoords();
+                canvas.renderAll();
+            }
+        }
+    });
+}
+
 function initFabricCanvas() {
     if (fabricCanvas) { fabricCanvas.dispose(); fabricCanvas = null; }
     const canvasEl = document.getElementById('slide-canvas');
@@ -680,6 +753,7 @@ function initFabricCanvas() {
         backgroundColor: '#1a1a2e'
     });
     window.fabricCanvas = fabricCanvas;
+    attachTextScalingProtection(fabricCanvas);
 
     // Scale all coordinates: objects are placed in virtual 1080x1350 space
     fabricCanvas.setZoom(CANVAS_ZOOM);
@@ -741,7 +815,9 @@ function initDesignStudio() {
         preserveObjectStacking: true,
         backgroundColor: '#ffffff'
     });
+    window.freeformCanvas = freeformCanvas;
     freeformCanvas.setZoom(CANVAS_ZOOM);
+    attachTextScalingProtection(freeformCanvas);
 
     freeformCanvas.on('selection:created', onCanvasLabSelection);
     freeformCanvas.on('selection:updated', onCanvasLabSelection);
@@ -1058,12 +1134,12 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                     if (overrides[selectedPreset] && overrides[selectedPreset]['header-bar']) {
                         const hStyle = overrides[selectedPreset]['header-bar'];
                         headerBar.set({
-                            left: hStyle.left ?? 0,
-                            top: hStyle.top ?? 0,
-                            width: hStyle.width ?? CANVAS_W,
-                            height: hStyle.height ?? 135,
-                            scaleX: hStyle.scaleX ?? 1,
-                            scaleY: hStyle.scaleY ?? 1,
+                            left: hStyle.left !== undefined ? hStyle.left : 0,
+                            top: hStyle.top !== undefined ? hStyle.top : 0,
+                            width: hStyle.width !== undefined ? hStyle.width : CANVAS_W,
+                            height: hStyle.height !== undefined ? hStyle.height : 135,
+                            scaleX: hStyle.scaleX !== undefined ? hStyle.scaleX : 1,
+                            scaleY: hStyle.scaleY !== undefined ? hStyle.scaleY : 1,
                             fill: hStyle.fill || defaultHeaderFill
                         });
                     }
