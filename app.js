@@ -1488,22 +1488,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
 
         const canvasTheme = document.getElementById('canvas-theme-selector')?.value || 'none';
         if (canvasTheme !== 'none') {
-            let tBg, tTitle, tBody, tAccent;
+            let tBg, tTitle, tBody, tAccent, tHeader;
             if (canvasTheme === 'theme-claude') {
                 tBg = '#eceeed';
                 tTitle = '#2c2c2c';
                 tBody = '#4a4a4a';
                 tAccent = '#d97757';
+                tHeader = '#e2e4e3';
             } else if (canvasTheme === 'theme-facebook') {
                 tBg = '#f0f2f5';
                 tTitle = '#1c1e21';
                 tBody = '#65676b';
                 tAccent = '#1877f2';
+                tHeader = '#ffffff';
             } else if (canvasTheme === 'theme-slate') {
                 tBg = '#0f172a';
                 tTitle = '#f8fafc';
                 tBody = '#94a3b8';
                 tAccent = '#38bdf8';
+                tHeader = '#1e293b';
             }
             
             fabricCanvas.backgroundColor = tBg;
@@ -1511,14 +1514,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             if (bgPicker) bgPicker.value = fabricColorToHex(tBg);
 
             fabricCanvas.getObjects().forEach(obj => {
-                if (obj.customType === 'title' || obj.isPlaceholder === 'title') {
-                    if (!slideData.titleStyle?.fill) obj.set('fill', tTitle);
+                if (obj.customType === 'title' || obj.isPlaceholder === 'title' || obj.customType === 'brand-handle') {
+                    if (!slideData.titleStyle?.fill || obj.customType === 'brand-handle') obj.set('fill', tTitle);
                 }
                 if (obj.customType === 'body' || obj.isPlaceholder === 'body') {
                     if (!slideData.bodyStyle?.fill) obj.set('fill', tBody);
                 }
-                if (obj.customType === 'news-badge-bg' || obj.customType === 'news-text-badge-bg' || obj.customType === 'vertical-accent-bar') {
+                if (obj.customType === 'news-badge-bg' || obj.customType === 'news-text-badge-bg' || obj.customType === 'vertical-accent-bar' || obj.customType === 'red-line') {
                     obj.set('fill', tAccent);
+                }
+                if (obj.customType === 'blue-border') {
+                    obj.set('stroke', tAccent);
+                }
+                if (obj.customType === 'header-bar') {
+                    obj.set('fill', tHeader);
+                }
+                if (obj.customType === 'overlay' || obj.customType === 'bg-overlay') {
+                    // Make the overlay solid so it completely adopts the theme background, 
+                    // overriding images behind it if a solid theme is selected.
+                    obj.set('fill', tBg);
                 }
                 if (obj.customType === 'image-placeholder-bg') {
                     obj.set('fill', canvasTheme === 'theme-slate' ? '#1e293b' : '#ffffff');
@@ -1537,6 +1551,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 }
             });
         }
+
 
         fabricCanvas.renderAll();
         saveCanvasHistory();
