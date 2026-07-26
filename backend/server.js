@@ -482,6 +482,7 @@ app.post('/generate-facts', async (req, res) => {
     const count = parseInt(slide_count) || 5;
     const factTopic = topic || "Sharks are older than trees";
     const brandCtx = getBrandContextBlock(brand_context);
+    const handle = brand_context?.handle || '@ammaazzingg';
     try {
         console.log(`[/generate-facts] "${factTopic}", ${count} slides, ${targetLanguage}`);
 
