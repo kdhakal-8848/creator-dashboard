@@ -442,6 +442,10 @@ navLinks.forEach(link => {
         if (targetViewId === 'settings-view') loadSettings();
         if (targetViewId === 'branding-view') loadBrandingView();
         if (targetViewId === 'template-studio-view') initTemplateStudio();
+        if (targetViewId === 'canvas-view') {
+            initFreeformCanvas();
+            loadCanvasBrandOptions();
+        }
         if (window.feather) feather.replace();
     });
 });
@@ -587,6 +591,7 @@ const CANVAS_ZOOM = PREVIEW_W / CANVAS_W; // 0.37037
 
 let fabricCanvas = null;
 let studioCanvas = null;
+let freeformCanvas = null;
 let currentEditingId = null;
 let currentSlides = [];
 let currentSlideIndex = 0;
@@ -621,6 +626,62 @@ function initFabricCanvas() {
     fabricCanvas.on('selection:created', onCanvasSelection);
     fabricCanvas.on('selection:updated', onCanvasSelection);
     fabricCanvas.on('selection:cleared', () => {});
+    
+    // Double click on placeholder/image triggers upload
+    fabricCanvas.on('mouse:down', (e) => {
+        if (e.target && (e.target.customType === 'image-placeholder-bg' || e.target.customType === 'single-image' || e.target.customType === 'background-image' || e.target.customType === 'facts-image')) {
+            const now = new Date().getTime();
+            if (e.target.lastClickTime && now - e.target.lastClickTime < 400) {
+                document.getElementById('image-upload')?.click();
+            }
+            e.target.lastClickTime = now;
+        }
+    });
+
+    // Native Drag and Drop for images
+    const canvasContainer = document.getElementById('slide-canvas')?.parentElement;
+    if (canvasContainer) {
+        canvasContainer.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+        canvasContainer.addEventListener('drop', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        currentImageUrls[currentSlideIndex] = ev.target.result;
+                        const editorImg = document.getElementById('editor-image');
+                        if (editorImg) editorImg.src = ev.target.result;
+                        updateSlidePreview();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+    }
+}
+
+function initFreeformCanvas() {
+    if (freeformCanvas) { freeformCanvas.dispose(); freeformCanvas = null; }
+    const canvasEl = document.getElementById('freeform-canvas');
+    if (!canvasEl) return;
+
+    freeformCanvas = new fabric.Canvas('freeform-canvas', {
+        width: PREVIEW_W,
+        height: PREVIEW_H,
+        selection: true,
+        preserveObjectStacking: true,
+        backgroundColor: '#ffffff'
+    });
+    freeformCanvas.setZoom(CANVAS_ZOOM);
+
+    freeformCanvas.on('selection:created', onCanvasLabSelection);
+    freeformCanvas.on('selection:updated', onCanvasLabSelection);
+    freeformCanvas.on('selection:cleared', () => {
+        const panel = document.getElementById('canvas-props-panel');
+        const empty = document.getElementById('canvas-props-empty');
+        if (panel && empty) { panel.style.display = 'none'; empty.style.display = 'block'; }
+    });
 }
 
 function syncFabricCanvasToCurrentSlide() {
@@ -662,6 +723,9 @@ function syncFabricCanvasToCurrentSlide() {
         } else if (obj.customType === 'cta-btn-text') {
             if (obj.text !== undefined) currentSlides[currentSlideIndex].ctaBtnTextContent = obj.text;
             currentSlides[currentSlideIndex].ctaBtnTextStyle = style;
+            updated = true;
+        } else if (['facts-image', 'image-placeholder-bg', 'single-image', 'background-image'].includes(obj.customType)) {
+            currentSlides[currentSlideIndex].imageStyle = style;
             updated = true;
         }
     });
@@ -1199,19 +1263,20 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
                     
                     const badgeBg = new fabric.Rect({
-                        left: 80, top: 160,
-                        width: estimatedWidth, height: 48,
+                        left: 0, top: 0, width: estimatedWidth, height: 48,
                         fill: '#dc2626', rx: 24, ry: 24,
-                        selectable: false, evented: false, customType: 'news-badge-bg'
+                        customType: 'news-badge-bg'
                     });
-                    fabricCanvas.add(badgeBg);
-
                     const badgeText = new fabric.IText(badgeString, {
-                        left: 98, top: 172,
+                        left: 18, top: 12,
                         fontSize: 22, fontWeight: '800', fill: '#ffffff',
-                        fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+                        fontFamily: headingFont, customType: 'news-badge-text'
                     });
-                    fabricCanvas.add(badgeText);
+                    const badgeGroup = new fabric.Group([badgeBg, badgeText], {
+                        left: 80, top: 160,
+                        selectable: true, evented: true, customType: 'news-badge-group'
+                    });
+                    fabricCanvas.add(badgeGroup);
                     titleY = 230;
                 }
 
@@ -1251,20 +1316,25 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 // --- Blue News Editorial Badge ---
                 let titleY = 180;
                 if (showNewsBreaking) {
-                    const badgeBg = new fabric.Rect({
-                        left: 80, top: 160,
-                        width: 250, height: 48,
-                        fill: '#0284c7', rx: 24, ry: 24,
-                        selectable: false, evented: false, customType: 'news-text-badge-bg'
-                    });
-                    fabricCanvas.add(badgeBg);
+                    const badgeString = document.getElementById('canvas-badge-selector')?.value || '📰 NEWS ANALYSIS';
+                    const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
 
-                    const badgeText = new fabric.IText('📰 NEWS ANALYSIS', {
-                        left: 98, top: 172,
-                        fontSize: 22, fontWeight: '800', fill: '#ffffff',
-                        fontFamily: headingFont, selectable: false, evented: false, customType: 'news-text-badge-text'
+                    const badgeBg = new fabric.Rect({
+                        left: 0, top: 0,
+                        width: estimatedWidth, height: 48,
+                        fill: '#0284c7', rx: 24, ry: 24,
+                        customType: 'news-text-badge-bg'
                     });
-                    fabricCanvas.add(badgeText);
+                    const badgeText = new fabric.IText(badgeString, {
+                        left: 18, top: 12,
+                        fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                        fontFamily: headingFont, customType: 'news-text-badge-text'
+                    });
+                    const badgeGroup = new fabric.Group([badgeBg, badgeText], {
+                        left: 80, top: 160,
+                        selectable: true, evented: true, customType: 'news-badge-group'
+                    });
+                    fabricCanvas.add(badgeGroup);
                     titleY = 230;
                 }
 
@@ -1316,33 +1386,49 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                     const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
 
                     const badgeBg = new fabric.Rect({
-                        left: 80, top: currentY, width: estimatedWidth, height: 48,
+                        left: 0, top: 0, width: estimatedWidth, height: 48,
                         fill: '#dc2626', rx: 24, ry: 24,
-                        selectable: false, evented: false, customType: 'news-badge-bg'
+                        customType: 'news-badge-bg'
                     });
-                    fabricCanvas.add(badgeBg);
                     const badgeText = new fabric.IText(badgeString, {
-                        left: 98, top: currentY + 12,
+                        left: 18, top: 12,
                         fontSize: 22, fontWeight: '800', fill: '#ffffff',
-                        fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+                        fontFamily: headingFont, customType: 'news-badge-text'
                     });
-                    fabricCanvas.add(badgeText);
+                    const badgeGroup = new fabric.Group([badgeBg, badgeText], {
+                        left: 80, top: currentY,
+                        selectable: true, evented: true, customType: 'news-badge-group'
+                    });
+                    fabricCanvas.add(badgeGroup);
                     currentY += 70;
                 }
 
                 const placeholderHeight = 400;
-                const placeholderBg = new fabric.Rect({
-                    left: 80, top: currentY, width: CANVAS_W - 160, height: placeholderHeight,
-                    fill: '#1e293b', stroke: '#475569', strokeWidth: 2, strokeDashArray: [10, 5],
-                    rx: 16, ry: 16, selectable: true, customType: 'image-placeholder-bg'
-                });
-                fabricCanvas.add(placeholderBg);
-                const placeholderText = new fabric.IText('Drop or Upload Image Here', {
-                    left: CANVAS_W / 2, top: currentY + placeholderHeight / 2, originX: 'center', originY: 'center',
-                    fontSize: 28, fontWeight: '600', fill: '#94a3b8',
-                    fontFamily: headingFont, selectable: false, evented: false, customType: 'image-placeholder-text'
-                });
-                fabricCanvas.add(placeholderText);
+                
+                // If there's no image, draw the placeholder container.
+                // If there is an image, it will be added asynchronously, but we still advance currentY.
+                if (!imageUrl) {
+                    let phStyle = slideData.imageStyle || {
+                        left: 80, top: currentY, width: CANVAS_W - 160, height: placeholderHeight,
+                        scaleX: 1, scaleY: 1
+                    };
+                    const placeholderBg = new fabric.Rect({
+                        fill: '#1e293b', stroke: '#475569', strokeWidth: 2, strokeDashArray: [10, 5],
+                        rx: 16, ry: 16, selectable: true, customType: 'image-placeholder-bg',
+                        ...phStyle
+                    });
+                    fabricCanvas.add(placeholderBg);
+                    const placeholderText = new fabric.IText('Drop or Upload Image Here', {
+                        left: phStyle.left + (phStyle.width * (phStyle.scaleX || 1)) / 2, 
+                        top: phStyle.top + (phStyle.height * (phStyle.scaleY || 1)) / 2, 
+                        originX: 'center', originY: 'center',
+                        fontSize: 28, fontWeight: '600', fill: '#94a3b8',
+                        fontFamily: headingFont, selectable: false, evented: false, customType: 'image-placeholder-text'
+                    });
+                    fabricCanvas.add(placeholderText);
+                }
+                
+                // Always advance currentY by the default layout height so subsequent elements are positioned correctly on initial layout
                 currentY += placeholderHeight + 40;
 
                 const titleDef = {
@@ -1473,17 +1559,20 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
             const estimatedWidth = 250 + Math.max(0, (badgeString.length - 16) * 12);
             
             const badgeBg = new fabric.Rect({
-                left: 80, top: 140, width: estimatedWidth, height: 48,
+                left: 0, top: 0, width: estimatedWidth, height: 48,
                 fill: '#dc2626', rx: 24, ry: 24,
-                selectable: true, evented: true, customType: 'news-badge-bg'
+                customType: 'news-badge-bg'
             });
-            fabricCanvas.add(badgeBg);
             const badgeText = new fabric.IText(badgeString, {
-                left: 98, top: 152,
+                left: 18, top: 12,
                 fontSize: 22, fontWeight: '800', fill: '#ffffff',
-                fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+                fontFamily: headingFont, customType: 'news-badge-text'
             });
-            fabricCanvas.add(badgeText);
+            const badgeGroup = new fabric.Group([badgeBg, badgeText], {
+                left: 80, top: 140,
+                selectable: true, evented: true, customType: 'news-badge-group'
+            });
+            fabricCanvas.add(badgeGroup);
         }
 
         const canvasTheme = document.getElementById('canvas-theme-selector')?.value || 'none';
@@ -1600,6 +1689,37 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                         offsetY: 10
                     });
                     fabricCanvas.add(img);
+                } else if (selectedPreset === 'template-news-single-image') {
+                    // Use saved image style if available, otherwise default placeholder style
+                    let currentY = 160;
+                    if (document.getElementById('toggle-news-breaking')?.checked && !slideData.hideNewsBreaking) {
+                        currentY += 70;
+                    }
+                    const phStyle = slideData.imageStyle || {
+                        left: 80, top: currentY, width: CANVAS_W - 160, height: 400,
+                        scaleX: 1, scaleY: 1
+                    };
+                    
+                    // We need to scale the image to fill the placeholder area
+                    const targetW = phStyle.width * (phStyle.scaleX || 1);
+                    const targetH = phStyle.height * (phStyle.scaleY || 1);
+                    const scale = Math.max(targetW / img.width, targetH / img.height);
+                    
+                    img.set({
+                        left: phStyle.left, top: phStyle.top,
+                        scaleX: scale, scaleY: scale,
+                        selectable: true, evented: true,
+                        customType: 'single-image',
+                        clipPath: new fabric.Rect({
+                            left: -img.width / 2, top: -img.height / 2,
+                            width: img.width, height: img.height,
+                            rx: 16 / scale, ry: 16 / scale,
+                            originX: 'center', originY: 'center'
+                        })
+                    });
+                    
+                    fabricCanvas.add(img);
+                    fabricCanvas.sendToBack(img);
                 } else {
                     const scaleX = CANVAS_W / img.width;
                     const scaleY = CANVAS_H / img.height;
@@ -3067,4 +3187,274 @@ document.getElementById('generate-custom-image-btn')?.addEventListener('click', 
         updateSlidePreview();
         showToast('AI Image applied to slide!');
     }, 1000);
+});
+
+// ============================================================
+// CANVAS LAB (FREEFORM EDITOR)
+// ============================================================
+
+function onCanvasLabSelection() {
+    const obj = freeformCanvas?.getActiveObject();
+    if (!obj) return;
+    
+    document.getElementById('canvas-props-empty').style.display = 'none';
+    document.getElementById('canvas-props-panel').style.display = 'block';
+    
+    // Opacity
+    document.getElementById('canvas-prop-opacity').value = obj.opacity || 1;
+    
+    // Color/Fill
+    const colorGroup = document.getElementById('canvas-prop-color-group');
+    if (obj.type === 'i-text' || obj.type === 'rect' || obj.type === 'circle') {
+        colorGroup.style.display = 'block';
+        document.getElementById('canvas-prop-color').value = obj.fill || '#000000';
+    } else {
+        colorGroup.style.display = 'none';
+    }
+    
+    // Text specific properties
+    const textGroup = document.getElementById('canvas-prop-text-group');
+    const fontGroup = document.getElementById('canvas-prop-fontsize-group');
+    if (obj.type === 'i-text') {
+        textGroup.style.display = 'block';
+        fontGroup.style.display = 'block';
+        document.getElementById('canvas-prop-text').value = obj.text || '';
+        document.getElementById('canvas-prop-fontsize').value = obj.fontSize || 40;
+    } else {
+        textGroup.style.display = 'none';
+        fontGroup.style.display = 'none';
+    }
+}
+
+// Format property listeners
+document.getElementById('canvas-prop-opacity')?.addEventListener('input', (e) => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) { obj.set('opacity', parseFloat(e.target.value)); freeformCanvas.renderAll(); }
+});
+
+document.getElementById('canvas-prop-color')?.addEventListener('input', (e) => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) { obj.set('fill', e.target.value); freeformCanvas.renderAll(); }
+});
+
+document.getElementById('canvas-prop-fontsize')?.addEventListener('input', (e) => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj && obj.type === 'i-text') { obj.set('fontSize', parseInt(e.target.value, 10)); freeformCanvas.renderAll(); }
+});
+
+document.getElementById('canvas-prop-text')?.addEventListener('input', (e) => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj && obj.type === 'i-text') { obj.set('text', e.target.value); freeformCanvas.renderAll(); }
+});
+
+// Canvas Background Color
+document.getElementById('canvas-bg-color')?.addEventListener('input', (e) => {
+    if (freeformCanvas) {
+        freeformCanvas.backgroundColor = e.target.value;
+        freeformCanvas.renderAll();
+    }
+});
+
+// Z-Index controls
+document.getElementById('canvas-bring-front')?.addEventListener('click', () => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) { freeformCanvas.bringToFront(obj); freeformCanvas.requestRenderAll(); }
+});
+document.getElementById('canvas-send-back')?.addEventListener('click', () => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) { freeformCanvas.sendToBack(obj); freeformCanvas.requestRenderAll(); }
+});
+
+// Delete and Clear
+document.getElementById('canvas-delete-selected')?.addEventListener('click', () => {
+    const obj = freeformCanvas?.getActiveObject();
+    if (obj) {
+        freeformCanvas.remove(obj);
+        freeformCanvas.discardActiveObject();
+        freeformCanvas.requestRenderAll();
+    }
+});
+document.getElementById('canvas-clear')?.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear the entire canvas?')) {
+        freeformCanvas?.clear();
+        freeformCanvas.backgroundColor = document.getElementById('canvas-bg-color')?.value || '#ffffff';
+        freeformCanvas.requestRenderAll();
+    }
+});
+
+// Drag and drop from palette to freeform canvas
+document.querySelectorAll('.palette-item[data-canvas-elem]').forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', item.dataset.canvasElem);
+    });
+});
+
+const freeformWrapper = document.getElementById('freeform-canvas')?.parentElement?.parentElement;
+if (freeformWrapper) {
+    freeformWrapper.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+    
+    freeformWrapper.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!freeformCanvas) return;
+        
+        // Calculate drop position mapped to the scaled canvas
+        const rect = document.getElementById('freeform-canvas').nextSibling.getBoundingClientRect(); // upper-canvas
+        const scale = CANVAS_ZOOM;
+        const pointerX = (e.clientX - rect.left) / scale;
+        const pointerY = (e.clientY - rect.top) / scale;
+        
+        const elemType = e.dataTransfer.getData('text/plain');
+        
+        // Handle drag and drop images directly from system
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    fabric.Image.fromURL(ev.target.result, (img) => {
+                        img.set({ left: pointerX, top: pointerY, originX: 'center', originY: 'center' });
+                        img.scaleToWidth(300);
+                        freeformCanvas.add(img);
+                        freeformCanvas.setActiveObject(img);
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+            return;
+        }
+
+        switch(elemType) {
+            case 'heading':
+                const textH = new fabric.IText('HEADING TEXT', {
+                    left: pointerX, top: pointerY,
+                    originX: 'center', originY: 'center',
+                    fontFamily: 'Inter', fontSize: 60, fontWeight: 'bold', fill: '#000000'
+                });
+                freeformCanvas.add(textH);
+                freeformCanvas.setActiveObject(textH);
+                break;
+            case 'body':
+                const textB = new fabric.IText('Body text goes here...', {
+                    left: pointerX, top: pointerY,
+                    originX: 'center', originY: 'center',
+                    fontFamily: 'Inter', fontSize: 30, fontWeight: 'normal', fill: '#333333'
+                });
+                freeformCanvas.add(textB);
+                freeformCanvas.setActiveObject(textB);
+                break;
+            case 'rect':
+                const rect = new fabric.Rect({
+                    left: pointerX, top: pointerY,
+                    originX: 'center', originY: 'center',
+                    width: 200, height: 100, fill: '#ff4757', rx: 10, ry: 10
+                });
+                freeformCanvas.add(rect);
+                freeformCanvas.setActiveObject(rect);
+                break;
+            case 'circle':
+                const circle = new fabric.Circle({
+                    left: pointerX, top: pointerY,
+                    originX: 'center', originY: 'center',
+                    radius: 75, fill: '#1e90ff'
+                });
+                freeformCanvas.add(circle);
+                freeformCanvas.setActiveObject(circle);
+                break;
+            case 'image-placeholder':
+                const placeholder = new fabric.Rect({
+                    left: pointerX, top: pointerY,
+                    originX: 'center', originY: 'center',
+                    width: 300, height: 300, fill: '#e1e1e1',
+                    stroke: '#888888', strokeDashArray: [5, 5], strokeWidth: 2
+                });
+                freeformCanvas.add(placeholder);
+                freeformCanvas.setActiveObject(placeholder);
+                break;
+            case 'brand-logo':
+                const selectedBrand = document.getElementById('canvas-brand-selector').value;
+                if (!selectedBrand) {
+                    showToast('Please select a brand first', 'error');
+                    return;
+                }
+                const logoPath = `assets/brands/${selectedBrand}/logo.png`;
+                fabric.Image.fromURL(logoPath, (img) => {
+                    if (img) {
+                        img.set({ left: pointerX, top: pointerY, originX: 'center', originY: 'center' });
+                        img.scaleToWidth(150);
+                        freeformCanvas.add(img);
+                        freeformCanvas.setActiveObject(img);
+                    } else {
+                        showToast('Logo not found for this brand', 'error');
+                    }
+                }, { crossOrigin: 'anonymous' });
+                break;
+        }
+    });
+}
+
+// Brand Options
+async function loadCanvasBrandOptions() {
+    const sel = document.getElementById('canvas-brand-selector');
+    if (!sel) return;
+    try {
+        const res = await fetch('/api/brands');
+        const brands = await res.json();
+        sel.innerHTML = '<option value="">-- Select Brand --</option>';
+        brands.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            sel.appendChild(opt);
+        });
+    } catch (err) {
+        console.error('Error loading brands for canvas', err);
+    }
+}
+
+// AI Image Generation
+document.getElementById('canvas-generate-ai')?.addEventListener('click', () => {
+    const prompt = document.getElementById('canvas-ai-prompt').value.trim();
+    if (!prompt) {
+        showToast('Please enter an image prompt', 'error');
+        return;
+    }
+    
+    const loading = document.getElementById('canvas-ai-loading');
+    if (loading) loading.style.display = 'block';
+    
+    // Simulate generation with Pollinations (using same method as NewsLab)
+    const seed = Math.floor(Math.random() * 100000);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&nologo=true&width=1080&height=1080`;
+    
+    setTimeout(() => {
+        if (loading) loading.style.display = 'none';
+        fabric.Image.fromURL(imageUrl, (img) => {
+            img.set({ left: CANVAS_W / 2, top: CANVAS_H / 2, originX: 'center', originY: 'center' });
+            img.scaleToWidth(500);
+            freeformCanvas.add(img);
+            freeformCanvas.setActiveObject(img);
+        }, { crossOrigin: 'anonymous' });
+        showToast('Generated image added to canvas!');
+    }, 1000);
+});
+
+// Export PNG
+document.getElementById('canvas-export-btn')?.addEventListener('click', () => {
+    if (!freeformCanvas) return;
+    freeformCanvas.discardActiveObject();
+    freeformCanvas.requestRenderAll();
+    
+    const dataUrl = freeformCanvas.toDataURL({
+        format: 'png',
+        quality: 1,
+        multiplier: 1 / CANVAS_ZOOM // Render at full 1080x1350 resolution
+    });
+    
+    const link = document.createElement('a');
+    link.download = `canvas-export-${Date.now()}.png`;
+    link.href = dataUrl;
+    link.click();
 });
