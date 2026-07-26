@@ -687,8 +687,10 @@ function onCanvasSelection() {
     if (!obj) return;
     const fontSizeInput = document.getElementById('fmt-font-size');
     const colorInput = document.getElementById('fmt-color');
+    const fontColorInput = document.getElementById('editor-font-color');
     if (fontSizeInput && obj.fontSize) fontSizeInput.value = Math.round(obj.fontSize);
     if (colorInput && obj.fill) colorInput.value = fabricColorToHex(obj.fill);
+    if (fontColorInput && obj.fill) fontColorInput.value = fabricColorToHex(obj.fill);
 }
 
 function fabricColorToHex(color) {
@@ -731,6 +733,7 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (selectedPreset === 'template-bright-minimal') bgColor = '#f8f9fa';
     if (selectedPreset === 'template-news-image') bgColor = '#090d16';
     if (selectedPreset === 'template-news-text') bgColor = '#0b1120';
+    if (selectedPreset === 'template-news-single-image') bgColor = '#0f172a';
     if (selectedPreset === 'template-facts-single') bgColor = '#f8f9fa';
     if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
 
@@ -740,6 +743,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     }
 
     fabricCanvas.backgroundColor = bgColor;
+    const bgPicker = document.getElementById('editor-bg-color');
+    if (bgPicker && bgColor) bgPicker.value = fabricColorToHex(bgColor);
     
     const showLogo = (document.getElementById('toggle-brand-logo-tb')?.checked ?? document.getElementById('toggle-brand-logo')?.checked) !== false;
     const showHandle = (document.getElementById('toggle-brand-handle-tb')?.checked ?? document.getElementById('toggle-brand-handle')?.checked) !== false;
@@ -1263,6 +1268,59 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 fabricCanvas.add(slideBody);
 
+            } else if (selectedPreset === 'template-news-single-image') {
+                let currentY = 160;
+                if (showNewsBreaking) {
+                    const badgeBg = new fabric.Rect({
+                        left: 80, top: currentY, width: 250, height: 48,
+                        fill: '#dc2626', rx: 24, ry: 24,
+                        selectable: false, evented: false, customType: 'news-badge-bg'
+                    });
+                    fabricCanvas.add(badgeBg);
+                    const badgeText = new fabric.IText('🔴 BREAKING NEWS', {
+                        left: 98, top: currentY + 12,
+                        fontSize: 22, fontWeight: '800', fill: '#ffffff',
+                        fontFamily: headingFont, selectable: false, evented: false, customType: 'news-badge-text'
+                    });
+                    fabricCanvas.add(badgeText);
+                    currentY += 70;
+                }
+
+                const placeholderHeight = 400;
+                const placeholderBg = new fabric.Rect({
+                    left: 80, top: currentY, width: CANVAS_W - 160, height: placeholderHeight,
+                    fill: '#1e293b', stroke: '#475569', strokeWidth: 2, strokeDashArray: [10, 5],
+                    rx: 16, ry: 16, selectable: true, customType: 'image-placeholder-bg'
+                });
+                fabricCanvas.add(placeholderBg);
+                const placeholderText = new fabric.IText('Drop or Upload Image Here', {
+                    left: CANVAS_W / 2, top: currentY + placeholderHeight / 2, originX: 'center', originY: 'center',
+                    fontSize: 28, fontWeight: '600', fill: '#94a3b8',
+                    fontFamily: headingFont, selectable: false, evented: false, customType: 'image-placeholder-text'
+                });
+                fabricCanvas.add(placeholderText);
+                currentY += placeholderHeight + 40;
+
+                const titleDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 72, fontWeight: '900', fill: '#ffffff',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                fabricCanvas.add(slideTitle);
+
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 30 : currentY + slideTitle.getScaledHeight() + 30;
+
+                const bodyDef = {
+                    left: 80, top: titleBottom, width: CANVAS_W - 160,
+                    fontSize: 42, fontWeight: '500', fill: '#e2e8f0',
+                    fontFamily: bodyFont, lineHeight: 1.5,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                fabricCanvas.add(slideBody);
+
             } else if (selectedPreset === 'template-custom') {
                 const customTitleSize = parseFloat(brand?.customTitleSize || 100) * 0.88;
                 const customTitleY = 210 + (parseFloat(brand?.customTitleY || 50) - 50) * 2;
@@ -1458,7 +1516,51 @@ document.querySelectorAll('.fmt-btn').forEach(btn => {
         fabricCanvas?.renderAll();
     });
 });
+document.getElementById('editor-bg-color')?.addEventListener('input', (e) => {
+    if (!fabricCanvas) return;
+    fabricCanvas.backgroundColor = e.target.value;
+    fabricCanvas.renderAll();
+});
+document.getElementById('editor-bg-color')?.addEventListener('change', () => { if (fabricCanvas) saveCanvasState(); });
 
+document.getElementById('editor-font-color')?.addEventListener('input', (e) => {
+    if (!fabricCanvas) return;
+    const obj = fabricCanvas.getActiveObject();
+    if (obj && obj.set) { 
+        obj.set('fill', e.target.value); 
+        fabricCanvas.renderAll(); 
+    }
+});
+document.getElementById('editor-font-color')?.addEventListener('change', () => { if (fabricCanvas) saveCanvasState(); });
+
+document.getElementById('canvas-delete')?.addEventListener('click', () => {
+    if (!fabricCanvas) return;
+    const objs = fabricCanvas.getActiveObjects();
+    if (objs.length > 0) {
+        objs.forEach(o => fabricCanvas.remove(o));
+        fabricCanvas.discardActiveObject();
+        fabricCanvas.renderAll();
+        saveCanvasState();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!fabricCanvas) return;
+        const obj = fabricCanvas.getActiveObject();
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+        if (obj && obj.isEditing) return;
+
+        if (obj) {
+            const objs = fabricCanvas.getActiveObjects();
+            objs.forEach(o => fabricCanvas.remove(o));
+            fabricCanvas.discardActiveObject();
+            fabricCanvas.renderAll();
+            saveCanvasState();
+            e.preventDefault();
+        }
+    }
+});
 document.getElementById('canvas-undo')?.addEventListener('click', () => {
     if (!fabricCanvas || canvasHistoryPointer <= 0) return;
     canvasHistoryPointer--;

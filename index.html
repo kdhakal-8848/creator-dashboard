@@ -198,7 +198,10 @@
                                     <label><input type="checkbox" id="toggle-swipe-indicator" checked> Swipe Tab</label>
                                     <label><input type="checkbox" id="toggle-news-breaking"> "Breaking"</label>
                                 </div>
-                                <div style="display: flex; gap: 6px;">
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    <input type="color" id="editor-bg-color" title="Canvas Background Color" value="#ffffff" style="width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer;">
+                                    <input type="color" id="editor-font-color" title="Selected Text Font Color" value="#000000" style="width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer;">
+                                    <button class="btn-secondary" id="canvas-delete" style="padding: 3px 8px; font-size: 12px; color: var(--color-danger-fg);" title="Delete Selected"><i data-feather="trash-2" style="width:13px;height:13px;"></i></button>
                                     <button class="btn-secondary" id="canvas-undo" style="padding: 3px 8px; font-size: 12px;" title="Undo"><i data-feather="corner-up-left" style="width:13px;height:13px;"></i></button>
                                     <button class="btn-secondary" id="canvas-redo" style="padding: 3px 8px; font-size: 12px;" title="Redo"><i data-feather="corner-up-right" style="width:13px;height:13px;"></i></button>
                                 </div>
@@ -306,6 +309,7 @@
                             <option value="template-facts-single">FB Facts (Single Image)</option>
                             <option value="template-news-image">📰 News Flash (Visual Image)</option>
                             <option value="template-news-text">📰 News Editorial (Text Focus)</option>
+                            <option value="template-news-single-image">📰 News Single (Image Frame)</option>
                             <option value="template-custom">Custom Advanced</option>
                         </select>
                         <div id="saved-templates-section">
