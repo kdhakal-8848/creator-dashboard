@@ -2536,6 +2536,7 @@ document.getElementById('brand-selector').addEventListener('change', (e) => {
     if (!bId) return;
     activeBrandId = bId;
     currentBranding = allBrands.find(br => br.id === activeBrandId) || currentBranding;
+    currentPromptTemplate = localStorage.getItem(`loksewa_prompt_template_${activeBrandId}`) || DEFAULT_PROMPT_TEMPLATE;
     loadBrandingForm(currentBranding);
     updateBrandVisuals(currentBranding);
 });
