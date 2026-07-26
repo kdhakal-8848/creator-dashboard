@@ -683,63 +683,72 @@ function initDesignStudio() {
         if (panel && empty) { panel.style.display = 'none'; empty.style.display = 'block'; }
     });
 
-    document.getElementById('canvas-base-template')?.addEventListener('change', (e) => {
-        const baseTemplate = e.target.value;
-        const brandId = document.getElementById('canvas-brand-selector')?.value;
-        const brand = brandData.find(b => b.id === brandId) || brandData[0];
-        
-        if (baseTemplate) {
-            const realSelector = document.getElementById('template-selector');
-            const oldVal = realSelector ? realSelector.value : null;
-            if (realSelector) {
-                // temporarily mock the selectedPreset for the generator
-                const opt = document.createElement('option');
-                opt.value = baseTemplate;
-                realSelector.appendChild(opt);
-                realSelector.value = baseTemplate;
-            }
+    if (!window.__designStudioEventsAttached) {
+        document.getElementById('canvas-base-template')?.addEventListener('change', (e) => {
+            const baseTemplate = e.target.value;
+            const brandId = document.getElementById('canvas-brand-selector')?.value;
+            const brand = allBrands.find(b => b.id === brandId) || allBrands[0] || currentBranding;
             
-            const dummyData = {
-                title: "Your Catchy Headline Here",
-                content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
-                is_cta: false
-            };
-            
-            renderFabricSlide(dummyData, 0, null, brand, freeformCanvas).then(() => {
-                if (realSelector && oldVal !== null) realSelector.value = oldVal;
-            });
-        }
-    });
-
-    document.getElementById('canvas-save-overrides')?.addEventListener('click', () => {
-        const baseTemplate = document.getElementById('canvas-base-template')?.value;
-        if (!baseTemplate) {
-            alert("Please select a Base Template from the dropdown first to save overrides for it.");
-            return;
-        }
-        
-        const overridesStr = localStorage.getItem('loksewa_template_overrides');
-        const overrides = overridesStr ? JSON.parse(overridesStr) : {};
-        const tmplOverrides = { extraObjects: [] };
-        
-        freeformCanvas.getObjects().forEach(obj => {
-            if (obj.customType && !obj.isExtraOverride) {
-                tmplOverrides[obj.customType] = {
-                    left: obj.left, top: obj.top, scaleX: obj.scaleX, scaleY: obj.scaleY,
-                    width: obj.width, height: obj.height, fill: obj.fill, fontSize: obj.fontSize,
-                    opacity: obj.opacity, angle: obj.angle
+            if (baseTemplate) {
+                const realSelector = document.getElementById('template-selector');
+                const oldVal = realSelector ? realSelector.value : null;
+                if (realSelector) {
+                    const opt = document.createElement('option');
+                    opt.value = baseTemplate;
+                    realSelector.appendChild(opt);
+                    realSelector.value = baseTemplate;
+                }
+                
+                const dummyData = {
+                    title: "Your Catchy Headline Here",
+                    content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
+                    is_cta: false
                 };
-            } else if (obj.type !== 'rect' || (obj.type === 'rect' && obj.customType !== 'background-image')) {
-                // If it's a completely custom object drawn by the user and not the default background filler
-                tmplOverrides.extraObjects.push(obj.toJSON(['customType']));
+                
+                renderFabricSlide(dummyData, 0, null, brand, freeformCanvas).then(() => {
+                    if (realSelector && oldVal !== null) realSelector.value = oldVal;
+                });
             }
         });
-        
-        overrides[baseTemplate] = tmplOverrides;
-        localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
-        alert("Template Overrides saved successfully! They will now be applied when you generate posts with " + baseTemplate + ".");
-    });
 
+        document.getElementById('canvas-save-overrides')?.addEventListener('click', () => {
+            const baseTemplate = document.getElementById('canvas-base-template')?.value;
+            if (!baseTemplate) {
+                alert("Please select a Base Template from the dropdown first to save overrides for it.");
+                return;
+            }
+            
+            const overridesStr = localStorage.getItem('loksewa_template_overrides');
+            const overrides = overridesStr ? JSON.parse(overridesStr) : {};
+            const tmplOverrides = { extraObjects: [] };
+            
+            freeformCanvas.getObjects().forEach(obj => {
+                if (obj.customType && !obj.isExtraOverride) {
+                    tmplOverrides[obj.customType] = {
+                        left: obj.left, top: obj.top, scaleX: obj.scaleX, scaleY: obj.scaleY,
+                        width: obj.width, height: obj.height, fill: obj.fill, fontSize: obj.fontSize,
+                        opacity: obj.opacity, angle: obj.angle
+                    };
+                } else if (obj.isExtraOverride) {
+                    tmplOverrides.extraObjects.push(obj.toObject(['isExtraOverride', 'customType']));
+                }
+            });
+            
+            overrides[baseTemplate] = tmplOverrides;
+            localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
+            showToast('Layout overrides saved for ' + baseTemplate);
+        });
+        window.__designStudioEventsAttached = true;
+    }
+
+    loadCanvasBrandOptions();
+    setTimeout(() => {
+        const baseSelector = document.getElementById('canvas-base-template');
+        if (baseSelector) {
+            if (!baseSelector.value) baseSelector.value = 'template-classic';
+            baseSelector.dispatchEvent(new Event('change'));
+        }
+    }, 50);
 }
 
 function syncFabricCanvasToCurrentSlide() {
@@ -2957,12 +2966,14 @@ document.getElementById('save-branding').addEventListener('click', async functio
     const customBgOpacity = document.getElementById('custom-bg-opacity').value;
     const customBgColor = document.getElementById('custom-bg-color').value;
     const themePreset = document.getElementById('custom-theme-preset')?.value || 'theme-default';
+    const promptInput = document.getElementById('prompt-template-input');
+    const promptTemplate = promptInput ? (promptInput.value || DEFAULT_PROMPT_TEMPLATE) : DEFAULT_PROMPT_TEMPLATE;
     const showPagination = document.getElementById('custom-show-pagination')?.checked !== false;
 
     const templateSettings = { customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination, headerAssetUrl, accentColor, bgColor, headingFont, bodyFont, narrative, toneOfVoice, icp };
     const socialLinks = { facebookUrl, instagramUrl, tiktokUrl, linkedinUrl };
 
-    const updatedBrandFields = { name, handle, logoUrl, headerAssetUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, accentColor, bgColor, narrative, toneOfVoice, icp, headingFont, bodyFont, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination };
+    const updatedBrandFields = { name, handle, logoUrl, headerAssetUrl, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, primaryColor, secondaryColor, accentColor, bgColor, narrative, toneOfVoice, icp, headingFont, bodyFont, customTitleSize, customTitleY, customContentY, customBgOpacity, customBgColor, themePreset, showPagination, promptTemplate };
 
     if (activeBrandId.startsWith('new-')) {
         if (!isMockMode) {
@@ -2981,12 +2992,8 @@ document.getElementById('save-branding').addEventListener('click', async functio
     currentBranding = allBrands.find(br => br.id === activeBrandId) || currentBranding;
     if (isMockMode) localStorage.setItem('loksewa_all_brands', JSON.stringify(allBrands));
 
-    // Save prompt template
-    const promptInput = document.getElementById('prompt-template-input');
-    if (promptInput) {
-        currentPromptTemplate = promptInput.value || DEFAULT_PROMPT_TEMPLATE;
-        localStorage.setItem(`loksewa_prompt_template_${activeBrandId}`, currentPromptTemplate);
-    }
+    // Save prompt template internally updated via updatedBrandFields
+    currentPromptTemplate = promptTemplate;
 
     updateBrandVisuals(currentBranding);
     populateBrandSelectors();
@@ -3001,13 +3008,13 @@ document.getElementById('brand-selector').addEventListener('change', (e) => {
     if (!bId) return;
     activeBrandId = bId;
     currentBranding = allBrands.find(br => br.id === activeBrandId) || currentBranding;
-    currentPromptTemplate = localStorage.getItem(`loksewa_prompt_template_${activeBrandId}`) || DEFAULT_PROMPT_TEMPLATE;
+    currentPromptTemplate = currentBranding.promptTemplate || localStorage.getItem(`loksewa_prompt_template_${activeBrandId}`) || DEFAULT_PROMPT_TEMPLATE;
     loadBrandingForm(currentBranding);
     updateBrandVisuals(currentBranding);
 });
 
 document.getElementById('create-brand-btn').addEventListener('click', () => {
-    const newBrand = { id: 'new-' + Date.now(), name: "New Brand", handle: "@newbrand", logoUrl: "assets/images/logo.png", primaryColor: "#000000", secondaryColor: "#666666", accentColor: '#f59e0b', bgColor: '#0f0c29', headingFont: 'Inter', bodyFont: 'Inter', narrative: '', toneOfVoice: 'Educational & Authoritative', icp: '', customTitleSize: "100", customTitleY: "50", customContentY: "70", customBgOpacity: "85", customBgColor: "#000000", themePreset: "theme-default", showPagination: true };
+    const newBrand = { id: 'new-' + Date.now(), name: "New Brand", handle: "@newbrand", logoUrl: "assets/images/logo.png", primaryColor: "#000000", secondaryColor: "#666666", accentColor: '#f59e0b', bgColor: '#0f0c29', headingFont: 'Inter', bodyFont: 'Inter', narrative: '', toneOfVoice: 'Educational & Authoritative', icp: '', customTitleSize: "100", customTitleY: "50", customContentY: "70", customBgOpacity: "85", customBgColor: "#000000", themePreset: "theme-default", showPagination: true, promptTemplate: DEFAULT_PROMPT_TEMPLATE };
     activeBrandId = newBrand.id;
     currentBranding = newBrand;
     const opt = document.createElement('option'); opt.value = activeBrandId; opt.innerText = newBrand.name;
@@ -3044,7 +3051,7 @@ function loadBrandingForm(brand) {
     const pt = document.getElementById('custom-show-pagination'); if (pt) pt.checked = brand.showPagination !== false;
     const hp = document.getElementById('brand-header-asset-preview'); if (hp) hp.src = brand.headerAssetUrl || brand.logoUrl || 'assets/images/logo.png';
     
-    currentPromptTemplate = localStorage.getItem(`loksewa_prompt_template_${brand.id}`) || localStorage.getItem('loksewa_prompt_template') || DEFAULT_PROMPT_TEMPLATE;
+    currentPromptTemplate = brand.promptTemplate || localStorage.getItem(`loksewa_prompt_template_${brand.id}`) || localStorage.getItem('loksewa_prompt_template') || DEFAULT_PROMPT_TEMPLATE;
     const promptInput = document.getElementById('prompt-template-input');
     if (promptInput) promptInput.value = currentPromptTemplate;
 }
@@ -3053,7 +3060,7 @@ document.getElementById('reset-prompt-btn').addEventListener('click', () => {
     if (!confirm("Reset to default prompt?")) return;
     currentPromptTemplate = DEFAULT_PROMPT_TEMPLATE;
     document.getElementById('prompt-template-input').value = currentPromptTemplate;
-    localStorage.setItem(`loksewa_prompt_template_${activeBrandId}`, currentPromptTemplate);
+    if(currentBranding) { currentBranding.promptTemplate = currentPromptTemplate; }
     const fb = document.getElementById('branding-feedback');
     fb.innerText = "Prompt reset to default."; fb.style.color = "var(--color-fg-muted)";
     setTimeout(() => { fb.innerText = ''; }, 3000);
@@ -3372,135 +3379,39 @@ document.getElementById('canvas-clear')?.addEventListener('click', () => {
     }
 });
 
-// Drag and drop from palette to freeform canvas
+// Drag and drop / click from palette to freeform canvas
 document.querySelectorAll('.palette-item[data-canvas-elem]').forEach(item => {
     item.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', item.dataset.canvasElem);
     });
+    item.addEventListener('click', () => {
+        if (!freeformCanvas) return;
+        const elemType = item.dataset.canvasElem;
+        const pointerX = CANVAS_W / 2;
+        const pointerY = CANVAS_H / 2;
+        addCanvasElement(elemType, pointerX, pointerY);
+    });
 });
 
-const freeformWrapper = document.getElementById('freeform-canvas')?.parentElement?.parentElement;
-if (freeformWrapper) {
-    freeformWrapper.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
-    });
+function addCanvasElement(elemType, pointerX, pointerY) {
+    if (!freeformCanvas) return;
     
-    freeformWrapper.addEventListener('drop', (e) => {
-        e.preventDefault();
-        if (!freeformCanvas) return;
-        
-        // Calculate drop position mapped to the scaled canvas
-        const rect = document.getElementById('freeform-canvas').nextSibling.getBoundingClientRect(); // upper-canvas
-        const scale = CANVAS_ZOOM;
-        const pointerX = (e.clientX - rect.left) / scale;
-        const pointerY = (e.clientY - rect.top) / scale;
-        
-        const elemType = e.dataTransfer.getData('text/plain');
-        
-        // Handle drag and drop images directly from system
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const file = e.dataTransfer.files[0];
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    fabric.Image.fromURL(ev.target.result, (img) => {
-                        img.set({ left: pointerX, top: pointerY, originX: 'center', originY: 'center' });
-                        img.scaleToWidth(300);
-                        freeformCanvas.add(img);
-                        freeformCanvas.setActiveObject(img);
-                    });
-                };
-                reader.readAsDataURL(file);
-            }
-            return;
-        }
-
-        switch(elemType) {
-            case 'heading':
-                const textH = new fabric.IText('HEADING TEXT', {
-                    left: pointerX, top: pointerY,
-                    originX: 'center', originY: 'center',
-                    fontFamily: 'Inter', fontSize: 60, fontWeight: 'bold', fill: '#000000'
-                });
-                freeformCanvas.add(textH);
-                freeformCanvas.setActiveObject(textH);
-                break;
-            case 'body':
-                const textB = new fabric.IText('Body text goes here...', {
-                    left: pointerX, top: pointerY,
-                    originX: 'center', originY: 'center',
-                    fontFamily: 'Inter', fontSize: 30, fontWeight: 'normal', fill: '#333333'
-                });
-                freeformCanvas.add(textB);
-                freeformCanvas.setActiveObject(textB);
-                break;
-            case 'rect':
-                const rect = new fabric.Rect({
-                    left: pointerX, top: pointerY,
-                    originX: 'center', originY: 'center',
-                    width: 200, height: 100, fill: '#ff4757', rx: 10, ry: 10
-                });
-                freeformCanvas.add(rect);
-                freeformCanvas.setActiveObject(rect);
-                break;
-            case 'circle':
-                const circle = new fabric.Circle({
-                    left: pointerX, top: pointerY,
-                    originX: 'center', originY: 'center',
-                    radius: 75, fill: '#1e90ff'
-                });
-                freeformCanvas.add(circle);
-                freeformCanvas.setActiveObject(circle);
-                break;
-            case 'image-placeholder':
-                const placeholder = new fabric.Rect({
-                    left: pointerX, top: pointerY,
-                    originX: 'center', originY: 'center',
-                    width: 300, height: 300, fill: '#e1e1e1',
-                    stroke: '#888888', strokeDashArray: [5, 5], strokeWidth: 2
-                });
-                freeformCanvas.add(placeholder);
-                freeformCanvas.setActiveObject(placeholder);
-                break;
-            case 'brand-logo':
-                const selectedBrand = document.getElementById('canvas-brand-selector').value;
-                if (!selectedBrand) {
-                    showToast('Please select a brand first', 'error');
-                    return;
-                }
-                const logoPath = `assets/brands/${selectedBrand}/logo.png`;
-                fabric.Image.fromURL(logoPath, (img) => {
-                    if (img) {
-                        img.set({ left: pointerX, top: pointerY, originX: 'center', originY: 'center' });
-                        img.scaleToWidth(150);
-                        freeformCanvas.add(img);
-                        freeformCanvas.setActiveObject(img);
-                    } else {
-                        showToast('Logo not found for this brand', 'error');
-                    }
-                }, { crossOrigin: 'anonymous' });
-                break;
-        }
     });
 }
 
 // Brand Options
-async function loadCanvasBrandOptions() {
+function loadCanvasBrandOptions() {
     const sel = document.getElementById('canvas-brand-selector');
     if (!sel) return;
-    try {
-        const res = await fetch('/api/brands');
-        const brands = await res.json();
-        sel.innerHTML = '<option value="">-- Select Brand --</option>';
-        brands.forEach(b => {
-            const opt = document.createElement('option');
-            opt.value = b;
-            opt.textContent = b;
-            sel.appendChild(opt);
-        });
-    } catch (err) {
-        console.error('Error loading brands for canvas', err);
+    sel.innerHTML = '';
+    allBrands.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = b.name;
+        sel.appendChild(opt);
+    });
+    if (currentBranding) {
+        sel.value = currentBranding.id;
     }
 }
 
