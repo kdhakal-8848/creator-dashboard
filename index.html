@@ -14,10 +14,11 @@
     <!-- JSZip for reliable mobile batch downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Styles -->
-    <link rel="stylesheet" href="index.css?v=20260724_v2">
+    <link rel="stylesheet" href="index.css?v=1785087608821">
     <!-- html2canvas (fallback) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <!-- Login Container -->
@@ -43,6 +44,10 @@
                 
                 <div style="margin-bottom: 10px;">
                     <button type="submit" id="login-btn" style="width: 100%; padding: 12px 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(99,102,241,0.4);">Sign In</button>
+                </div>
+            
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <button type="button" id="guest-login-btn" style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">⚡ Quick Demo / Guest Access</button>
                 </div>
             </form>
             <p id="login-feedback" style="margin-top: 14px; font-size: 13px; color: #f87171;"></p>
@@ -960,7 +965,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="app.js?v=20260725_v24"></script>
+    <script type="module" src="app.js?v=1785087608821"></script>
     <script>
         if (typeof feather !== 'undefined') feather.replace();
     </script>

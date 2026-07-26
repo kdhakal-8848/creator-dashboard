@@ -1,5 +1,12 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { CONFIG } from './config.js';
+
+// Safe Supabase client retrieval
+const getCreateClient = () => {
+    if (window.supabase && window.supabase.createClient) {
+        return window.supabase.createClient;
+    }
+    return null;
+};
 
 const SUPABASE_URL = CONFIG.SUPABASE_URL;
 const SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY;
@@ -11,9 +18,11 @@ let currentUser = null;
 window.isGuest = false;
 
 try {
-    if (SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const createClientFn = getCreateClient();
+    if (createClientFn && SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+        supabase = createClientFn(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
+        console.warn("Supabase client not available or unconfigured, running in mock/demo mode");
         isMockMode = true;
     }
 } catch (err) {
@@ -100,6 +109,16 @@ function setLoginLoading(on) {
         fb.style.display = 'none';
     }
 }
+
+
+async function signInWithTimeout(email, password, timeoutMs = 8000) {
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Sign-in request timed out. Please check your internet connection or try Guest Mode.")), timeoutMs)
+    );
+    return Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        timeoutPromise
+    ]);
 }
 
 // --- Auth UI ---
@@ -135,7 +154,7 @@ const handleLoginAction = async (e) => {
     }
     setLoginLoading(true);
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await signInWithTimeout(email, password);
         if (error) {
             let msg = error.message;
             if (msg.includes('Invalid login credentials')) msg = '❌ Wrong email or password. Please try again.';
@@ -3404,8 +3423,61 @@ document.querySelectorAll('.palette-item[data-canvas-elem]').forEach(item => {
 
 function addCanvasElement(elemType, pointerX, pointerY) {
     if (!freeformCanvas) return;
-    
-    });
+    switch(elemType) {
+        case 'heading':
+            const textH = new fabric.IText('HEADING TEXT', {
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                fontFamily: 'Inter', fontSize: 60, fontWeight: 'bold', fill: '#000000',
+                isExtraOverride: true
+            });
+            freeformCanvas.add(textH); freeformCanvas.setActiveObject(textH);
+            break;
+        case 'body':
+            const textB = new fabric.IText('Body text goes here...', {
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                fontFamily: 'Inter', fontSize: 30, fontWeight: 'normal', fill: '#333333',
+                isExtraOverride: true
+            });
+            freeformCanvas.add(textB); freeformCanvas.setActiveObject(textB);
+            break;
+        case 'rect':
+            const rect = new fabric.Rect({
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                width: 200, height: 100, fill: '#ff4757', rx: 10, ry: 10,
+                isExtraOverride: true
+            });
+            freeformCanvas.add(rect); freeformCanvas.setActiveObject(rect);
+            break;
+        case 'circle':
+            const circle = new fabric.Circle({
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                radius: 75, fill: '#1e90ff',
+                isExtraOverride: true
+            });
+            freeformCanvas.add(circle); freeformCanvas.setActiveObject(circle);
+            break;
+        case 'image-placeholder':
+            const placeholder = new fabric.Rect({
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                width: 300, height: 300, fill: '#e1e1e1',
+                stroke: '#888888', strokeDashArray: [5, 5], strokeWidth: 2,
+                isExtraOverride: true, customType: 'custom-image-box'
+            });
+            freeformCanvas.add(placeholder); freeformCanvas.setActiveObject(placeholder);
+            break;
+        case 'brand-logo':
+            const selectedBrandId = document.getElementById('canvas-brand-selector')?.value;
+            const brand = allBrands.find(b => b.id === selectedBrandId) || allBrands[0] || currentBranding;
+            const logoPath = (brand && brand.logoUrl) ? brand.logoUrl : 'assets/images/logo.png';
+            fabric.Image.fromURL(logoPath, (img) => {
+                if (img) {
+                    img.set({ left: pointerX, top: pointerY, originX: 'center', originY: 'center', isExtraOverride: true });
+                    img.scaleToWidth(150);
+                    freeformCanvas.add(img); freeformCanvas.setActiveObject(img);
+                }
+            }, { crossOrigin: 'anonymous' });
+            break;
+    }
 }
 
 // Brand Options
@@ -3467,4 +3539,14 @@ document.getElementById('canvas-export-btn')?.addEventListener('click', () => {
     link.download = `canvas-export-${Date.now()}.png`;
     link.href = dataUrl;
     link.click();
+});
+
+document.getElementById('guest-login-btn')?.addEventListener('click', () => {
+    isMockMode = true;
+    isGuest = true;
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('app-container').style.display = 'flex';
+    document.getElementById('user-avatar').src = 'https://ui-avatars.com/api/?name=Guest+User&background=random';
+    fetchBrands();
+    loadDashboardStats();
 });
