@@ -173,7 +173,7 @@ app.get('/', (req, res) => {
 // POST /generate — Manual Content Lab
 // ============================================================
 app.post('/generate', async (req, res) => {
-    const { topic, contentType, promptTemplate, brand_id, brand_context } = req.body;
+    const { topic, contentType, promptTemplate, brand_id, brand_context, brand_snapshot } = req.body;
 
     if (!topic || !contentType) {
         return res.status(400).json({ error: "Missing topic or contentType" });
@@ -216,6 +216,10 @@ ${SLIDE_SCHEMA}`;
         } catch (e) {
             console.error("Gemini invalid JSON for /generate:", text.substring(0, 300));
             return res.status(500).json({ error: "AI returned invalid JSON" });
+        }
+
+        if (brand_snapshot) {
+            parsed.brand_snapshot = brand_snapshot;
         }
 
         const imageUrls = buildImageUrls(parsed.slides);
@@ -308,7 +312,7 @@ app.post('/generate-video', async (req, res) => {
 // POST /generate-news — News Lab
 // ============================================================
 app.post('/generate-news', async (req, res) => {
-    const { topic, category, brand_id, language, contentType, brand_context, slide_count } = req.body;
+    const { topic, category, brand_id, language, contentType, brand_context, slide_count, brand_snapshot } = req.body;
     const targetLanguage = language || "English";
     const templateStyle = contentType || "Standard News Summary";
     const selectedCategory = category || "Weird & Bizarre News (Worldwide)";
@@ -407,6 +411,10 @@ ${SLIDE_SCHEMA}`;
             return res.status(500).json({ error: "AI returned invalid JSON" });
         }
 
+        if (brand_snapshot) {
+            parsed.brand_snapshot = brand_snapshot;
+        }
+
         // STRICT ENFORCEMENT: Enforce exact slide count requested by user
         if (parsed.slides && Array.isArray(parsed.slides)) {
             if (requestedSlides === 1) {
@@ -466,7 +474,7 @@ ${SLIDE_SCHEMA}`;
 // POST /generate-facts — Facts Lab
 // ============================================================
 app.post('/generate-facts', async (req, res) => {
-    const { topic, language, slide_count, brand_id, brand_context } = req.body;
+    const { topic, language, slide_count, brand_id, brand_context, brand_snapshot } = req.body;
     const targetLanguage = language || "English";
     const count = parseInt(slide_count) || 5;
     const factTopic = topic || "Sharks are older than trees";
@@ -474,7 +482,32 @@ app.post('/generate-facts', async (req, res) => {
     try {
         console.log(`[/generate-facts] "${factTopic}", ${count} slides, ${targetLanguage}`);
 
-        const prompt = `You are an expert Instagram facts content creator.${brandCtx}
+        let prompt;
+        if (count === 1) {
+            prompt = `You are an expert Instagram facts content creator.${brandCtx}
+
+Create a single viral, high-converting Instagram fact slide.
+Topic: "${factTopic}"
+Language: ${targetLanguage}
+
+MANDATORY SLIDE STRUCTURE:
+- EXACTLY 1 SLIDE. No hook slide, no CTA slide.
+- Title MUST be a short, bold, fascinating statement about the topic itself (max 10 words).
+- Content: The most fascinating fact (max 35 words).
+- image_prompt: dramatic wide-angle visual that makes the fact tangible.
+- Do NOT set "is_cta": true.
+
+TYPOGRAPHY & COPY RULES:
+- Headlines: short, punchy, high contrast
+- Body: max 35 words, scannable. Use line breaks for rhythm.
+- Numbers and stats should be bolded in text (use ** for emphasis markers)
+
+ALL text MUST be written in ${targetLanguage}.
+
+Return ONLY valid JSON (no markdown):
+${SLIDE_SCHEMA}`;
+        } else {
+            prompt = `You are an expert Instagram facts content creator.${brandCtx}
 
 Create a viral, high-converting Instagram facts carousel.
 Topic: "${factTopic}"
@@ -495,6 +528,7 @@ ALL text (titles, content, caption) MUST be written in ${targetLanguage}.
 
 Return ONLY valid JSON (no markdown):
 ${SLIDE_SCHEMA}`;
+        }
 
         const result = await generateAIContent(prompt);
         let text = result.response.text().trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
@@ -523,9 +557,17 @@ ${SLIDE_SCHEMA}`;
             }
             parsed.slides[0].title = slide1Title;
 
-            const lastSlide = parsed.slides[parsed.slides.length - 1];
-            lastSlide.is_cta = true;
-            delete lastSlide.image_prompt;
+            if (count > 1) {
+                const lastSlide = parsed.slides[parsed.slides.length - 1];
+                lastSlide.is_cta = true;
+                delete lastSlide.image_prompt;
+            } else {
+                parsed.slides = parsed.slides.slice(0, 1);
+            }
+        }
+
+        if (brand_snapshot) {
+            parsed.brand_snapshot = brand_snapshot;
         }
 
         const imageUrls = buildImageUrls(parsed.slides);

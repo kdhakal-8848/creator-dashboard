@@ -731,7 +731,6 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     const headingFont = brand?.headingFont || 'Inter';
     const bodyFont = brand?.bodyFont || 'Inter';
 
-    // Canvas Background Color based on Preset
     let bgColor = primaryColor;
     if (selectedPreset === 'template-bold') bgColor = '#0d0d0d';
     if (selectedPreset === 'template-glass') bgColor = '#0a192f';
@@ -742,6 +741,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
     if (selectedPreset === 'template-news-text') bgColor = '#0b1120';
     if (selectedPreset === 'template-facts-single') bgColor = '#f8f9fa';
     if (selectedPreset === 'template-custom' && brand?.customBgColor) bgColor = brand.customBgColor;
+
+    // Override with explicit brand background color if set to something other than the default dark blue
+    if (brand?.bgColor && brand.bgColor.toLowerCase() !== '#0f0c29' && selectedPreset !== 'template-custom') {
+        bgColor = brand.bgColor;
+    }
 
     fabricCanvas.backgroundColor = bgColor;
     
@@ -1567,17 +1571,20 @@ window.openEditor = async (id) => {
     const h1 = document.querySelector('.topbar h1');
     if (h1) h1.textContent = 'Editor';
 
-    // Set brand
-    if (post.brand_id) {
-        const postBrand = allBrands.find(b => b.id === post.brand_id);
-        if (postBrand) { currentBranding = postBrand; updateBrandVisuals(currentBranding); }
-    }
-
-    // Parse content
+    // Parse content first to check for brand_snapshot
     const parsed = parsePostText(post.text);
     currentSlides = parsed.slides || [];
     const caption = parsed.caption || '';
     currentImageUrls = parseImageUrls(post.image_url);
+
+    // Set brand
+    if (post.brand_id) {
+        let postBrand = parsed.brand_snapshot || allBrands.find(b => b.id === post.brand_id);
+        if (postBrand) { 
+            currentBranding = postBrand; 
+            updateBrandVisuals(currentBranding); 
+        }
+    }
 
     // Set UI
     document.getElementById('editor-topic').innerText = `Editing: ${post.topic}`;
@@ -2054,7 +2061,7 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic, contentType, brand_id: brandId, promptTemplate: currentPromptTemplate, brand_context: getBrandContext(activeBrand) })
+            body: JSON.stringify({ topic, contentType, brand_id: brandId, promptTemplate: currentPromptTemplate, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unknown error");
@@ -2100,7 +2107,7 @@ document.getElementById('trigger-news').addEventListener('click', async () => {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-news'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic, category, slide_count: slideCount, brand_id: brandId, language, contentType, brand_context: getBrandContext(activeBrand) })
+            body: JSON.stringify({ topic, category, slide_count: slideCount, brand_id: brandId, language, contentType, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "News generation failed");
@@ -2137,7 +2144,7 @@ document.getElementById('trigger-facts-single')?.addEventListener('click', async
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             // Using slide_count 1 and a hint for single slide fact
-            body: JSON.stringify({ topic, language, slide_count: 1, brand_id: brandId, brand_context: getBrandContext(activeBrand) })
+            body: JSON.stringify({ topic, language, slide_count: 1, brand_id: brandId, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Facts generation failed");
@@ -2180,7 +2187,7 @@ document.getElementById('trigger-facts')?.addEventListener('click', async () => 
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
         const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic, language, slide_count: slideCount, brand_id: brandId, brand_context: getBrandContext(activeBrand) })
+            body: JSON.stringify({ topic, language, slide_count: slideCount, brand_id: brandId, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Facts generation failed");
