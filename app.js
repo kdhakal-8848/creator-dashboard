@@ -95,12 +95,18 @@ function setLoginLoading(on) {
     if (on && fb) {
         fb.innerHTML = '⏳ Signing in...';
         fb.style.cssText = 'color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;display:block;';
+    } else if (!on && fb && fb.innerHTML === '⏳ Signing in...') {
+        fb.innerHTML = '';
+        fb.style.display = 'none';
     }
+}
 }
 
 // --- Auth UI ---
 const handleLoginAction = async (e) => {
     if (e) e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    if (btn && btn.disabled) return; // Prevent double execution
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     const feedback = document.getElementById('login-feedback');
@@ -129,7 +135,7 @@ const handleLoginAction = async (e) => {
     }
     setLoginLoading(true);
     try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
             let msg = error.message;
             if (msg.includes('Invalid login credentials')) msg = '❌ Wrong email or password. Please try again.';
@@ -138,6 +144,9 @@ const handleLoginAction = async (e) => {
             showLoginError(msg);
         } else {
             showLoginSuccess('✅ Signed in! Loading...');
+            if (data && data.session) {
+                setTimeout(() => handleAuthChange(data.session), 500);
+            }
         }
     } catch (err) {
         showLoginError('⚠️ Network error: ' + err.message);
