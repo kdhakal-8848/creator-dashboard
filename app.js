@@ -443,7 +443,7 @@ navLinks.forEach(link => {
         if (targetViewId === 'branding-view') loadBrandingView();
         // removed initTemplateStudio
         if (targetViewId === 'canvas-view') {
-            initFreeformCanvas();
+            initDesignStudio();
             loadCanvasBrandOptions();
         }
         if (window.feather) feather.replace();
@@ -826,8 +826,11 @@ function fabricColorToHex(color) {
 
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
-async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetCanvas = fabricCanvas) {
-    if (!targetCanvas) initFabricCanvas();
+async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetCanvas = null) {
+    if (!targetCanvas) {
+        if (!fabricCanvas) initFabricCanvas();
+        targetCanvas = fabricCanvas;
+    }
     if (!targetCanvas) return;
 
     // We do NOT sync here anymore, because it would overwrite the new target slide
