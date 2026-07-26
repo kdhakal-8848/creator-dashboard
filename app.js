@@ -744,10 +744,10 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand) {
 
     fabricCanvas.backgroundColor = bgColor;
     
-    const showLogo = document.getElementById('toggle-brand-logo')?.checked !== false;
-    const showHandle = document.getElementById('toggle-brand-handle')?.checked !== false;
+    const showLogo = (document.getElementById('toggle-brand-logo-tb')?.checked ?? document.getElementById('toggle-brand-logo')?.checked) !== false;
+    const showHandle = (document.getElementById('toggle-brand-handle-tb')?.checked ?? document.getElementById('toggle-brand-handle')?.checked) !== false;
     const showHeaderAsset = document.getElementById('toggle-brand-header-asset')?.checked !== false;
-    const showPagination = document.getElementById('toggle-slide-numbers')?.checked !== false;
+    const showPagination = (document.getElementById('toggle-slide-numbers-tb')?.checked ?? document.getElementById('toggle-slide-numbers')?.checked) !== false;
     const showSwipe = document.getElementById('toggle-swipe-indicator')?.checked !== false;
     const showNewsBreaking = document.getElementById('toggle-news-breaking')?.checked !== false;
 
@@ -1703,6 +1703,19 @@ document.getElementById('toggle-brand-header-asset')?.addEventListener('change',
 document.getElementById('toggle-slide-numbers')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-swipe-indicator')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-news-breaking')?.addEventListener('change', () => updateSlidePreview());
+
+document.getElementById('toggle-brand-logo-tb')?.addEventListener('change', (e) => {
+    const el = document.getElementById('toggle-brand-logo'); if (el) el.checked = e.target.checked;
+    updateSlidePreview();
+});
+document.getElementById('toggle-brand-handle-tb')?.addEventListener('change', (e) => {
+    const el = document.getElementById('toggle-brand-handle'); if (el) el.checked = e.target.checked;
+    updateSlidePreview();
+});
+document.getElementById('toggle-slide-numbers-tb')?.addEventListener('change', (e) => {
+    const el = document.getElementById('toggle-slide-numbers'); if (el) el.checked = e.target.checked;
+    updateSlidePreview();
+});
 
 document.getElementById('back-to-queue').addEventListener('click', () => {
     document.querySelector('[data-target="queue-view"]')?.click();
