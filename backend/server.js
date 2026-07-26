@@ -181,6 +181,7 @@ app.post('/generate', async (req, res) => {
 
     try {
         console.log(`[/generate] [${contentType}] topic: "${topic}"`);
+        const brandCtx = getBrandContextBlock(brand_context);
         let prompt;
         if (promptTemplate) {
             prompt = promptTemplate
