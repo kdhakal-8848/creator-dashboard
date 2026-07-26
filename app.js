@@ -1232,30 +1232,31 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                         selectable: true, evented: true,
                         customType: 'header-asset'
                     });
-                    if (slideData.headerAssetStyle) {
-                        const customStyle = { ...slideData.headerAssetStyle };
-                        
-                        // CRITICAL: Prevent cropped bounding boxes from being applied if they were saved previously
-                        delete customStyle.width;
-                        delete customStyle.height;
-                        delete customStyle.cropX;
-                        delete customStyle.cropY;
+                    // Check template overrides for header-asset
+                    const overridesStr = localStorage.getItem('loksewa_template_overrides');
+                    let appliedOverride = false;
+                    if (overridesStr) {
+                        try {
+                            const overrides = JSON.parse(overridesStr);
+                            if (overrides[selectedPreset] && overrides[selectedPreset]['header-asset']) {
+                                const haStyle = overrides[selectedPreset]['header-asset'];
+                                img.set({
+                                    left: haStyle.left !== undefined ? haStyle.left : 80,
+                                    top: haStyle.top !== undefined ? haStyle.top : 67.5,
+                                    scaleX: haStyle.scaleX !== undefined ? haStyle.scaleX : defaultScale,
+                                    scaleY: haStyle.scaleY !== undefined ? haStyle.scaleY : defaultScale,
+                                    opacity: haStyle.opacity !== undefined ? haStyle.opacity : 1,
+                                    angle: haStyle.angle || 0
+                                });
+                                appliedOverride = true;
+                            }
+                        } catch(e) {}
+                    }
 
-                        customStyle.originX = 'left';
-                        customStyle.originY = 'center';
-                        if (typeof customStyle.left !== 'number' || customStyle.left < 80 || customStyle.left > 600) {
-                            customStyle.left = 80;
-                        }
-                        if (typeof customStyle.top !== 'number' || customStyle.top < 20 || customStyle.top > 115) {
-                            customStyle.top = 67.5;
-                        }
-                        
-                        // Prevent the image from blowing up and covering the whole slide from previous bad state
-                        const maxAllowedScale = Math.min(450 / img.width, 100 / img.height);
-                        
-                        if (!customStyle.scaleX || customStyle.scaleX > maxAllowedScale) customStyle.scaleX = defaultScale;
-                        if (!customStyle.scaleY || customStyle.scaleY > maxAllowedScale) customStyle.scaleY = defaultScale;
-                        
+                    if (!appliedOverride && slideData.headerAssetStyle) {
+                        const customStyle = { ...slideData.headerAssetStyle };
+                        delete customStyle.width; delete customStyle.height;
+                        customStyle.originX = 'left'; customStyle.originY = 'center';
                         img.set(customStyle);
                     }
                     targetCanvas.add(img);
@@ -1269,14 +1270,35 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
 
         // --- 6. Accent Line ---
         if (selectedPreset !== 'template-minimal' && selectedPreset !== 'template-fb-minimal-1' && selectedPreset !== 'template-fb-minimal-2') {
+            const defaultFill = selectedPreset === 'template-bold' ? '#ffd700' : (selectedPreset === 'template-bright-minimal' ? '#2563eb' : accentColor);
             const topAccent = new fabric.Rect({
                 left: selectedPreset === 'template-bold' ? 90 : 80,
                 top: selectedPreset === 'template-bright-minimal' ? 110 : 135,
                 width: selectedPreset === 'template-bold' ? 260 : (selectedPreset === 'template-bright-minimal' ? CANVAS_W - 160 : 200),
                 height: selectedPreset === 'template-bold' ? 8 : (selectedPreset === 'template-bright-minimal' ? 4 : 6),
-                fill: selectedPreset === 'template-bold' ? '#ffd700' : (selectedPreset === 'template-bright-minimal' ? '#2563eb' : accentColor),
-                selectable: false, evented: false, customType: 'top-accent'
+                fill: defaultFill, rx: 4, ry: 4,
+                selectable: true, evented: true, customType: 'top-accent'
             });
+
+            const overridesStr = localStorage.getItem('loksewa_template_overrides');
+            if (overridesStr) {
+                try {
+                    const overrides = JSON.parse(overridesStr);
+                    if (overrides[selectedPreset] && overrides[selectedPreset]['top-accent']) {
+                        const aStyle = overrides[selectedPreset]['top-accent'];
+                        topAccent.set({
+                            left: aStyle.left !== undefined ? aStyle.left : topAccent.left,
+                            top: aStyle.top !== undefined ? aStyle.top : topAccent.top,
+                            width: aStyle.width !== undefined ? aStyle.width : topAccent.width,
+                            height: aStyle.height !== undefined ? aStyle.height : topAccent.height,
+                            scaleX: aStyle.scaleX !== undefined ? aStyle.scaleX : 1,
+                            scaleY: aStyle.scaleY !== undefined ? aStyle.scaleY : 1,
+                            fill: aStyle.fill || defaultFill,
+                            opacity: aStyle.opacity !== undefined ? aStyle.opacity : 1
+                        });
+                    }
+                } catch(e) {}
+            }
             targetCanvas.add(topAccent);
         }
 
@@ -1377,8 +1399,28 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                     left: 65, top: 210,
                     width: 14, height: 820,
                     fill: '#ffd700', rx: 7, ry: 7,
-                    selectable: false, evented: false, customType: 'bold-vertical-bar'
+                    selectable: true, evented: true, customType: 'bold-vertical-bar'
                 });
+
+                const overridesStrV = localStorage.getItem('loksewa_template_overrides');
+                if (overridesStrV) {
+                    try {
+                        const overrides = JSON.parse(overridesStrV);
+                        if (overrides[selectedPreset] && overrides[selectedPreset]['bold-vertical-bar']) {
+                            const vStyle = overrides[selectedPreset]['bold-vertical-bar'];
+                            verticalBar.set({
+                                left: vStyle.left !== undefined ? vStyle.left : 65,
+                                top: vStyle.top !== undefined ? vStyle.top : 210,
+                                width: vStyle.width !== undefined ? vStyle.width : 14,
+                                height: vStyle.height !== undefined ? vStyle.height : 820,
+                                scaleX: vStyle.scaleX !== undefined ? vStyle.scaleX : 1,
+                                scaleY: vStyle.scaleY !== undefined ? vStyle.scaleY : 1,
+                                fill: vStyle.fill || '#ffd700',
+                                opacity: vStyle.opacity !== undefined ? vStyle.opacity : 1
+                            });
+                        }
+                    } catch(e) {}
+                }
                 targetCanvas.add(verticalBar);
 
                 const titleDef = {
@@ -3698,6 +3740,22 @@ function addCanvasElement(elemType, pointerX, pointerY) {
                 isExtraOverride: true
             });
             freeformCanvas.add(circle); freeformCanvas.setActiveObject(circle);
+            break;
+        case 'accent-line':
+            const accentLine = new fabric.Rect({
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                width: 260, height: 8, fill: '#ffd700', rx: 4, ry: 4,
+                isExtraOverride: true, customType: 'top-accent', selectable: true, evented: true
+            });
+            freeformCanvas.add(accentLine); freeformCanvas.setActiveObject(accentLine);
+            break;
+        case 'accent-bar':
+            const accentBar = new fabric.Rect({
+                left: pointerX, top: pointerY, originX: 'center', originY: 'center',
+                width: 14, height: 400, fill: '#ffd700', rx: 7, ry: 7,
+                isExtraOverride: true, customType: 'bold-vertical-bar', selectable: true, evented: true
+            });
+            freeformCanvas.add(accentBar); freeformCanvas.setActiveObject(accentBar);
             break;
         case 'image-placeholder':
             const placeholder = new fabric.Rect({
