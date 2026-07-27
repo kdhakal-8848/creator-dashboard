@@ -4426,6 +4426,10 @@ function transferPsychToStudio() {
     showToast('Loaded Psychology slides into Design Studio!');
 }
 
+window.transferPsychToManual = transferPsychToManual;
+window.transferPsychToStudio = transferPsychToStudio;
+window.savePsychToQueue = savePsychToQueue;
+
 async function savePsychToQueue() {
     if (!currentPsychSlides || currentPsychSlides.length === 0) {
         showToast('No generated Psychology content to save.');
