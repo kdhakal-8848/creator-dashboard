@@ -1,4 +1,135 @@
 import { CONFIG } from './config.js';
+let psychCanvas = null;
+let currentPsychSlides = [];
+let currentPsychSlideIndex = 0;
+let psychCurrentMode = 'GENERATE';
+
+var CANVAS_W = 1080;
+var CANVAS_H = 1350;
+var PREVIEW_W = 400;
+var PREVIEW_H = 500;
+var CANVAS_ZOOM = PREVIEW_W / CANVAS_W;
+
+var fabricCanvas = null;
+var studioCanvas = null;
+var freeformCanvas = null;
+var currentEditingId = null;
+var currentSlides = [];
+var currentSlideIndex = 0;
+var currentImageUrls = [];
+var canvasHistory = [];
+var canvasHistoryPointer = -1;
+
+
+
+
+
+
+
+const DEFAULT_PROMPT_TEMPLATE = `You are an expert Loksewa (Public Service Commission Nepal) content creator.
+Generate content based on the following parameters:
+Topic: \${topic}
+Content Type: \${contentType}
+
+Format the output strictly as a JSON object with the following schema:
+{
+  "slides": [
+    {
+      "title": "Short title for the slide",
+      "content": "Content for the slide",
+      "image_prompt": "Visual description for this slide's background (omit for CTA slide)",
+      "is_cta": false
+    }
+  ],
+  "caption": {
+    "hook": "Scroll-stopping first line",
+    "body": "Value-packed summary (2-4 sentences)",
+    "cta": "Primary call to action",
+    "hashtags": {
+      "niche": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
+      "broad": ["#tag1", "#tag2", "#tag3"],
+      "high_intent": ["#tag1", "#tag2", "#tag3"]
+    }
+  }
+}
+Do NOT include markdown formatting. Return ONLY valid JSON.`;
+
+let currentPromptTemplate = localStorage.getItem('loksewa_prompt_template') || DEFAULT_PROMPT_TEMPLATE;
+
+// ============================================================
+// MOCK DATA
+// ============================================================
+let defaultMockPosts = [
+    { id: '1', topic: 'Geography of Nepal', text: JSON.stringify({ slides: [{ title: "Geography of Nepal", content: "Nepal is a landlocked country in South Asia.", image_prompt: "Himalayan mountain range Nepal aerial photography" }, { title: "Himalayas", content: "Home to 8 of the 10 highest peaks in the world.", image_prompt: "Mount Everest summit clouds dramatic photography" }, { title: "Follow for More! 🔥", content: "Read caption for full breakdown ↓\n\nFollow @LoksewaPro for daily prep.", is_cta: true }], caption: { hook: "Nepal sits on top of the world — literally. 🏔️", body: "8 of the 10 highest peaks on Earth are in Nepal, including Everest.", cta: "Follow for daily Loksewa prep tips!", hashtags: { niche: ["#Loksewa", "#LoksewaTayari", "#PSCNepal"], broad: ["#Nepal", "#Himalayas"], high_intent: ["#LoKsewaPreperation", "#CivilService"] } } }), image_url: JSON.stringify(["https://image.pollinations.ai/prompt/Himalayan%20mountains", "https://image.pollinations.ai/prompt/Mount%20Everest", null]), status: 'Draft', updated_at: new Date().toISOString() },
+    { id: '2', topic: 'Constitution of Nepal', text: JSON.stringify({ slides: [{ title: "Constitution of Nepal", content: "Promulgated on 20 September 2015.", image_prompt: "Nepal constitution document official photography" }, { title: "Follow for More! 🔥", content: "Follow @LoksewaPro for daily prep.", is_cta: true }], caption: { hook: "Nepal's constitution is one of the most comprehensive in South Asia.", body: "Promulgated in 2015, it established Nepal as a federal democratic republic.", cta: "Follow for more constitutional law breakdowns!", hashtags: { niche: ["#Loksewa", "#ConstitutionNepal"], broad: ["#Nepal", "#Law"], high_intent: ["#LoksewaExam"] } } }), image_url: JSON.stringify(["https://image.pollinations.ai/prompt/Nepal%20constitution", null]), status: 'Approved', updated_at: new Date().toISOString() },
+];
+
+let mockPosts = JSON.parse(localStorage.getItem('loksewa_mock_posts')) || defaultMockPosts;
+function saveMockPosts() { if (isMockMode) localStorage.setItem('loksewa_mock_posts', JSON.stringify(mockPosts)); }
+
+// ============================================================
+// BRANDING STATE — Expanded Model with Narrative/Tone/ICP
+// ============================================================
+let allBrands = [
+    {
+        id: "bfd851c5-2eb8-458f-af70-9c549896a5f8",
+        name: "AMMAAZZINGG",
+        handle: "@ammaazzingg",
+        logoUrl: "assets/images/logo.png",
+        headerAssetUrl: "",
+        facebookUrl: "https://facebook.com",
+        instagramUrl: "https://instagram.com",
+        tiktokUrl: "https://tiktok.com",
+        linkedinUrl: "https://linkedin.com",
+        primaryColor: "#003366",
+        secondaryColor: "#cc0000",
+        accentColor: "#f59e0b",
+        bgColor: "#0f0c29",
+        headingFont: "Inter",
+        bodyFont: "Inter",
+        narrative: "Creating fascinating facts, news breakdowns, and viral daily carousels.",
+        toneOfVoice: "Engaging & Authoritative",
+        icp: "General Knowledge & Social Media Enthusiasts",
+        customTitleSize: "100",
+        customTitleY: "50",
+        customContentY: "70",
+        customBgOpacity: "85",
+        customBgColor: "#000000",
+        themePreset: "theme-default",
+        showPagination: true
+    },
+    {
+        id: "default-brand",
+        name: "CREATOR'S DEN",
+        handle: "@ammaazzingg",
+        logoUrl: "assets/images/logo.png",
+        headerAssetUrl: "",
+        facebookUrl: "https://business.facebook.com",
+        instagramUrl: "https://instagram.com",
+        tiktokUrl: "https://tiktok.com",
+        linkedinUrl: "https://linkedin.com",
+        primaryColor: "#1e3c72",
+        secondaryColor: "#2a5298",
+        accentColor: "#f59e0b",
+        bgColor: "#0f0c29",
+        headingFont: "Inter",
+        bodyFont: "Inter",
+        narrative: "",
+        toneOfVoice: "Educational & Authoritative",
+        icp: "",
+        customTitleSize: "100",
+        customTitleY: "50",
+        customContentY: "70",
+        customBgOpacity: "85",
+        customBgColor: "#000000",
+        themePreset: "theme-default",
+        showPagination: true
+    }
+];
+let activeBrandId = allBrands[0].id;
+let currentBranding = allBrands[0];
+
+
 const API_URL = CONFIG.N8N_MANUAL_WEBHOOK_URL ? CONFIG.N8N_MANUAL_WEBHOOK_URL.replace(/\/generate$/, '') : 'https://loksewa-backend-ah2s.onrender.com';
 
 // Safe Supabase client retrieval
@@ -339,7 +470,7 @@ if (sendResetBtn) sendResetBtn.addEventListener('click', async () => {
     else { fb.innerText = "Reset link sent! Check your inbox."; fb.style.color = "var(--color-success-fg)"; }
 });
 
-document.getElementById('logout-btn').addEventListener('click', async (e) => {
+document.getElementById('logout-btn')?.addEventListener('click', async (e) => {
     e.preventDefault();
     if (isMockMode) {
         document.getElementById('login-container').style.display = 'flex';
@@ -354,109 +485,6 @@ document.getElementById('logout-btn').addEventListener('click', async (e) => {
 // ============================================================
 // PROMPT TEMPLATES
 // ============================================================
-const DEFAULT_PROMPT_TEMPLATE = `You are an expert Loksewa (Public Service Commission Nepal) content creator.
-Generate content based on the following parameters:
-Topic: \${topic}
-Content Type: \${contentType}
-
-Format the output strictly as a JSON object with the following schema:
-{
-  "slides": [
-    {
-      "title": "Short title for the slide",
-      "content": "Content for the slide",
-      "image_prompt": "Visual description for this slide's background (omit for CTA slide)",
-      "is_cta": false
-    }
-  ],
-  "caption": {
-    "hook": "Scroll-stopping first line",
-    "body": "Value-packed summary (2-4 sentences)",
-    "cta": "Primary call to action",
-    "hashtags": {
-      "niche": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-      "broad": ["#tag1", "#tag2", "#tag3"],
-      "high_intent": ["#tag1", "#tag2", "#tag3"]
-    }
-  }
-}
-Do NOT include markdown formatting. Return ONLY valid JSON.`;
-
-let currentPromptTemplate = localStorage.getItem('loksewa_prompt_template') || DEFAULT_PROMPT_TEMPLATE;
-
-// ============================================================
-// MOCK DATA
-// ============================================================
-let defaultMockPosts = [
-    { id: '1', topic: 'Geography of Nepal', text: JSON.stringify({ slides: [{ title: "Geography of Nepal", content: "Nepal is a landlocked country in South Asia.", image_prompt: "Himalayan mountain range Nepal aerial photography" }, { title: "Himalayas", content: "Home to 8 of the 10 highest peaks in the world.", image_prompt: "Mount Everest summit clouds dramatic photography" }, { title: "Follow for More! 🔥", content: "Read caption for full breakdown ↓\n\nFollow @LoksewaPro for daily prep.", is_cta: true }], caption: { hook: "Nepal sits on top of the world — literally. 🏔️", body: "8 of the 10 highest peaks on Earth are in Nepal, including Everest.", cta: "Follow for daily Loksewa prep tips!", hashtags: { niche: ["#Loksewa", "#LoksewaTayari", "#PSCNepal"], broad: ["#Nepal", "#Himalayas"], high_intent: ["#LoKsewaPreperation", "#CivilService"] } } }), image_url: JSON.stringify(["https://image.pollinations.ai/prompt/Himalayan%20mountains", "https://image.pollinations.ai/prompt/Mount%20Everest", null]), status: 'Draft', updated_at: new Date().toISOString() },
-    { id: '2', topic: 'Constitution of Nepal', text: JSON.stringify({ slides: [{ title: "Constitution of Nepal", content: "Promulgated on 20 September 2015.", image_prompt: "Nepal constitution document official photography" }, { title: "Follow for More! 🔥", content: "Follow @LoksewaPro for daily prep.", is_cta: true }], caption: { hook: "Nepal's constitution is one of the most comprehensive in South Asia.", body: "Promulgated in 2015, it established Nepal as a federal democratic republic.", cta: "Follow for more constitutional law breakdowns!", hashtags: { niche: ["#Loksewa", "#ConstitutionNepal"], broad: ["#Nepal", "#Law"], high_intent: ["#LoksewaExam"] } } }), image_url: JSON.stringify(["https://image.pollinations.ai/prompt/Nepal%20constitution", null]), status: 'Approved', updated_at: new Date().toISOString() },
-];
-
-let mockPosts = JSON.parse(localStorage.getItem('loksewa_mock_posts')) || defaultMockPosts;
-function saveMockPosts() { if (isMockMode) localStorage.setItem('loksewa_mock_posts', JSON.stringify(mockPosts)); }
-
-// ============================================================
-// BRANDING STATE — Expanded Model with Narrative/Tone/ICP
-// ============================================================
-let allBrands = [
-    {
-        id: "bfd851c5-2eb8-458f-af70-9c549896a5f8",
-        name: "AMMAAZZINGG",
-        handle: "@ammaazzingg",
-        logoUrl: "assets/images/logo.png",
-        headerAssetUrl: "",
-        facebookUrl: "https://facebook.com",
-        instagramUrl: "https://instagram.com",
-        tiktokUrl: "https://tiktok.com",
-        linkedinUrl: "https://linkedin.com",
-        primaryColor: "#003366",
-        secondaryColor: "#cc0000",
-        accentColor: "#f59e0b",
-        bgColor: "#0f0c29",
-        headingFont: "Inter",
-        bodyFont: "Inter",
-        narrative: "Creating fascinating facts, news breakdowns, and viral daily carousels.",
-        toneOfVoice: "Engaging & Authoritative",
-        icp: "General Knowledge & Social Media Enthusiasts",
-        customTitleSize: "100",
-        customTitleY: "50",
-        customContentY: "70",
-        customBgOpacity: "85",
-        customBgColor: "#000000",
-        themePreset: "theme-default",
-        showPagination: true
-    },
-    {
-        id: "default-brand",
-        name: "CREATOR'S DEN",
-        handle: "@ammaazzingg",
-        logoUrl: "assets/images/logo.png",
-        headerAssetUrl: "",
-        facebookUrl: "https://business.facebook.com",
-        instagramUrl: "https://instagram.com",
-        tiktokUrl: "https://tiktok.com",
-        linkedinUrl: "https://linkedin.com",
-        primaryColor: "#1e3c72",
-        secondaryColor: "#2a5298",
-        accentColor: "#f59e0b",
-        bgColor: "#0f0c29",
-        headingFont: "Inter",
-        bodyFont: "Inter",
-        narrative: "",
-        toneOfVoice: "Educational & Authoritative",
-        icp: "",
-        customTitleSize: "100",
-        customTitleY: "50",
-        customContentY: "70",
-        customBgOpacity: "85",
-        customBgColor: "#000000",
-        themePreset: "theme-default",
-        showPagination: true
-    }
-];
-let activeBrandId = allBrands[0].id;
-let currentBranding = allBrands[0];
-
 function getBrandContext(brand = currentBranding) {
     return {
         name: brand.name,
@@ -537,36 +565,52 @@ function updateBrandVisuals(brand = currentBranding) {
 // ============================================================
 // NAVIGATION
 // ============================================================
-const navLinks = document.querySelectorAll('.nav-links a');
-const views = document.querySelectorAll('.view');
+function switchView(targetViewId, linkElement = null) {
+    const navLinks = document.querySelectorAll('.nav-links a');
+    const views = document.querySelectorAll('.view');
+    navLinks.forEach(l => l.classList.remove('active'));
+    views.forEach(v => v.classList.remove('active-view'));
 
-navLinks.forEach(link => {
-    link.addEventListener('click', (e) => {
+    if (linkElement) {
+        linkElement.classList.add('active');
+    } else {
+        const matchingLink = document.querySelector(`.nav-links a[data-target="${targetViewId}"]`);
+        if (matchingLink) matchingLink.classList.add('active');
+    }
+
+    const targetView = document.getElementById(targetViewId);
+    if (targetView) targetView.classList.add('active-view');
+
+    const h1 = document.querySelector('.topbar h1');
+    if (h1 && linkElement) h1.textContent = linkElement.textContent.trim();
+
+    if (targetViewId === 'home-view') loadDashboardStats();
+    if (targetViewId === 'queue-view') loadQueue();
+    if (targetViewId === 'video-view') loadVideoQueue();
+    if (targetViewId === 'settings-view') loadSettings();
+    if (targetViewId === 'branding-view') loadBrandingView();
+    if (targetViewId === 'canvas-view') initDesignStudio();
+    if (targetViewId === 'psych-view') initPsychLab();
+
+    syncTemplateDropdowns();
+}
+
+window.switchView = switchView;
+
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('.nav-links a[data-target]');
+    if (link) {
         e.preventDefault();
-        navLinks.forEach(l => l.classList.remove('active'));
-        views.forEach(v => v.classList.remove('active-view'));
-        link.classList.add('active');
         const targetViewId = link.getAttribute('data-target');
-        const targetView = document.getElementById(targetViewId);
-        if (targetView) targetView.classList.add('active-view');
-        const h1 = document.querySelector('.topbar h1');
-        if (h1) h1.textContent = link.textContent.trim();
-        if (targetViewId === 'home-view') loadDashboardStats();
-        if (targetViewId === 'queue-view') loadQueue();
-        if (targetViewId === 'video-view') loadVideoQueue();
-        if (targetViewId === 'settings-view') loadSettings();
-        if (targetViewId === 'branding-view') loadBrandingView();
-        // removed initTemplateStudio
-        if (targetViewId === 'canvas-view') {
-            initDesignStudio();
-        }
-        if (targetViewId === 'psych-view') {
-            initPsychLab();
-        
-            syncTemplateDropdowns();
+        switchView(targetViewId, link);
+    }
+});
         
         // Save As New Template
-        document.getElementById('canvas-save-new-template')?.addEventListener('click', () => {
+        function setupCanvasTemplateListeners() {
+    if (window.canvasTemplateListenersAttached) return;
+    window.canvasTemplateListenersAttached = true;
+    document.getElementById('canvas-save-new-template')?.addEventListener('click', () => {
             const customTemplates = JSON.parse(localStorage.getItem('loksewa_custom_templates') || '[]');
             const name = prompt("Enter a name for your new template:", "Custom Template " + (customTemplates.length + 1));
             if (!name || !name.trim()) return;
@@ -681,10 +725,14 @@ navLinks.forEach(link => {
         });
 
         loadCanvasBrandOptions();
-        }
         if (window.feather) feather.replace();
-    });
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupCanvasTemplateListeners);
+} else {
+    setupCanvasTemplateListeners();
+}
 
 // ============================================================
 // DATA HELPERS
@@ -795,7 +843,7 @@ async function loadQueue() {
     if (window.feather) feather.replace();
 }
 
-document.getElementById('status-filter').addEventListener('change', loadQueue);
+document.getElementById('status-filter')?.addEventListener('change', loadQueue);
 document.getElementById('queue-brand-filter')?.addEventListener('change', loadQueue);
 
 window.updatePostStatus = async (id, newStatus) => {
@@ -819,21 +867,9 @@ window.deletePost = async (id) => {
 // ============================================================
 // 3. FABRIC.JS CANVAS ENGINE
 // ============================================================
-const CANVAS_W = 1080;
-const CANVAS_H = 1350;
-const PREVIEW_W = 400;
-const PREVIEW_H = 500;
-const CANVAS_ZOOM = PREVIEW_W / CANVAS_W; // 0.37037
 
-let fabricCanvas = null;
-let studioCanvas = null;
-let freeformCanvas = null;
-let currentEditingId = null;
-let currentSlides = [];
-let currentSlideIndex = 0;
-let currentImageUrls = [];
-let canvasHistory = [];
-let canvasHistoryPointer = -1;
+
+
 
 
 // ============================================================
@@ -2681,7 +2717,7 @@ window.updateSlideData = (index, field, value) => {
 };
 
 // Prev/Next Slide
-document.getElementById('prev-slide').addEventListener('click', () => {
+document.getElementById('prev-slide')?.addEventListener('click', () => {
     if (currentSlideIndex > 0) {
         syncFabricCanvasToCurrentSlide();
         currentSlideIndex--;
@@ -2691,7 +2727,7 @@ document.getElementById('prev-slide').addEventListener('click', () => {
         updateCTABadge();
     }
 });
-document.getElementById('next-slide').addEventListener('click', () => {
+document.getElementById('next-slide')?.addEventListener('click', () => {
     if (currentSlideIndex < currentSlides.length - 1) {
         syncFabricCanvasToCurrentSlide();
         currentSlideIndex++;
@@ -2730,14 +2766,14 @@ document.getElementById('toggle-slide-numbers-tb')?.addEventListener('change', (
     updateSlidePreview();
 });
 
-document.getElementById('back-to-queue').addEventListener('click', () => {
+document.getElementById('back-to-queue')?.addEventListener('click', () => {
     document.querySelector('[data-target="queue-view"]')?.click();
 });
 
 // ============================================================
 // 3c. IMAGE UPLOAD (per-slide)
 // ============================================================
-document.getElementById('image-upload').addEventListener('change', function(e) {
+document.getElementById('image-upload')?.addEventListener('change', function(e) {
     if (!e.target.files?.[0]) return;
     const file = e.target.files[0];
     if (!file.type.match('image.*')) { alert("Not an image file."); return; }
@@ -2799,7 +2835,7 @@ async function downloadSlidesAsFabric() {
     if (window.feather) feather.replace();
 }
 
-document.getElementById('download-slides').addEventListener('click', downloadSlidesAsFabric);
+document.getElementById('download-slides')?.addEventListener('click', downloadSlidesAsFabric);
 
 function getSuggestiveFilename(slideIndex) {
     const topicEl = document.getElementById('editor-topic');
@@ -2900,7 +2936,7 @@ document.getElementById('download-current-slide')?.addEventListener('click', () 
 // ============================================================
 // 3e. SAVE POST
 // ============================================================
-document.getElementById('save-post').addEventListener('click', async () => {
+document.getElementById('save-post')?.addEventListener('click', async () => {
     syncFabricCanvasToCurrentSlide();
     const updatedStatus = document.getElementById('editor-status').value;
     const updatedText = JSON.stringify({ slides: currentSlides, caption: getCaptionText() });
@@ -2940,15 +2976,15 @@ async function executePublish(platformUrl) {
     document.querySelector('[data-target="queue-view"]')?.click();
 }
 
-document.getElementById('publish-facebook').addEventListener('click', () => executePublish(currentBranding.facebookUrl));
-document.getElementById('publish-instagram').addEventListener('click', () => executePublish(currentBranding.instagramUrl));
-document.getElementById('publish-tiktok').addEventListener('click', () => executePublish(currentBranding.tiktokUrl));
-document.getElementById('publish-linkedin').addEventListener('click', () => executePublish(currentBranding.linkedinUrl));
+document.getElementById('publish-facebook')?.addEventListener('click', () => executePublish(currentBranding.facebookUrl));
+document.getElementById('publish-instagram')?.addEventListener('click', () => executePublish(currentBranding.instagramUrl));
+document.getElementById('publish-tiktok')?.addEventListener('click', () => executePublish(currentBranding.tiktokUrl));
+document.getElementById('publish-linkedin')?.addEventListener('click', () => executePublish(currentBranding.linkedinUrl));
 
 // ============================================================
 // 3g. REFINE
 // ============================================================
-document.getElementById('refine-post').addEventListener('click', async () => {
+document.getElementById('refine-post')?.addEventListener('click', async () => {
     const note = prompt("Enter instructions for refining this content:");
     if (!note) return;
     const btn = document.getElementById('refine-post');
@@ -3004,7 +3040,7 @@ document.getElementById('apply-saved-template')?.addEventListener('click', () =>
 // ============================================================
 // 4. MANUAL CONTENT LAB
 // ============================================================
-document.getElementById('trigger-manual').addEventListener('click', async () => {
+document.getElementById('trigger-manual')?.addEventListener('click', async () => {
     const topic = document.getElementById('manual-topic').value.trim();
     const contentType = document.getElementById('manual-content-type').value;
     const brandId = document.getElementById('manual-brand').value;
@@ -3047,12 +3083,12 @@ document.getElementById('trigger-manual').addEventListener('click', async () => 
 // Topic suggestions
 const suggestedTopics = ["Geography of Nepal - Major Rivers", "History - The Unification of Nepal", "Constitution - Fundamental Rights", "Current Affairs - Nepal's Economic Policy 2080", "Science - Human Digestive System", "General Knowledge - First in Nepal", "Literature - Bhanubhakta Acharya", "Ecology - National Parks", "Administration - Local Government Structure", "International Relations - Nepal and the UN"];
 function suggestRandomTopic() { const input = document.getElementById('manual-topic'); if (input) input.value = suggestedTopics[Math.floor(Math.random() * suggestedTopics.length)]; }
-document.getElementById('refresh-topic-btn').addEventListener('click', suggestRandomTopic);
+document.getElementById('refresh-topic-btn')?.addEventListener('click', suggestRandomTopic);
 
 // ============================================================
 // 5. NEWS LAB
 // ============================================================
-document.getElementById('trigger-news').addEventListener('click', async () => {
+document.getElementById('trigger-news')?.addEventListener('click', async () => {
     const topic = document.getElementById('news-topic-input')?.value.trim() || '';
     const category = document.getElementById('news-category-select')?.value || '';
     const slideCount = parseInt(document.getElementById('news-slide-format')?.value) || 4;
@@ -3407,7 +3443,7 @@ function loadBrandingView() {
 }
 
 // Logo upload
-document.getElementById('brand-logo-upload').addEventListener('change', function(e) {
+document.getElementById('brand-logo-upload')?.addEventListener('change', function(e) {
     if (!e.target.files?.[0]) return;
     const file = e.target.files[0];
     if (!file.type.match('image.*')) { alert("Not an image."); return; }
@@ -3450,7 +3486,7 @@ document.getElementById('brand-header-asset-upload')?.addEventListener('change',
 });
 
 // Save Branding
-document.getElementById('save-branding').addEventListener('click', async function() {
+document.getElementById('save-branding')?.addEventListener('click', async function() {
     const name = document.getElementById('brand-name-input').value;
     const handle = document.getElementById('brand-handle-input').value;
     const logoUrl = document.getElementById('brand-logo-preview').src;
@@ -3511,7 +3547,7 @@ document.getElementById('save-branding').addEventListener('click', async functio
     setTimeout(() => { fb.innerText = ''; }, 3000);
 });
 
-document.getElementById('brand-selector').addEventListener('change', (e) => {
+document.getElementById('brand-selector')?.addEventListener('change', (e) => {
     const bId = e.target.value;
     if (!bId) return;
     activeBrandId = bId;
@@ -3521,7 +3557,7 @@ document.getElementById('brand-selector').addEventListener('change', (e) => {
     updateBrandVisuals(currentBranding);
 });
 
-document.getElementById('create-brand-btn').addEventListener('click', () => {
+document.getElementById('create-brand-btn')?.addEventListener('click', () => {
     const newBrand = { id: 'new-' + Date.now(), name: "New Brand", handle: "@newbrand", logoUrl: "assets/images/logo.png", primaryColor: "#000000", secondaryColor: "#666666", accentColor: '#f59e0b', bgColor: '#0f0c29', headingFont: 'Inter', bodyFont: 'Inter', narrative: '', toneOfVoice: 'Educational & Authoritative', icp: '', customTitleSize: "100", customTitleY: "50", customContentY: "70", customBgOpacity: "85", customBgColor: "#000000", themePreset: "theme-default", showPagination: true, promptTemplate: DEFAULT_PROMPT_TEMPLATE };
     activeBrandId = newBrand.id;
     currentBranding = newBrand;
@@ -3564,7 +3600,7 @@ function loadBrandingForm(brand) {
     if (promptInput) promptInput.value = currentPromptTemplate;
 }
 
-document.getElementById('reset-prompt-btn').addEventListener('click', () => {
+document.getElementById('reset-prompt-btn')?.addEventListener('click', () => {
     if (!confirm("Reset to default prompt?")) return;
     currentPromptTemplate = DEFAULT_PROMPT_TEMPLATE;
     document.getElementById('prompt-template-input').value = currentPromptTemplate;
@@ -3639,10 +3675,10 @@ window.openVideoEditor = async (id) => {
     document.getElementById('video-editor-view').classList.add('active-view');
 };
 
-document.getElementById('back-to-video-queue').addEventListener('click', () => document.querySelector('[data-target="video-view"]')?.click());
-document.getElementById('video-format').addEventListener('change', (e) => { document.getElementById('video-splits-group').style.display = e.target.value === 'multiple' ? 'block' : 'none'; });
+document.getElementById('back-to-video-queue')?.addEventListener('click', () => document.querySelector('[data-target="video-view"]')?.click());
+document.getElementById('video-format')?.addEventListener('change', (e) => { document.getElementById('video-splits-group').style.display = e.target.value === 'multiple' ? 'block' : 'none'; });
 
-document.getElementById('generate-video-btn').addEventListener('click', async () => {
+document.getElementById('generate-video-btn')?.addEventListener('click', async () => {
     const originalResearch = document.getElementById('video-original-content').innerText;
     const format = document.getElementById('video-format').value;
     const splits = document.getElementById('video-splits').value;
@@ -3664,7 +3700,7 @@ document.getElementById('generate-video-btn').addEventListener('click', async ()
     finally { btn.innerHTML = '<i data-feather="film"></i> Generate Video Prompts'; btn.disabled = false; if (window.feather) feather.replace(); }
 });
 
-document.getElementById('copy-video-prompts').addEventListener('click', () => {
+document.getElementById('copy-video-prompts')?.addEventListener('click', () => {
     navigator.clipboard.writeText(document.getElementById('video-prompts-text').value).catch(() => {});
     showToast('Video prompts copied!');
 });
@@ -3679,7 +3715,7 @@ async function loadSettings() {
     }
 }
 
-document.getElementById('save-profile-btn').addEventListener('click', async () => {
+document.getElementById('save-profile-btn')?.addEventListener('click', async () => {
     if (isMockMode) { alert('Cannot update profile in mock mode'); return; }
     const displayName = document.getElementById('setting-display-name').value;
     const phone = document.getElementById('setting-phone').value;
@@ -3690,7 +3726,7 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
     else { fb.innerText = 'Profile updated!'; fb.style.color = 'var(--color-success-fg)'; if (displayName) document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${displayName.substring(0, 2)}&background=random`; }
 });
 
-document.getElementById('update-password-btn').addEventListener('click', async () => {
+document.getElementById('update-password-btn')?.addEventListener('click', async () => {
     if (isMockMode) { alert('Cannot update password in mock mode'); return; }
     const password = document.getElementById('setting-new-password').value;
     const fb = document.getElementById('password-feedback');
@@ -3702,7 +3738,7 @@ document.getElementById('update-password-btn').addEventListener('click', async (
 });
 
 let currentMfaFactorId = null;
-document.getElementById('enroll-mfa-btn').addEventListener('click', async () => {
+document.getElementById('enroll-mfa-btn')?.addEventListener('click', async () => {
     if (isMockMode) { alert('MFA not available in mock mode'); return; }
     try {
         const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
@@ -3714,7 +3750,7 @@ document.getElementById('enroll-mfa-btn').addEventListener('click', async () => 
     } catch (e) { alert("MFA error: " + e.message); }
 });
 
-document.getElementById('verify-mfa-btn').addEventListener('click', async () => {
+document.getElementById('verify-mfa-btn')?.addEventListener('click', async () => {
     const code = document.getElementById('mfa-verify-code').value;
     const fb = document.getElementById('mfa-feedback');
     if (!code || code.length !== 6) { fb.innerText = "Enter a valid 6-digit code."; fb.style.color = 'var(--color-danger-fg)'; return; }
@@ -3734,7 +3770,7 @@ document.getElementById('verify-mfa-btn').addEventListener('click', async () => 
 // ============================================================
 // 11. MOBILE MENU
 // ============================================================
-document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
     document.getElementById('app-container').classList.toggle('sidebar-open');
 });
 document.addEventListener('click', (e) => {
@@ -4081,10 +4117,7 @@ document.getElementById('canvas-export-btn')?.addEventListener('click', () => {
 // ============================================================
 // LabEngine-v1: Psychology & Mind Lab Engine Logic
 // ============================================================
-let psychCanvas = null;
-let currentPsychSlides = [];
-let currentPsychSlideIndex = 0;
-let psychCurrentMode = 'GENERATE';
+
 
 // Global Delegation for Psychology Lab Controls
 document.addEventListener('click', (e) => {
