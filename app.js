@@ -4371,14 +4371,15 @@ function initPsychLab() {
 let lastGeneratedPsychData = null;
 
 function transferPsychToManual() {
-    if (!currentPsychSlides || currentPsychSlides.length === 0) {
+    const slides = (currentPsychSlides && currentPsychSlides.length > 0) ? currentPsychSlides : window.currentPsychSlides;
+    if (!slides || slides.length === 0) {
         showToast('No generated Psychology content available.');
         return;
     }
     const topic = document.getElementById('psych-topic-input')?.value || 'Psychology Topic';
     
     const formattedPayload = {
-        slides: currentPsychSlides.map((s, idx) => ({
+        slides: slides.map((s, idx) => ({
             title: s.title_text || s.title || `Slide ${idx+1}`,
             content: s.body_text || s.content || '',
             header_text: s.header_text || '',
@@ -4403,12 +4404,13 @@ function transferPsychToManual() {
 }
 
 function transferPsychToStudio() {
-    if (!currentPsychSlides || currentPsychSlides.length === 0) {
+    const slides = (currentPsychSlides && currentPsychSlides.length > 0) ? currentPsychSlides : window.currentPsychSlides;
+    if (!slides || slides.length === 0) {
         showToast('No generated Psychology slides available to edit in Design Studio.');
         return;
     }
 
-    const studioSlides = currentPsychSlides.map((s, idx) => ({
+    const studioSlides = slides.map((s, idx) => ({
         title: s.title_text || s.title || `Slide ${idx+1}`,
         content: s.body_text || s.content || '',
         header: s.header_text || '@amazingfacts.lab',
