@@ -120,7 +120,15 @@ async function generateAIContent(prompt) {
         throw new Error("No GEMINI_API_KEY or GEMINI_API_KEYS found in environment variables.");
     }
 
-    const models = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash-latest"];
+    // Valid Gemini API models in order of fallback priority
+    const models = [
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-2.0-flash-lite-preview-02-05",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro"
+    ];
     let lastError = null;
 
     for (let kIdx = 0; kIdx < apiKeys.length; kIdx++) {
@@ -133,6 +141,7 @@ async function generateAIContent(prompt) {
                 try {
                     const modelObj = client.getGenerativeModel({ model: m });
                     const result = await modelObj.generateContent(prompt);
+                    console.log(`[AI Success] Generated content using model ${m} with API Key ${kIdx + 1}/${apiKeys.length} (${keyTag})`);
                     return result;
                 } catch (err) {
                     lastError = err;
@@ -143,26 +152,21 @@ async function generateAIContent(prompt) {
                         errMsg.includes('429') || 
                         errMsg.includes('Quota exceeded') || 
                         errMsg.includes('quota') || 
-                        errMsg.includes('limit') || 
-                        errMsg.includes('token');
+                        errMsg.includes('RESOURCE_EXHAUSTED') ||
+                        errMsg.includes('limit');
 
                     if (isQuotaOrLimit) {
-                        console.warn(`[AI Failover] Quota/Token limit hit on key (${keyTag}). Switching to next available API key...`);
+                        console.warn(`[AI Failover] Quota/Rate limit on key (${keyTag}) for model ${m}. Trying next model...`);
                         break;
                     } else if (attempt === 0) {
-                        await new Promise(r => setTimeout(r, 1500));
+                        await new Promise(r => setTimeout(r, 1000));
                     }
                 }
-            }
-
-            const isQuotaError = lastError && (lastError.status === 429 || lastError.message?.includes('429') || lastError.message?.includes('Quota') || lastError.message?.includes('quota'));
-            if (isQuotaError) {
-                break;
             }
         }
     }
 
-    throw lastError || new Error("All Gemini API keys and models failed.");
+    throw lastError || new Error("All Gemini API keys and fallback models were exhausted.");
 }
 
 /**

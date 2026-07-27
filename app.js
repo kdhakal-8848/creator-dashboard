@@ -2562,9 +2562,7 @@ window.openEditor = async (id) => {
     currentEditingId = id;
 
     // Switch to editor view
-    navLinks.forEach(l => l.classList.remove('active'));
-    views.forEach(v => v.classList.remove('active-view'));
-    document.getElementById('editor-view').classList.add('active-view');
+    switchView('editor-view');
     const h1 = document.querySelector('.topbar h1');
     if (h1) h1.textContent = 'Editor';
 
@@ -3680,8 +3678,7 @@ window.openVideoEditor = async (id) => {
     document.getElementById('video-prompts-result').style.display = 'none';
     document.getElementById('video-prompts-text').value = '';
     document.getElementById('video-feedback').innerText = '';
-    views.forEach(v => v.classList.remove('active-view'));
-    document.getElementById('video-editor-view').classList.add('active-view');
+    switchView('video-editor-view');
 };
 
 document.getElementById('back-to-video-queue')?.addEventListener('click', () => document.querySelector('[data-target="video-view"]')?.click());
