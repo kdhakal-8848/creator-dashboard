@@ -1013,6 +1013,8 @@ function initFabricCanvas() {
 // ============================================================
 const DEFAULT_PRESETS = [
     { id: 'template-classic', defaultName: 'Classic Template' },
+    { id: 'template-psych-dark', defaultName: 'Psychology Dark Mode' },
+    { id: 'template-psych-quote', defaultName: 'Psychology Insight Quote' },
     { id: 'template-bold', defaultName: 'Bold Typography' },
     { id: 'template-glass', defaultName: 'Glassmorphism' },
     { id: 'template-visual', defaultName: 'Visual Centric' },
