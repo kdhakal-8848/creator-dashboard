@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+const API_URL = CONFIG.N8N_MANUAL_WEBHOOK_URL ? CONFIG.N8N_MANUAL_WEBHOOK_URL.replace(/\/generate$/, '') : 'https://loksewa-backend-ah2s.onrender.com';
 
 // Safe Supabase client retrieval
 const getCreateClient = () => {
@@ -223,11 +224,19 @@ function setupAuthListeners() {
     document.getElementById('guest-login-btn')?.addEventListener('click', handleGuestLogin);
 }
 
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupAuthListeners);
+    document.addEventListener('DOMContentLoaded', () => {
+        setupAuthListeners();
+        initPsychLab();
+        initDesignStudio();
+    });
 } else {
     setupAuthListeners();
+    initPsychLab();
+    initDesignStudio();
 }
+
 
 // Global Event Delegation so sign-in click NEVER fails regardless of DOM load timing
 document.addEventListener('click', (e) => {
@@ -550,7 +559,10 @@ navLinks.forEach(link => {
         // removed initTemplateStudio
         if (targetViewId === 'canvas-view') {
             initDesignStudio();
-        initPsychLab();
+        }
+        if (targetViewId === 'psych-view') {
+            initPsychLab();
+        
             syncTemplateDropdowns();
         
         // Save As New Template
@@ -4073,6 +4085,31 @@ let psychCanvas = null;
 let currentPsychSlides = [];
 let currentPsychSlideIndex = 0;
 let psychCurrentMode = 'GENERATE';
+
+// Global Delegation for Psychology Lab Controls
+document.addEventListener('click', (e) => {
+    const presetBtn = e.target.closest('.psych-preset-btn');
+    if (presetBtn) {
+        const topicInput = document.getElementById('psych-topic-input');
+        if (topicInput && presetBtn.dataset.topic) {
+            topicInput.value = presetBtn.dataset.topic;
+        }
+        return;
+    }
+
+    const modeBtn = e.target.closest('.psych-mode-btn');
+    if (modeBtn) {
+        document.querySelectorAll('.psych-mode-btn').forEach(b => b.classList.remove('active'));
+        modeBtn.classList.add('active');
+        psychCurrentMode = modeBtn.dataset.mode || 'GENERATE';
+        const genControls = document.getElementById('psych-generate-controls');
+        if (genControls) {
+            genControls.style.display = psychCurrentMode === 'GENERATE' ? 'flex' : 'none';
+        }
+        return;
+    }
+});
+
 
 function initPsychLab() {
     const brandSelect = document.getElementById('psych-brand-select');
