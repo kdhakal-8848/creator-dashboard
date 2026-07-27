@@ -56,7 +56,7 @@ if (!isMockMode && supabase) {
 }
 
 function handleAuthChange(session) {
-    if (isGuest) return;
+    if (isGuest || isMockMode) return;
     if (session) {
         currentUser = session.user;
         document.getElementById('login-container').style.display = 'none';
@@ -119,7 +119,7 @@ function setLoginLoading(on) {
 }
 
 
-async function signInWithTimeout(email, password, timeoutMs = 8000) {
+async function signInWithTimeout(email, password, timeoutMs = 2500) {
     const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Sign-in request timed out. Please check your internet connection or try Guest Mode.")), timeoutMs)
     );
@@ -130,7 +130,7 @@ async function signInWithTimeout(email, password, timeoutMs = 8000) {
 }
 
 // --- Auth UI ---
-const handleLoginAction = async (e) => {
+async function handleLoginAction(e) {
     if (e) e.preventDefault();
     const btn = document.getElementById('login-btn');
     if (btn && btn.disabled) return; // Prevent double execution
@@ -214,7 +214,32 @@ const handleLoginAction = async (e) => {
     }
 };
 
-document.getElementById('login-btn')?.addEventListener('click', handleLoginAction);
+
+// Failproof Auth Listener Initialization & Global Event Delegation
+function setupAuthListeners() {
+    document.getElementById('login-btn')?.addEventListener('click', handleLoginAction);
+    document.getElementById('signin-form')?.addEventListener('submit', handleLoginAction);
+    document.getElementById('guest-btn')?.addEventListener('click', handleGuestLogin);
+    document.getElementById('guest-login-btn')?.addEventListener('click', handleGuestLogin);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupAuthListeners);
+} else {
+    setupAuthListeners();
+}
+
+// Global Event Delegation so sign-in click NEVER fails regardless of DOM load timing
+document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!target) return;
+    if (target.id === 'guest-login-btn' || target.id === 'guest-btn' || target.closest('#guest-login-btn') || target.closest('#guest-btn')) {
+        handleGuestLogin(e);
+    } else if (target.id === 'login-btn' || target.closest('#login-btn')) {
+        handleLoginAction(e);
+    }
+});
+
 document.getElementById('signin-form')?.addEventListener('submit', handleLoginAction);
 
 // Sign Up Handler
@@ -262,11 +287,22 @@ window.handleAuthChange = handleAuthChange;
 window.renderFabricSlide = renderFabricSlide;
 
 // Guest Mode Handler
-document.getElementById('guest-btn')?.addEventListener('click', () => {
+function handleGuestLogin(e) {
+    if (e) e.preventDefault();
     window.isGuest = true;
     isGuest = true;
-    window.enableGuestMode();
-});
+    isMockMode = true;
+    showLoginSuccess('⚡ Access Granted (Demo Access)');
+    setTimeout(() => {
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'flex';
+        fetchBrands();
+        loadDashboardStats();
+    }, 150);
+};
+
+document.getElementById('guest-btn')?.addEventListener('click', handleGuestLogin);
+document.getElementById('guest-login-btn')?.addEventListener('click', handleGuestLogin);
 
 // Sign Out Handler
 document.getElementById('sign-out-btn')?.addEventListener('click', async () => {
@@ -4025,15 +4061,7 @@ document.getElementById('canvas-export-btn')?.addEventListener('click', () => {
     link.click();
 });
 
-document.getElementById('guest-login-btn')?.addEventListener('click', () => {
-    isMockMode = true;
-    isGuest = true;
-    document.getElementById('login-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
-    document.getElementById('user-avatar').src = 'https://ui-avatars.com/api/?name=Guest+User&background=random';
-    fetchBrands();
-    loadDashboardStats();
-});
+
 
 
 // ============================================================
@@ -4117,7 +4145,7 @@ function initPsychLab() {
             currentPsychSlideIndex = i;
             renderPsychCurrentSlide();
             const dataUrl = psychCanvas.toDataURL({ format: 'png' });
-            const base64Data = dataUrl.replace(/^data:image/png;base64,/, "");
+            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
             zip.file(`slide_${i + 1}.png`, base64Data, { base64: true });
         }
         const content = await zip.generateAsync({ type: "blob" });
@@ -4239,7 +4267,7 @@ function renderPsychResearchMarkdown(markdownStr) {
         .replace(/^### (.*$)/gim, '<h4 style="font-size: 16px; font-weight: 700; color: #818cf8; margin: 16px 0 8px 0;">$1</h4>')
         .replace(/^## (.*$)/gim, '<h3 style="font-size: 18px; font-weight: 700; color: #a7f3d0; margin: 20px 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">$1</h3>')
         .replace(/^# (.*$)/gim, '<h2 style="font-size: 22px; font-weight: 800; color: #ffffff; margin: 24px 0 12px 0;">$1</h2>')
-        .replace(/^* (.*$)/gim, '<li style="margin-left: 20px;">$1</li>')
+        .replace(/^\* (.*$)/gim, '<li style="margin-left: 20px;">$1</li>')
         .replace(/^- (.*$)/gim, '<li style="margin-left: 20px;">$1</li>')
         .replace(/\*\*(.*?)\*\*/gim, '<strong style="color: #f8fafc;">$1</strong>')
         .replace(/\*(.*?)\*/gim, '<em>$1</em>')
