@@ -499,7 +499,7 @@ async function fetchBrands() {
 }
 
 function populateBrandSelectors() {
-    const selectors = ['brand-selector', 'manual-brand', 'queue-brand-filter', 'news-brand', 'facts-brand'];
+    const selectors = ['brand-selector', 'manual-brand', 'queue-brand-filter', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector'];
     selectors.forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
@@ -511,9 +511,11 @@ function populateBrandSelectors() {
         allBrands.forEach(b => {
             const opt = document.createElement('option'); opt.value = b.id; opt.innerText = b.name; sel.appendChild(opt);
         });
-        if (id === 'brand-selector') sel.value = activeBrandId;
-        else if (['manual-brand', 'news-brand', 'facts-brand'].includes(id)) sel.value = activeBrandId;
-        else if (currentVal) sel.value = currentVal;
+        if (['brand-selector', 'manual-brand', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector'].includes(id)) {
+            sel.value = activeBrandId || (allBrands[0] ? allBrands[0].id : '');
+        } else if (currentVal) {
+            sel.value = currentVal;
+        }
     });
 }
 
