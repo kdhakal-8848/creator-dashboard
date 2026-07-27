@@ -20,7 +20,7 @@
     <!-- JSZip for reliable mobile batch downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Styles -->
-    <link rel="stylesheet" href="index.css?v=20260726_v1785091599429">
+    <link rel="stylesheet" href="index.css?v=20260726_v1785176403631">
     <!-- html2canvas (fallback) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
@@ -91,6 +91,7 @@
                 <li><a href="#" data-target="manual-view"><i data-feather="edit-3"></i> Manual Input</a></li>
                 <li><a href="#" data-target="news-view"><i data-feather="globe"></i> News Lab</a></li>
                 <li><a href="#" data-target="facts-view"><i data-feather="zap"></i> Facts Lab</a></li>
+                <li><a href="#" data-target="psych-view"><i data-feather="brain"></i> Psychology Lab</a></li>
                 <li><a href="#" data-target="canvas-view"><i data-feather="layout"></i> Design Studio</a></li>
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Brand Identity</a></li>
@@ -555,6 +556,121 @@
             </div>
 
             <!-- ============================================================ -->
+            <!-- Psychology & Mind Lab View (LabEngine-v1) -->
+            <!-- ============================================================ -->
+            <div id="psych-view" class="view">
+                <div class="view-header">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h2>Psychology & Mind Lab</h2>
+                            <span style="font-size: 11px; background: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4); padding: 2px 8px; border-radius: 12px; font-weight: 600;">LabEngine-v1</span>
+                        </div>
+                        <p style="color: #656d76; font-size: 14px; margin-top: 4px;">Automated psychological intelligence system for high-utility SAVES & DM SHARES.</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid" style="grid-template-columns: 1fr;">
+                    <div class="card">
+                        <div style="display: flex; gap: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; gap: 8px; background: var(--color-canvas-subtle); padding: 4px; border-radius: 8px;">
+                                <button type="button" class="btn-secondary psych-mode-btn active" data-mode="GENERATE" style="height: 32px; font-size: 13px;"><i data-feather="cpu"></i> Generate Mode</button>
+                                <button type="button" class="btn-secondary psych-mode-btn" data-mode="RESEARCH" style="height: 32px; font-size: 13px;"><i data-feather="book-open"></i> Research Mode</button>
+                            </div>
+
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Target Brand:</label>
+                                <select id="psych-brand-select" style="height: 34px; border-radius: 6px; padding: 0 10px; font-size: 13px;"></select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label style="font-size: 13px; font-weight: 600;">Psychology Topic / Keyword</label>
+                            <input type="text" id="psych-topic-input" placeholder="e.g. The Spotlighting Effect, Dopamine Traps, Why We Self-Sabotage..." style="height: 42px; font-size: 14px;">
+                            <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center;">
+                                <span style="font-size: 11px; color: var(--color-fg-muted); font-weight: 500;">Preset Topics:</span>
+                                <button type="button" class="btn-secondary psych-preset-btn" data-topic="Dopamine & Focus Traps" style="padding: 2px 8px; font-size: 11px;">Dopamine Traps</button>
+                                <button type="button" class="btn-secondary psych-preset-btn" data-topic="The Zeigarnik Effect & Procrastination" style="padding: 2px 8px; font-size: 11px;">Zeigarnik Effect</button>
+                                <button type="button" class="btn-secondary psych-preset-btn" data-topic="Hyper-Independence as Trauma Response" style="padding: 2px 8px; font-size: 11px;">Hyper-Independence</button>
+                                <button type="button" class="btn-secondary psych-preset-btn" data-topic="Spotlight Effect & Social Anxiety" style="padding: 2px 8px; font-size: 11px;">Spotlight Effect</button>
+                                <button type="button" class="btn-secondary psych-preset-btn" data-topic="Dunning-Kruger Effect in Career" style="padding: 2px 8px; font-size: 11px;">Dunning-Kruger</button>
+                            </div>
+                        </div>
+
+                        <div id="psych-generate-controls" style="display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1; min-width: 180px; margin-bottom: 0;">
+                                <label style="font-size: 12px; font-weight: 600;">Target Metric Trigger</label>
+                                <select id="psych-metric-select" style="height: 38px; font-size: 13px;">
+                                    <option value="SAVES">💾 High Utility SAVES (Evergreen Reference)</option>
+                                    <option value="SHARES">💬 DM SHARES (Relational Recognition)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="flex: 1; min-width: 180px; margin-bottom: 0;">
+                                <label style="font-size: 12px; font-weight: 600;">Format Type</label>
+                                <select id="psych-format-select" style="height: 38px; font-size: 13px;">
+                                    <option value="CAROUSEL">Carousel (Multi-slide Deck)</option>
+                                    <option value="SINGLE_SLIDE">Single-Slide Quote Post</option>
+                                    <option value="REEL_BLUEPRINT">Reel Blueprint (Video Script)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn-primary" id="psych-submit-btn" style="height: 42px; width: 100%; justify-content: center; font-size: 14px; font-weight: 600; background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                            <i data-feather="zap"></i> Run LabEngine Intelligence
+                        </button>
+                    </div>
+                </div>
+
+                <div id="psych-results-container" style="display: none; margin-top: 24px;">
+                    <div id="psych-research-card" class="card" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--color-border-muted); padding-bottom: 12px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px;"><i data-feather="book-open" style="color: #818cf8;"></i> Psychological Research Breakdown</h3>
+                            <button type="button" class="btn-secondary" id="psych-convert-angle-btn" style="font-size: 12px;"><i data-feather="play"></i> Switch to Generate Mode</button>
+                        </div>
+                        <div id="psych-research-markdown" style="font-size: 14px; line-height: 1.7; color: var(--color-fg-default);"></div>
+                    </div>
+
+                    <div id="psych-generate-card" class="card" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px;"><i data-feather="cpu" style="color: #6366f1;"></i> Generated Content Intelligence</h3>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" class="btn-primary" id="psych-export-btn" style="height: 34px; font-size: 12px; background: var(--color-accent-fg);"><i data-feather="download"></i> Download Deck</button>
+                            </div>
+                        </div>
+
+                        <div id="psych-stage-wrapper" style="display: flex; flex-direction: column; align-items: center; background: #0B0C10; padding: 24px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.08);">
+                            <div style="position: relative; box-shadow: 0 16px 48px rgba(0,0,0,0.8); border-radius: 8px; overflow: hidden;">
+                                <canvas id="psych-slide-canvas" width="540" height="675" style="border-radius: 8px; max-width: 100%; height: auto; display: block;"></canvas>
+                            </div>
+                            <div style="display: flex; gap: 16px; align-items: center; margin-top: 16px;">
+                                <button type="button" class="btn-secondary" id="psych-prev-slide" style="height: 32px; width: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"><i data-feather="chevron-left"></i></button>
+                                <span id="psych-slide-counter" style="font-size: 13px; font-weight: 600; color: #e2e8f0;">Slide 1 of 4</span>
+                                <button type="button" class="btn-secondary" id="psych-next-slide" style="height: 32px; width: 32px; padding: 0; display: flex; align-items: center; justify-content: center;"><i data-feather="chevron-right"></i></button>
+                            </div>
+                        </div>
+
+                        <div id="psych-reel-card" style="display: none; background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3); margin-bottom: 20px;">
+                            <h4 style="color: #818cf8; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;"><i data-feather="video"></i> Reel Blueprint Script</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+                                <div><strong>Hook (0-2s):</strong> <span id="psych-reel-hook"></span></div>
+                                <div><strong>Body (2-7s):</strong> <span id="psych-reel-body"></span></div>
+                                <div><strong>Audio Specification:</strong> <span id="psych-reel-audio"></span></div>
+                                <div><strong>Visual Loop Prompt:</strong> <span id="psych-reel-video"></span></div>
+                            </div>
+                        </div>
+
+                        <div style="background: var(--color-canvas-subtle); padding: 16px; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <strong style="font-size: 13px;">Optimized Instagram Caption & Hashtags</strong>
+                                <button type="button" class="btn-secondary" id="psych-copy-caption" style="font-size: 11px; padding: 4px 8px;"><i data-feather="copy"></i> Copy Caption</button>
+                            </div>
+                            <textarea id="psych-caption-text" readonly style="width: 100%; height: 110px; font-size: 13px; font-family: monospace; padding: 10px; border-radius: 6px; background: var(--color-canvas-default); border: 1px solid var(--color-border-default);"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
             <!-- Design Studio View (Unified Editor & Templates) -->
             <!-- ============================================================ -->
             <div id="canvas-view" class="view">
@@ -993,7 +1109,7 @@
     </div>
 
     <!-- Application Logic -->
-    <script type="module" src="app.js?v=20260726_v1785091599429"></script>
+    <script type="module" src="app.js?v=20260726_v1785176403631"></script>
     <script>
         if (typeof feather !== 'undefined') feather.replace();
     </script>

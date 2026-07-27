@@ -602,6 +602,175 @@ ${SLIDE_SCHEMA}`;
     }
 });
 
+
+// ============================================================
+// LabEngine-v1: Psychology & Mind Content Intelligence Endpoint
+// ============================================================
+app.post('/generate-psych', async (req, res) => {
+    try {
+        const { mode, topic, content_type, target_metric, brand_context, brand_id } = req.body;
+        const brandCtx = getBrandContextBlock(brand_context);
+        const handle = brand_context?.handle || '@amazingfacts.lab';
+
+        if (!topic || !topic.trim()) {
+            return res.status(400).json({ error: "Topic is required for Psychology Lab generation." });
+        }
+
+        const isResearchMode = (mode || '').toUpperCase() === 'RESEARCH';
+
+        if (isResearchMode) {
+            const researchPrompt = `You are the primary engine behind "LabEngine-v1", an automated content intelligence system for psychological and mind topics.
+
+Goal: Perform psychological research on the topic: "${topic}".
+Audience: "The Curious Optimizer" (Ages 18-35). Introspective, ambitious, seeking to understand human nature.
+
+Output a structured Markdown report with the exact sections below:
+1. Topic Overview & Scientific Basis
+2. Psychological Mechanism Explained
+3. Why Viewers Care (Emotional & Relational Drivers)
+4. 3 Angle Hook Ideas for Content Generation
+5. Virality Rating (1-10) with reasoning.
+
+Keep facts grounded in real cognitive science, behavioral psychology, or neurobiology. Do not write superficial fluff.`;
+
+            const aiRes = await generateAIContent(researchPrompt);
+            const rawText = aiRes.response.text();
+
+            return res.json({
+                success: true,
+                mode: "RESEARCH",
+                markdown: rawText
+            });
+        }
+
+        // GENERATE MODE
+        const targetMetric = (target_metric || 'SAVES').toUpperCase();
+        const contentType = (content_type || 'CAROUSEL').toUpperCase();
+
+        const generatePrompt = `You are the primary engine behind "LabEngine-v1", an automated content intelligence system for psychological and mind topics.
+
+Your goal is to generate social media content designed to maximize ${targetMetric === 'SHARES' ? 'DM SHARES (relational recognition)' : 'SAVES (high utility & reference)'}.
+
+Topic: "${topic}"
+Target Metric: ${targetMetric}
+Content Type: ${contentType}
+Handle/Brand: ${handle}
+${brandCtx}
+
+Audience: "The Curious Optimizer" (Ages 18-35). Introspective, ambitious, seeking to understand human nature.
+Visual Style: Dark mode (#0B0C10 background), off-white high contrast text, minimal clean typography.
+
+CONTENT RESILIENCE RULES:
+- Hooks must create an open cognitive loop within 2 seconds.
+- Grounded in real cognitive science, behavioral psychology, or neurobiology.
+- Never write superficial fluff; frame facts as quiet revelations.
+- Focus heavily on triggers that urge users to ${targetMetric}.
+
+OUTPUT REQUIREMENT:
+You MUST output ONLY valid JSON matching the exact schema below without any markdown wrappers (no \`\`\`json or \`\`\`):
+
+{
+  "generation_metadata": {
+    "topic": "${topic}",
+    "content_type": "${contentType}",
+    "target_metric": "${targetMetric}"
+  },
+  "carousel": {
+    "enabled": ${contentType === 'CAROUSEL' ? 'true' : 'false'},
+    "slides": [
+      {
+        "slide_number": 1,
+        "type": "HOOK_COVER",
+        "header_text": "${handle}",
+        "title_text": "Hook Title",
+        "subtitle_text": "Sub-hook statement",
+        "design_notes": "Dark background, high contrast title text"
+      },
+      {
+        "slide_number": 2,
+        "type": "BODY_VAL",
+        "header_text": "01 / THE MECHANISM",
+        "title_text": "Concept Name",
+        "body_text": "Clear explanation of the psychology principle.",
+        "highlight_words": ["words", "to", "highlight"]
+      },
+      {
+        "slide_number": 3,
+        "type": "BODY_VAL",
+        "header_text": "02 / THE TRIGGER",
+        "title_text": "Behavioral Pattern",
+        "body_text": "Deep insight into cognitive response.",
+        "highlight_words": ["key", "insight"]
+      },
+      {
+        "slide_number": 4,
+        "type": "CTA_FINAL",
+        "header_text": "RESEARCH LAB",
+        "title_text": "Actionable Takeaway",
+        "body_text": "Save this to remember it later. Follow ${handle} for daily insights.",
+        "is_cta": true
+      }
+    ]
+  },
+  "single_slide": {
+    "enabled": ${contentType === 'SINGLE_SLIDE' ? 'true' : 'false'},
+    "quote_text": "Powerful single psychology insight or quote",
+    "attribution": "${handle}"
+  },
+  "reel_blueprint": {
+    "enabled": ${contentType === 'REEL_BLUEPRINT' ? 'true' : 'false'},
+    "hook_text": "On-screen text (0-2s)",
+    "body_text": "On-screen text (2-7s)",
+    "audio_prompt": "Voiceover / background audio style",
+    "background_video_prompt": "Visual loop video description"
+  },
+  "caption": {
+    "hook": "First line of caption",
+    "body": "2-4 sentence deep dive explaining the psychology",
+    "cta": "Primary CTA sentence",
+    "hashtags": ["#psychologyfacts", "#humanbehavior", "#brainfacts", "#cognitivescience", "#mindfacts"]
+  }
+}`;
+
+        const aiRes = await generateAIContent(generatePrompt);
+        let rawText = aiRes.response.text();
+        rawText = cleanJsonString(rawText);
+
+        let parsed;
+        try {
+            parsed = JSON.parse(rawText);
+        } catch (pe) {
+            console.error("JSON parse error in /generate-psych:", pe.message, "Raw:", rawText.substring(0, 200));
+            return res.status(500).json({ error: "Failed to parse structured JSON output: " + pe.message });
+        }
+
+        const cleanBrandId = sanitizeBrandId(brand_id);
+        let postId = null;
+        try {
+            const { data, error } = await supabase
+                .from('posts')
+                .insert([{
+                    topic: `[Psychology Lab] ${topic.substring(0, 60)}`,
+                    text: JSON.stringify(parsed),
+                    status: 'Draft',
+                    brand_id: cleanBrandId
+                }])
+                .select();
+            if (data && data[0]) postId = data[0].id;
+        } catch (e) {}
+
+        res.json({
+            success: true,
+            mode: "GENERATE",
+            data: parsed,
+            post_id: postId
+        });
+    } catch (err) {
+        console.error("Psychology Lab error:", err);
+        res.status(500).json({ error: "Internal server error: " + err.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Creator's Den Backend v2.0 running on port ${port}`);
 });

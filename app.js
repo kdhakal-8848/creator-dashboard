@@ -512,6 +512,7 @@ navLinks.forEach(link => {
         // removed initTemplateStudio
         if (targetViewId === 'canvas-view') {
             initDesignStudio();
+        initPsychLab();
             syncTemplateDropdowns();
         
         // Save As New Template
@@ -4033,3 +4034,272 @@ document.getElementById('guest-login-btn')?.addEventListener('click', () => {
     fetchBrands();
     loadDashboardStats();
 });
+
+
+// ============================================================
+// LabEngine-v1: Psychology & Mind Lab Engine Logic
+// ============================================================
+let psychCanvas = null;
+let currentPsychSlides = [];
+let currentPsychSlideIndex = 0;
+let psychCurrentMode = 'GENERATE';
+
+function initPsychLab() {
+    const brandSelect = document.getElementById('psych-brand-select');
+    if (brandSelect) {
+        brandSelect.innerHTML = '';
+        allBrands.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name + ' (' + (b.handle || '') + ')';
+            brandSelect.appendChild(opt);
+        });
+    }
+
+    if (!psychCanvas) {
+        const cEl = document.getElementById('psych-slide-canvas');
+        if (cEl) {
+            psychCanvas = new fabric.Canvas('psych-slide-canvas', {
+                backgroundColor: '#0B0C10',
+                selection: false
+            });
+        }
+    }
+
+    document.querySelectorAll('.psych-mode-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.psych-mode-btn').forEach(b => b.classList.remove('active'));
+            const target = e.currentTarget;
+            target.classList.add('active');
+            psychCurrentMode = target.dataset.mode;
+
+            const genControls = document.getElementById('psych-generate-controls');
+            if (genControls) {
+                genControls.style.display = psychCurrentMode === 'GENERATE' ? 'flex' : 'none';
+            }
+        });
+    });
+
+    document.querySelectorAll('.psych-preset-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const topicInput = document.getElementById('psych-topic-input');
+            if (topicInput) topicInput.value = e.currentTarget.dataset.topic;
+        });
+    });
+
+    document.getElementById('psych-prev-slide')?.addEventListener('click', () => {
+        if (currentPsychSlideIndex > 0) {
+            currentPsychSlideIndex--;
+            renderPsychCurrentSlide();
+        }
+    });
+
+    document.getElementById('psych-next-slide')?.addEventListener('click', () => {
+        if (currentPsychSlideIndex < currentPsychSlides.length - 1) {
+            currentPsychSlideIndex++;
+            renderPsychCurrentSlide();
+        }
+    });
+
+    document.getElementById('psych-copy-caption')?.addEventListener('click', () => {
+        const capText = document.getElementById('psych-caption-text')?.value;
+        if (capText) {
+            navigator.clipboard.writeText(capText);
+            showToast('Caption & hashtags copied to clipboard!');
+        }
+    });
+
+    document.getElementById('psych-export-btn')?.addEventListener('click', async () => {
+        if (!psychCanvas || currentPsychSlides.length === 0) return;
+        showToast('Exporting Psychology Deck...');
+        const zip = new JSZip();
+        for (let i = 0; i < currentPsychSlides.length; i++) {
+            currentPsychSlideIndex = i;
+            renderPsychCurrentSlide();
+            const dataUrl = psychCanvas.toDataURL({ format: 'png' });
+            const base64Data = dataUrl.replace(/^data:image/png;base64,/, "");
+            zip.file(`slide_${i + 1}.png`, base64Data, { base64: true });
+        }
+        const content = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `Psychology_Lab_Deck_${Date.now()}.zip`;
+        link.click();
+        showToast('Deck exported successfully!');
+    });
+
+    document.getElementById('psych-submit-btn')?.addEventListener('click', async () => {
+        const topic = document.getElementById('psych-topic-input')?.value;
+        if (!topic || !topic.trim()) {
+            alert('Please enter a psychology topic or select a preset topic first.');
+            return;
+        }
+
+        const brandId = document.getElementById('psych-brand-select')?.value;
+        const brandObj = allBrands.find(b => b.id === brandId) || allBrands[0] || currentBranding;
+        const targetMetric = document.getElementById('psych-metric-select')?.value || 'SAVES';
+        const formatType = document.getElementById('psych-format-select')?.value || 'CAROUSEL';
+
+        const btn = document.getElementById('psych-submit-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-feather="loader" class="spin"></i> Running LabEngine Intelligence...';
+        if (window.feather) feather.replace();
+
+        const resultsContainer = document.getElementById('psych-results-container');
+        const researchCard = document.getElementById('psych-research-card');
+        const generateCard = document.getElementById('psych-generate-card');
+
+        try {
+            const res = await fetch(`${API_URL}/generate-psych`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: psychCurrentMode,
+                    topic: topic.trim(),
+                    target_metric: targetMetric,
+                    content_type: formatType,
+                    brand_context: brandObj,
+                    brand_id: brandId
+                })
+            });
+
+            const data = await res.json();
+            btn.disabled = false;
+            btn.innerHTML = '<i data-feather="zap"></i> Run LabEngine Intelligence';
+            if (window.feather) feather.replace();
+
+            if (!data.success) {
+                alert('Generation error: ' + (data.error || 'Unknown error'));
+                return;
+            }
+
+            resultsContainer.style.display = 'block';
+
+            if (data.mode === 'RESEARCH') {
+                researchCard.style.display = 'block';
+                generateCard.style.display = 'none';
+                renderPsychResearchMarkdown(data.markdown);
+            } else {
+                researchCard.style.display = 'none';
+                generateCard.style.display = 'block';
+
+                const outputData = data.data;
+                
+                if (outputData.carousel && outputData.carousel.slides) {
+                    currentPsychSlides = outputData.carousel.slides;
+                } else if (outputData.single_slide) {
+                    currentPsychSlides = [{
+                        slide_number: 1,
+                        type: 'SINGLE_SLIDE',
+                        header_text: outputData.single_slide.attribution || brandObj.handle || '@amazingfacts.lab',
+                        title_text: outputData.single_slide.quote_text,
+                        body_text: ''
+                    }];
+                } else {
+                    currentPsychSlides = [];
+                }
+
+                currentPsychSlideIndex = 0;
+                renderPsychCurrentSlide();
+
+                const reelCard = document.getElementById('psych-reel-card');
+                if (outputData.reel_blueprint && (outputData.reel_blueprint.enabled || formatType === 'REEL_BLUEPRINT')) {
+                    reelCard.style.display = 'block';
+                    document.getElementById('psych-reel-hook').textContent = outputData.reel_blueprint.hook_text || '';
+                    document.getElementById('psych-reel-body').textContent = outputData.reel_blueprint.body_text || '';
+                    document.getElementById('psych-reel-audio').textContent = outputData.reel_blueprint.audio_prompt || '';
+                    document.getElementById('psych-reel-video').textContent = outputData.reel_blueprint.background_video_prompt || '';
+                } else {
+                    reelCard.style.display = 'none';
+                }
+
+                const capObj = outputData.caption || {};
+                const captionStr = `${capObj.hook || ''}\n\n${capObj.body || ''}\n\n${capObj.cta || ''}\n\n${(capObj.hashtags || []).join(' ')}`;
+                document.getElementById('psych-caption-text').value = captionStr.trim();
+            }
+        } catch (err) {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-feather="zap"></i> Run LabEngine Intelligence';
+            if (window.feather) feather.replace();
+            alert('Error connecting to backend: ' + err.message);
+        }
+    });
+
+    document.getElementById('psych-convert-angle-btn')?.addEventListener('click', () => {
+        document.querySelector('.psych-mode-btn[data-mode="GENERATE"]')?.click();
+        window.scrollTo({ top: document.getElementById('psych-view').offsetTop, behavior: 'smooth' });
+    });
+}
+
+function renderPsychResearchMarkdown(markdownStr) {
+    const target = document.getElementById('psych-research-markdown');
+    if (!target) return;
+
+    let html = markdownStr
+        .replace(/^### (.*$)/gim, '<h4 style="font-size: 16px; font-weight: 700; color: #818cf8; margin: 16px 0 8px 0;">$1</h4>')
+        .replace(/^## (.*$)/gim, '<h3 style="font-size: 18px; font-weight: 700; color: #a7f3d0; margin: 20px 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">$1</h3>')
+        .replace(/^# (.*$)/gim, '<h2 style="font-size: 22px; font-weight: 800; color: #ffffff; margin: 24px 0 12px 0;">$1</h2>')
+        .replace(/^* (.*$)/gim, '<li style="margin-left: 20px;">$1</li>')
+        .replace(/^- (.*$)/gim, '<li style="margin-left: 20px;">$1</li>')
+        .replace(/\*\*(.*?)\*\*/gim, '<strong style="color: #f8fafc;">$1</strong>')
+        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+        .replace(/\n\n/gim, '<br><br>');
+
+    target.innerHTML = html;
+}
+
+function renderPsychCurrentSlide() {
+    if (!psychCanvas || currentPsychSlides.length === 0) return;
+    const slide = currentPsychSlides[currentPsychSlideIndex];
+
+    const counterEl = document.getElementById('psych-slide-counter');
+    if (counterEl) {
+        counterEl.textContent = `Slide ${currentPsychSlideIndex + 1} of ${currentPsychSlides.length}`;
+    }
+
+    psychCanvas.clear();
+    psychCanvas.backgroundColor = '#0B0C10';
+
+    const headerText = new fabric.Text(slide.header_text || '@amazingfacts.lab', {
+        left: 40, top: 40,
+        fontSize: 14, fontFamily: 'Inter, sans-serif',
+        fontWeight: '700', fill: '#6366f1', letterSpacing: 2
+    });
+    psychCanvas.add(headerText);
+
+    const accentLine = new fabric.Rect({
+        left: 40, top: 70,
+        width: 80, height: 4,
+        fill: '#ffd700', rx: 2, ry: 2
+    });
+    psychCanvas.add(accentLine);
+
+    const titleText = new fabric.Textbox(slide.title_text || '', {
+        left: 40, top: 110, width: 460,
+        fontSize: slide.type === 'HOOK_COVER' ? 32 : 24,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: '800', fill: '#f8fafc',
+        lineHeight: 1.2
+    });
+    psychCanvas.add(titleText);
+
+    const bodyStr = slide.subtitle_text || slide.body_text || '';
+    if (bodyStr) {
+        const bodyText = new fabric.Textbox(bodyStr, {
+            left: 40, top: 250, width: 460,
+            fontSize: 17, fontFamily: 'Inter, sans-serif',
+            fontWeight: '400', fill: '#94a3b8',
+            lineHeight: 1.5
+        });
+        psychCanvas.add(bodyText);
+    }
+
+    const footerText = new fabric.Text(slide.is_cta ? 'SAVE & SHARE WITH A FRIEND' : 'LABENGINE-V1 / PSYCHOLOGY', {
+        left: 40, top: 615,
+        fontSize: 12, fontFamily: 'Inter, sans-serif',
+        fontWeight: '600', fill: slide.is_cta ? '#ffd700' : '#475569'
+    });
+    psychCanvas.add(footerText);
+
+    psychCanvas.renderAll();
+}
