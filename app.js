@@ -1114,13 +1114,18 @@ function initDesignStudio() {
                     realSelector.value = baseTemplate;
                 }
                 
-                const dummyData = {
-                    title: "Your Catchy Headline Here",
-                    content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
-                    is_cta: false
-                };
+                // Use real slide data if available, otherwise show placeholder
+                const slideData = (currentSlides && currentSlides.length > 0 && currentSlides[currentSlideIndex])
+                    ? currentSlides[currentSlideIndex]
+                    : {
+                        title: "Your Catchy Headline Here",
+                        content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
+                        is_cta: false
+                    };
+                const slideIdx = (currentSlides && currentSlides.length > 0) ? currentSlideIndex : 0;
+                const imgUrl = (currentImageUrls && currentImageUrls[slideIdx]) || null;
                 
-                renderFabricSlide(dummyData, 0, null, brand, freeformCanvas).then(() => {
+                renderFabricSlide(slideData, slideIdx, imgUrl, brand, freeformCanvas).then(() => {
                     if (realSelector && oldVal !== null) realSelector.value = oldVal;
                 });
             }
@@ -4416,14 +4421,28 @@ function transferPsychToStudio() {
         is_cta: s.is_cta || false
     }));
 
+    // Set real slide data BEFORE switching view so initDesignStudio picks it up
     currentSlides = studioSlides;
+    currentImageUrls = studioSlides.map(() => null);
     currentSlideIndex = 0;
     
+    // switchView('canvas-view') already calls initDesignStudio() internally,
+    // which triggers the template change event — that event now checks
+    // currentSlides and renders real data instead of dummy placeholders.
     switchView('canvas-view');
-    const tSelect = document.getElementById('canvas-base-template');
-    if (tSelect) tSelect.value = 'template-psych-dark';
 
-    initDesignStudio();
+    // After init completes, set the psych template and render the full slide list
+    setTimeout(() => {
+        const tSelect = document.getElementById('canvas-base-template');
+        if (tSelect && tSelect.value !== 'template-psych-dark') {
+            tSelect.value = 'template-psych-dark';
+            tSelect.dispatchEvent(new Event('change'));
+        }
+        // Populate the slide list sidebar and render the first slide preview
+        if (typeof renderSlidesForm === 'function') renderSlidesForm();
+        if (typeof updateSlidePreview === 'function') updateSlidePreview();
+    }, 120);
+
     showToast('Loaded Psychology slides into Design Studio!');
 }
 
