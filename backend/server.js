@@ -731,8 +731,11 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
     "enabled": ${contentType === 'REEL_BLUEPRINT' ? 'true' : 'false'},
     "hook_text": "On-screen text (0-2s)",
     "body_text": "On-screen text (2-7s)",
-    "audio_prompt": "Voiceover / background audio style",
-    "background_video_prompt": "Visual loop video description"
+    "audio_prompt": "Voiceover tone, acoustic style, and SFX cues",
+    "background_video_prompt": "Detailed B-roll video search terms and visual framing",
+    "audio_script": "[0:00-0:03 HOOK] (Energetic/Intriguing) Spoken hook line... [SFX: Whoosh]\n\n[0:03-0:12 BODY] (Explanatory & Calm) Spoken core concept breakdown... [SFX: Soft Riser]\n\n[0:12-0:20 CTA] (Direct & Friendly) Spoken call to action... [SFX: Pop]",
+    "video_script": "SCENE 1 (0-3s): Close-up shot of person looking thoughtful in dark lighting. Text Overlay: 'The Competence Paradox'\n\nSCENE 2 (3-12s): Macro B-roll of brain neural pathways / clock ticking. Text Overlay: Key psychological principle\n\nSCENE 3 (12-20s): Smooth transition to dark minimal aesthetic logo card with follow button animation.",
+    "full_script_markdown": "# REEL PRODUCTION SCRIPT\n\n## AUDIO (VOICEOVER & SFX)\n- [0:00-0:03] Spoken hook...\n- [0:03-0:12] Spoken body...\n- [0:12-0:20] Spoken CTA...\n\n## VIDEO (B-ROLL & TEXT OVERLAYS)\n- Scene 1: ...\n- Scene 2: ...\n- Scene 3: ..."
   },
   "caption": {
     "hook": "First line of caption",

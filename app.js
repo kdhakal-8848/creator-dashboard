@@ -1741,22 +1741,31 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 targetCanvas.add(slideBody);
 
-            } else if (selectedPreset === 'template-minimal' || selectedPreset === 'template-bright-minimal') {
+            } else if (selectedPreset === 'template-minimal' || selectedPreset === 'template-bright-minimal' || selectedPreset === 'template-psych-dark' || selectedPreset === 'template-psych-quote') {
                 const titleColor = selectedPreset === 'template-bright-minimal' ? '#111827' : '#ffffff';
                 const bodyColor = selectedPreset === 'template-bright-minimal' ? '#4b5563' : '#cbd5e1';
                 
+                if (selectedPreset === 'template-psych-dark' || selectedPreset === 'template-psych-quote') {
+                    const topBar = new fabric.Rect({
+                        left: 80, top: 120, width: 80, height: 6,
+                        fill: '#6366F1', rx: 3, ry: 3,
+                        selectable: false, evented: false, customType: 'psych-accent-bar'
+                    });
+                    targetCanvas.add(topBar);
+                }
+
                 const titleDef = {
-                    left: 80, top: 230, width: CANVAS_W - 160,
-                    fontSize: 84, fontWeight: '700', fill: titleColor,
+                    left: 80, top: (selectedPreset === 'template-psych-dark' || selectedPreset === 'template-psych-quote') ? 160 : 230, width: CANVAS_W - 160,
+                    fontSize: selectedPreset === 'template-psych-quote' ? 76 : 84, fontWeight: '700', fill: titleColor,
                     fontFamily: headingFont, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
                 targetCanvas.add(slideTitle);
 
-                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : 230 + slideTitle.getScaledHeight() + 35;
+                const titleBottom = (slideData.titleStyle && slideData.titleStyle.top) ? slideData.titleStyle.top + slideTitle.getScaledHeight() + 35 : ((selectedPreset === 'template-psych-dark' || selectedPreset === 'template-psych-quote') ? 160 : 230) + slideTitle.getScaledHeight() + 35;
                 const bodyDef = {
-                    left: 80, top: Math.max(titleBottom, 460), width: CANVAS_W - 160,
+                    left: 80, top: Math.max(titleBottom, 450), width: CANVAS_W - 160,
                     fontSize: 48, fontWeight: '400', fill: bodyColor,
                     fontFamily: bodyFont, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
@@ -4307,8 +4316,17 @@ function initPsychLab() {
                     reelCard.style.display = 'block';
                     document.getElementById('psych-reel-hook').textContent = outputData.reel_blueprint.hook_text || '';
                     document.getElementById('psych-reel-body').textContent = outputData.reel_blueprint.body_text || '';
-                    document.getElementById('psych-reel-audio').textContent = outputData.reel_blueprint.audio_prompt || '';
-                    document.getElementById('psych-reel-video').textContent = outputData.reel_blueprint.background_video_prompt || '';
+                    
+                    const audioScriptText = outputData.reel_blueprint.audio_script || outputData.reel_blueprint.audio_prompt || '';
+                    const videoScriptText = outputData.reel_blueprint.video_script || outputData.reel_blueprint.background_video_prompt || '';
+                    
+                    const elAudio = document.getElementById('psych-reel-audio-script');
+                    if (elAudio) elAudio.value = audioScriptText;
+                    
+                    const elVideo = document.getElementById('psych-reel-video-script');
+                    if (elVideo) elVideo.value = videoScriptText;
+                    
+                    window.currentPsychFullReelScript = outputData.reel_blueprint.full_script_markdown || `# REEL PRODUCTION SCRIPT: ${topic}\n\n## AUDIO SCRIPT (VOICEOVER & SFX)\n${audioScriptText}\n\n## VIDEO SCRIPT (B-ROLL & OVERLAYS)\n${videoScriptText}`;
                 } else {
                     reelCard.style.display = 'none';
                 }
@@ -4325,10 +4343,120 @@ function initPsychLab() {
         }
     });
 
+    document.getElementById('psych-send-to-manual-btn')?.addEventListener('click', transferPsychToManual);
+    document.getElementById('psych-open-in-studio-btn')?.addEventListener('click', transferPsychToStudio);
+    document.getElementById('psych-send-to-queue-btn')?.addEventListener('click', savePsychToQueue);
+
+    document.getElementById('psych-copy-audio')?.addEventListener('click', () => {
+        const val = document.getElementById('psych-reel-audio-script')?.value;
+        if (val) { navigator.clipboard.writeText(val); showToast('Detailed Audio Script copied!'); }
+    });
+
+    document.getElementById('psych-copy-video')?.addEventListener('click', () => {
+        const val = document.getElementById('psych-reel-video-script')?.value;
+        if (val) { navigator.clipboard.writeText(val); showToast('Detailed Video Script copied!'); }
+    });
+
+    document.getElementById('psych-copy-full-reel')?.addEventListener('click', () => {
+        const fullScript = window.currentPsychFullReelScript || document.getElementById('psych-reel-audio-script')?.value;
+        if (fullScript) { navigator.clipboard.writeText(fullScript); showToast('Full Teleprompter Reel Script copied!'); }
+    });
+
     document.getElementById('psych-convert-angle-btn')?.addEventListener('click', () => {
         document.querySelector('.psych-mode-btn[data-mode="GENERATE"]')?.click();
         window.scrollTo({ top: document.getElementById('psych-view').offsetTop, behavior: 'smooth' });
     });
+}
+
+let lastGeneratedPsychData = null;
+
+function transferPsychToManual() {
+    if (!currentPsychSlides || currentPsychSlides.length === 0) {
+        showToast('No generated Psychology content available.');
+        return;
+    }
+    const topic = document.getElementById('psych-topic-input')?.value || 'Psychology Topic';
+    
+    const formattedPayload = {
+        slides: currentPsychSlides.map((s, idx) => ({
+            title: s.title_text || s.title || `Slide ${idx+1}`,
+            content: s.body_text || s.content || '',
+            header_text: s.header_text || '',
+            is_cta: s.is_cta || false
+        })),
+        caption: {
+            hook: document.getElementById('psych-caption-text')?.value?.split('\n\n')[0] || '',
+            body: document.getElementById('psych-caption-text')?.value || '',
+            cta: 'Save this post to remember it later!',
+            hashtags: { niche: ["#psychology", "#mindset"], broad: ["#behavior"], high_intent: ["#mentalmodels"] }
+        }
+    };
+
+    const topicInput = document.getElementById('manual-topic');
+    if (topicInput) topicInput.value = topic;
+
+    const manualSelect = document.getElementById('manual-content-type');
+    if (manualSelect) manualSelect.value = 'Concept Deep Dive';
+
+    switchView('manual-view');
+    showToast('Psychology post transferred to Manual Input for editing!');
+}
+
+function transferPsychToStudio() {
+    if (!currentPsychSlides || currentPsychSlides.length === 0) {
+        showToast('No generated Psychology slides available to edit in Design Studio.');
+        return;
+    }
+
+    const studioSlides = currentPsychSlides.map((s, idx) => ({
+        title: s.title_text || s.title || `Slide ${idx+1}`,
+        content: s.body_text || s.content || '',
+        header: s.header_text || '@amazingfacts.lab',
+        is_cta: s.is_cta || false
+    }));
+
+    currentSlides = studioSlides;
+    currentSlideIndex = 0;
+    
+    switchView('canvas-view');
+    const tSelect = document.getElementById('canvas-base-template');
+    if (tSelect) tSelect.value = 'template-psych-dark';
+
+    initDesignStudio();
+    showToast('Loaded Psychology slides into Design Studio!');
+}
+
+async function savePsychToQueue() {
+    if (!currentPsychSlides || currentPsychSlides.length === 0) {
+        showToast('No generated Psychology content to save.');
+        return;
+    }
+
+    const topic = document.getElementById('psych-topic-input')?.value || 'Psychology Topic';
+    const brandId = document.getElementById('psych-brand-select')?.value || activeBrandId;
+    const captionStr = document.getElementById('psych-caption-text')?.value || '';
+
+    const newPost = {
+        id: 'psych_' + Date.now(),
+        topic: `[Psychology] ${topic}`,
+        text: JSON.stringify({
+            slides: currentPsychSlides,
+            caption: { body: captionStr }
+        }),
+        image_url: JSON.stringify(currentPsychSlides.map(() => null)),
+        status: 'Draft',
+        brand_id: brandId,
+        updated_at: new Date().toISOString()
+    };
+
+    if (isMockMode) {
+        mockPosts.unshift(newPost);
+        saveMockPosts();
+    } else {
+        await supabase.from('posts').insert([newPost]);
+    }
+
+    showToast('Psychology post saved to Content Queue!');
 }
 
 function renderPsychResearchMarkdown(markdownStr) {
