@@ -30,6 +30,16 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 // --- Shared Helpers ---
 
 /**
+ * Clean raw JSON string returned by LLM (strip markdown backticks / code fences)
+ */
+function cleanJsonString(str) {
+    if (!str) return '';
+    let cleaned = String(str).trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    return cleaned;
+}
+
+/**
  * Generate a Pollinations.ai image URL from a descriptive prompt
  */
 function buildImageUrl(imagePrompt, seed) {
