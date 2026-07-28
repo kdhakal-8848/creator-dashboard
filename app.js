@@ -1114,18 +1114,13 @@ function initDesignStudio() {
                     realSelector.value = baseTemplate;
                 }
                 
-                // Use real slide data if available, otherwise show placeholder
-                const slideData = (currentSlides && currentSlides.length > 0 && currentSlides[currentSlideIndex])
-                    ? currentSlides[currentSlideIndex]
-                    : {
-                        title: "Your Catchy Headline Here",
-                        content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
-                        is_cta: false
-                    };
-                const slideIdx = (currentSlides && currentSlides.length > 0) ? currentSlideIndex : 0;
-                const imgUrl = (currentImageUrls && currentImageUrls[slideIdx]) || null;
+                const dummyData = {
+                    title: "Your Catchy Headline Here",
+                    content: "This is a placeholder for your body text. It will be replaced with real content during generation.",
+                    is_cta: false
+                };
                 
-                renderFabricSlide(slideData, slideIdx, imgUrl, brand, freeformCanvas).then(() => {
+                renderFabricSlide(dummyData, 0, null, brand, freeformCanvas).then(() => {
                     if (realSelector && oldVal !== null) realSelector.value = oldVal;
                 });
             }
@@ -4297,6 +4292,8 @@ function initPsychLab() {
                 generateCard.style.display = 'block';
 
                 const outputData = data.data;
+                // Store the Supabase post ID so "Edit in Studio" can open the editor
+                window.lastPsychPostId = data.post_id || null;
                 
                 if (outputData.carousel && outputData.carousel.slides) {
                     currentPsychSlides = outputData.carousel.slides;
@@ -4408,42 +4405,16 @@ function transferPsychToManual() {
 }
 
 function transferPsychToStudio() {
-    const slides = (currentPsychSlides && currentPsychSlides.length > 0) ? currentPsychSlides : window.currentPsychSlides;
-    if (!slides || slides.length === 0) {
-        showToast('No generated Psychology slides available to edit in Design Studio.');
+    const postId = window.lastPsychPostId;
+    if (!postId) {
+        showToast('No saved Psychology post found. Please generate content first.');
         return;
     }
 
-    const studioSlides = slides.map((s, idx) => ({
-        title: s.title_text || s.title || `Slide ${idx+1}`,
-        content: s.body_text || s.content || '',
-        header: s.header_text || '@amazingfacts.lab',
-        is_cta: s.is_cta || false
-    }));
-
-    // Set real slide data BEFORE switching view so initDesignStudio picks it up
-    currentSlides = studioSlides;
-    currentImageUrls = studioSlides.map(() => null);
-    currentSlideIndex = 0;
-    
-    // switchView('canvas-view') already calls initDesignStudio() internally,
-    // which triggers the template change event — that event now checks
-    // currentSlides and renders real data instead of dummy placeholders.
-    switchView('canvas-view');
-
-    // After init completes, set the psych template and render the full slide list
-    setTimeout(() => {
-        const tSelect = document.getElementById('canvas-base-template');
-        if (tSelect && tSelect.value !== 'template-psych-dark') {
-            tSelect.value = 'template-psych-dark';
-            tSelect.dispatchEvent(new Event('change'));
-        }
-        // Populate the slide list sidebar and render the first slide preview
-        if (typeof renderSlidesForm === 'function') renderSlidesForm();
-        if (typeof updateSlidePreview === 'function') updateSlidePreview();
-    }, 120);
-
-    showToast('Loaded Psychology slides into Design Studio!');
+    // Use the same flow as Facts Lab / News Lab:
+    // open the post in the Editor view via openEditor(id)
+    window.openEditor(postId);
+    showToast('Opening Psychology post in Editor...');
 }
 
 window.transferPsychToManual = transferPsychToManual;

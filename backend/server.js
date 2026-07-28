@@ -763,12 +763,48 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
 
         const cleanBrandId = sanitizeBrandId(brand_id);
         let postId = null;
+
+        // Normalize psych output into the standard {slides, caption} format
+        // that openEditor / parsePostText expects (same as Facts Lab, News Lab)
+        let normalizedSlides = [];
+        if (parsed.carousel && parsed.carousel.slides) {
+            normalizedSlides = parsed.carousel.slides.map((s, idx) => ({
+                title: s.title_text || s.title || `Slide ${idx + 1}`,
+                content: s.body_text || s.content || '',
+                header: s.header_text || handle,
+                image_prompt: s.design_notes || '',
+                is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
+            }));
+        } else if (parsed.single_slide && parsed.single_slide.enabled) {
+            normalizedSlides = [{
+                title: parsed.single_slide.quote_text || 'Psychology Insight',
+                content: '',
+                header: parsed.single_slide.attribution || handle,
+                is_cta: false
+            }];
+        }
+
+        const normalizedCaption = parsed.caption || {};
+        const normalizedPost = {
+            slides: normalizedSlides,
+            caption: {
+                hook: normalizedCaption.hook || '',
+                body: normalizedCaption.body || '',
+                cta: normalizedCaption.cta || '',
+                hashtags: {
+                    niche: Array.isArray(normalizedCaption.hashtags) ? normalizedCaption.hashtags : (normalizedCaption.hashtags?.niche || []),
+                    broad: normalizedCaption.hashtags?.broad || [],
+                    high_intent: normalizedCaption.hashtags?.high_intent || []
+                }
+            }
+        };
+
         try {
             const { data, error } = await supabase
                 .from('posts')
                 .insert([{
                     topic: `[Psychology Lab] ${topic.substring(0, 60)}`,
-                    text: JSON.stringify(parsed),
+                    text: JSON.stringify(normalizedPost),
                     status: 'Draft',
                     brand_id: cleanBrandId
                 }])
