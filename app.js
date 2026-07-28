@@ -1369,7 +1369,79 @@ function fabricColorToHex(color) {
     } catch { return '#ffffff'; }
 }
 
-// --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
+const BRAND_TOKENS = {
+    loksewa: {
+        id: 'loksewa',
+        name: 'Loksewa Nepal',
+        handle: '@loksewa_prep',
+        logoUrl: 'assets/icons/icon-192.png',
+        verified: true,
+        headerStyle: 'pinned-bar',
+        headerHeight: 96,
+        bgPrimary: '#FFFFFF',
+        bgSecondary: '#F1F5F9',
+        headerBg: '#0F3D5C',
+        headerText: '#FFFFFF',
+        accentPrimary: '#0F3D5C',
+        accentSecondary: '#E8A93C',
+        textHeading: '#0B1B2B',
+        textBody: '#1F2937',
+        textCaption: '#64748B',
+        fontHeading: 'Noto Sans Devanagari, Inter, sans-serif',
+        fontBody: 'Noto Sans Devanagari, Inter, sans-serif',
+        fontMono: 'Roboto Condensed, Noto Sans, sans-serif',
+        radiusCard: 20,
+        safeMargin: 60
+    },
+    political_literacy: {
+        id: 'political_literacy',
+        name: 'Political Literacy',
+        handle: '@CIVIC_LITERACY_NP',
+        logoUrl: 'assets/icons/icon-192.png',
+        verified: true,
+        headerStyle: 'inset-hairline',
+        headerHeight: 72,
+        bgPrimary: '#FAF9F6',
+        bgSecondary: '#EFEDE7',
+        headerBg: 'transparent',
+        headerText: '#1A1A1A',
+        accentPrimary: '#7A1F2B',
+        accentSecondary: '#4A5A48',
+        textHeading: '#111111',
+        textBody: '#333333',
+        textCaption: '#7A7A7A',
+        fontHeading: 'Source Serif 4, Lora, Georgia, serif',
+        fontBody: 'Source Sans 3, Inter, sans-serif',
+        fontMono: 'Inter, sans-serif',
+        radiusCard: 8,
+        safeMargin: 60
+    },
+    psychology: {
+        id: 'psychology',
+        name: 'Psychology & Mind Facts',
+        handle: '@AMAZINGFACTS.LAB',
+        logoUrl: 'assets/icons/icon-192.png',
+        verified: true,
+        headerStyle: 'floating-pill',
+        headerHeight: 56,
+        bgPrimary: '#0B0E14',
+        bgSecondary: 'rgba(21, 26, 36, 0.7)',
+        headerBg: 'rgba(255, 255, 255, 0.08)',
+        headerText: '#F5F5F7',
+        accentPrimary: '#8B7FD6',
+        accentSecondary: '#5FB3B3',
+        accentGlow: '#C9BFFF',
+        textHeading: '#FFFFFF',
+        textBody: '#D6D9E0',
+        textCaption: '#8B949E',
+        fontHeading: 'Fraunces, Outfit, sans-serif',
+        fontBody: 'Satoshi, Inter, sans-serif',
+        fontMono: 'Inter, monospace',
+        radiusCard: 28,
+        safeMargin: 60
+    }
+};
+
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
 async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetCanvas = null) {
     if (!targetCanvas) {
@@ -1378,9 +1450,6 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
     }
     if (!targetCanvas) return;
 
-    // We do NOT sync here anymore, because it would overwrite the new target slide
-    // with the old slide's canvas state just before we draw the new one!
-    // Sync is now strictly handled in the nav button click handlers and UI updaters BEFORE currentSlideIndex changes.
     targetCanvas.clear();
 
     const templateSelector = document.getElementById('template-selector');
@@ -1396,11 +1465,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
     const bodyFont = brand?.bodyFont || 'Inter';
 
     let bgColor = primaryColor;
-    if (selectedPreset === 'tpl_news_editorial') bgColor = '#0f172a';
-    if (selectedPreset === 'tpl_gamified_quiz') bgColor = '#0f0c29';
-    if (selectedPreset === 'tpl_curiosity_hook') bgColor = '#0b0c10';
-    if (selectedPreset === 'tpl_editorial_quote') bgColor = '#0a1128';
-    if (selectedPreset === 'tpl_structured_list') bgColor = '#0f172a';
+    if (selectedPreset === 'tpl_news_editorial') bgColor = BRAND_TOKENS.loksewa.bgPrimary;
+    if (selectedPreset === 'tpl_gamified_quiz') bgColor = BRAND_TOKENS.loksewa.bgPrimary;
+    if (selectedPreset === 'tpl_curiosity_hook') bgColor = BRAND_TOKENS.psychology.bgPrimary;
+    if (selectedPreset === 'tpl_editorial_quote') bgColor = BRAND_TOKENS.political_literacy.bgPrimary;
+    if (selectedPreset === 'tpl_structured_list') bgColor = BRAND_TOKENS.political_literacy.bgPrimary;
     if (selectedPreset === 'template-bold') bgColor = '#0d0d0d';
     if (selectedPreset === 'template-glass') bgColor = '#0a192f';
     if (selectedPreset === 'template-visual') bgColor = '#0f172a';
@@ -1831,27 +1900,27 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
             } else if (selectedPreset === 'tpl_news_editorial') {
                 let currentY = 160;
 
-                // Category Pill / Badge
+                // Category Pill / Badge (Loksewa Token)
                 const badgeTextVal = (document.getElementById('canvas-badge-selector')?.value || '🇳🇵 LOKSEWA NEWS').toUpperCase();
                 const badgeBg = new fabric.Rect({
                     left: 0, top: 0, width: 260 + (badgeTextVal.length * 10), height: 50,
-                    fill: '#2563EB', rx: 8, ry: 8, customType: 'news-badge-bg'
+                    fill: BRAND_TOKENS.loksewa.accentPrimary, rx: 8, ry: 8, customType: 'news-badge-bg'
                 });
                 const badgeText = new fabric.IText(badgeTextVal, {
                     left: 18, top: 12, fontSize: 22, fontWeight: '800', fill: '#FFFFFF',
-                    fontFamily: headingFont, customType: 'news-badge-text'
+                    fontFamily: BRAND_TOKENS.loksewa.fontHeading, customType: 'news-badge-text'
                 });
                 const badgeGroup = new fabric.Group([badgeBg, badgeText], {
-                    left: 80, top: currentY, selectable: true, customType: 'news-badge-group'
+                    left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, selectable: true, customType: 'news-badge-group'
                 });
                 targetCanvas.add(badgeGroup);
                 currentY += 75;
 
                 // Headline
                 const titleDef = {
-                    left: 80, top: currentY, width: CANVAS_W - 160,
-                    fontSize: 76, fontWeight: '900', fill: '#FFFFFF',
-                    fontFamily: headingFont, lineHeight: 1.15,
+                    left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.loksewa.safeMargin * 2),
+                    fontSize: 76, fontWeight: '900', fill: BRAND_TOKENS.loksewa.textHeading,
+                    fontFamily: BRAND_TOKENS.loksewa.fontHeading, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
@@ -1863,14 +1932,14 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 const frameHeight = Math.round(CANVAS_H * 0.35);
                 if (!imageUrl) {
                     const placeholderBg = new fabric.Rect({
-                        left: 80, top: currentY, width: CANVAS_W - 160, height: frameHeight,
-                        fill: 'rgba(30, 41, 59, 0.7)', stroke: '#3B82F6', strokeWidth: 2, strokeDashArray: [8, 4],
+                        left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.loksewa.safeMargin * 2), height: frameHeight,
+                        fill: BRAND_TOKENS.loksewa.bgSecondary, stroke: BRAND_TOKENS.loksewa.accentPrimary, strokeWidth: 2, strokeDashArray: [8, 4],
                         rx: 16, ry: 16, selectable: true, customType: 'image-placeholder-bg'
                     });
                     targetCanvas.add(placeholderBg);
                     const placeholderText = new fabric.IText('📰 Editorial Media Slot (Upload / AI)', {
                         left: CANVAS_W / 2, top: currentY + frameHeight / 2, originX: 'center', originY: 'center',
-                        fontSize: 28, fontWeight: '600', fill: '#94A3B8', fontFamily: headingFont, selectable: false
+                        fontSize: 28, fontWeight: '600', fill: BRAND_TOKENS.loksewa.textCaption, fontFamily: BRAND_TOKENS.loksewa.fontHeading, selectable: false
                     });
                     targetCanvas.add(placeholderText);
                 }
@@ -1878,9 +1947,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
 
                 // Body Text
                 const bodyDef = {
-                    left: 80, top: currentY, width: CANVAS_W - 160,
-                    fontSize: 44, fontWeight: '400', fill: '#CBD5E1',
-                    fontFamily: bodyFont, lineHeight: 1.5,
+                    left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.loksewa.safeMargin * 2),
+                    fontSize: 44, fontWeight: '400', fill: BRAND_TOKENS.loksewa.textBody,
+                    fontFamily: BRAND_TOKENS.loksewa.fontBody, lineHeight: 1.5,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
@@ -1888,8 +1957,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
 
                 // Source Tag
                 const sourceTag = new fabric.IText('SOURCE: PUBLIC SERVICE COMMISSION (NEPAL) • VERIFIED REPORT', {
-                    left: 80, top: CANVAS_H - 120, fontSize: 20, fontWeight: '700', fill: '#64748B',
-                    fontFamily: headingFont, letterSpacing: 1.5, selectable: true
+                    left: BRAND_TOKENS.loksewa.safeMargin, top: CANVAS_H - 120, fontSize: 20, fontWeight: '700', fill: BRAND_TOKENS.loksewa.textCaption,
+                    fontFamily: BRAND_TOKENS.loksewa.fontHeading, letterSpacing: 1.5, selectable: true
                 });
                 targetCanvas.add(sourceTag);
 
@@ -1897,16 +1966,16 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 let currentY = 150;
 
                 const quizTag = new fabric.IText('🎯 LOKSEWA MODEL TEST • QUIZ SLIDE', {
-                    left: 80, top: currentY, fontSize: 24, fontWeight: '800', fill: '#F59E0B',
-                    fontFamily: headingFont, letterSpacing: 2, selectable: true
+                    left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, fontSize: 24, fontWeight: '800', fill: BRAND_TOKENS.loksewa.accentSecondary,
+                    fontFamily: BRAND_TOKENS.loksewa.fontHeading, letterSpacing: 2, selectable: true
                 });
                 targetCanvas.add(quizTag);
                 currentY += 45;
 
                 const qTitleDef = {
-                    left: 80, top: currentY, width: CANVAS_W - 160,
-                    fontSize: 72, fontWeight: '900', fill: '#FFFFFF',
-                    fontFamily: headingFont, lineHeight: 1.15,
+                    left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.loksewa.safeMargin * 2),
+                    fontSize: 72, fontWeight: '900', fill: BRAND_TOKENS.loksewa.textHeading,
+                    fontFamily: BRAND_TOKENS.loksewa.fontHeading, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...qTitleDef, ...(slideData.titleStyle || {}) });
@@ -1925,17 +1994,17 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 options.slice(0, 4).forEach((optText, i) => {
                     const isCorrect = optText.includes('✓') || optText.includes('(Correct)') || i === 0;
                     const cardBg = new fabric.Rect({
-                        left: 80, top: currentY, width: CANVAS_W - 160, height: 95,
-                        fill: isCorrect ? 'rgba(16, 185, 129, 0.2)' : 'rgba(30, 41, 59, 0.8)',
-                        stroke: isCorrect ? '#10B981' : '#475569', strokeWidth: 2,
+                        left: BRAND_TOKENS.loksewa.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.loksewa.safeMargin * 2), height: 95,
+                        fill: isCorrect ? '#FEF3C7' : BRAND_TOKENS.loksewa.bgSecondary,
+                        stroke: isCorrect ? BRAND_TOKENS.loksewa.accentSecondary : '#CBD5E1', strokeWidth: 2,
                         rx: 16, ry: 16, selectable: true
                     });
                     targetCanvas.add(cardBg);
 
                     const optLabel = new fabric.Textbox(optText, {
-                        left: 110, top: currentY + 24, width: CANVAS_W - 220,
+                        left: BRAND_TOKENS.loksewa.safeMargin + 30, top: currentY + 24, width: CANVAS_W - (BRAND_TOKENS.loksewa.safeMargin * 2) - 60,
                         fontSize: 38, fontWeight: isCorrect ? '700' : '500',
-                        fill: isCorrect ? '#6EE7B7' : '#E2E8F0', fontFamily: bodyFont, selectable: true
+                        fill: isCorrect ? '#92400E' : BRAND_TOKENS.loksewa.textBody, fontFamily: BRAND_TOKENS.loksewa.fontBody, selectable: true
                     });
                     targetCanvas.add(optLabel);
 
@@ -1947,32 +2016,32 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                     left: CANVAS_W / 2, top: CANVAS_H / 3, radius: 350, originX: 'center', originY: 'center',
                     fill: new fabric.Gradient({
                         type: 'radial', coords: { x1: 350, y1: 350, r1: 0, x2: 350, y2: 350, r2: 350 },
-                        colorStops: [{ offset: 0, color: 'rgba(99, 102, 241, 0.35)' }, { offset: 1, color: 'rgba(11, 12, 16, 0)' }]
+                        colorStops: [{ offset: 0, color: 'rgba(139, 127, 214, 0.35)' }, { offset: 1, color: 'rgba(11, 14, 20, 0)' }]
                     }),
                     selectable: false, evented: false
                 });
                 targetCanvas.add(glowCircle);
 
-                const cardMargin = 70;
+                const cardMargin = BRAND_TOKENS.psychology.safeMargin;
                 const cardTop = 160;
                 const cardHeight = CANVAS_H - 320;
                 const glassCard = new fabric.Rect({
                     left: cardMargin, top: cardTop, width: CANVAS_W - (cardMargin * 2), height: cardHeight,
-                    fill: 'rgba(255, 255, 255, 0.05)', stroke: 'rgba(255, 255, 255, 0.18)', strokeWidth: 2,
-                    rx: 28, ry: 28, selectable: true, customType: 'glass-card'
+                    fill: BRAND_TOKENS.psychology.bgSecondary, stroke: 'rgba(255, 255, 255, 0.18)', strokeWidth: 2,
+                    rx: BRAND_TOKENS.psychology.radiusCard, ry: BRAND_TOKENS.psychology.radiusCard, selectable: true, customType: 'glass-card'
                 });
                 targetCanvas.add(glassCard);
 
                 const accentPill = new fabric.Rect({
                     left: cardMargin + 40, top: cardTop + 45, width: 100, height: 8,
-                    fill: '#818CF8', rx: 4, ry: 4, selectable: false
+                    fill: BRAND_TOKENS.psychology.accentPrimary, rx: 4, ry: 4, selectable: false
                 });
                 targetCanvas.add(accentPill);
 
                 const titleDef = {
                     left: cardMargin + 40, top: cardTop + 75, width: CANVAS_W - (cardMargin * 2) - 80,
-                    fontSize: 78, fontWeight: '900', fill: '#FFFFFF',
-                    fontFamily: headingFont, lineHeight: 1.15,
+                    fontSize: 78, fontWeight: '900', fill: BRAND_TOKENS.psychology.textHeading,
+                    fontFamily: BRAND_TOKENS.psychology.fontHeading, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
@@ -1982,8 +2051,8 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
 
                 const bodyDef = {
                     left: cardMargin + 40, top: titleBottom, width: CANVAS_W - (cardMargin * 2) - 80,
-                    fontSize: 46, fontWeight: '400', fill: '#E2E8F0',
-                    fontFamily: bodyFont, lineHeight: 1.55,
+                    fontSize: 46, fontWeight: '400', fill: BRAND_TOKENS.psychology.textBody,
+                    fontFamily: BRAND_TOKENS.psychology.fontBody, lineHeight: 1.55,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
@@ -1993,17 +2062,17 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 let currentY = 160;
 
                 const quoteGlyph = new fabric.IText('“', {
-                    left: 75, top: currentY - 30, fontSize: 160, fontWeight: '900',
-                    fill: '#F59E0B', fontFamily: 'Georgia', selectable: false
+                    left: BRAND_TOKENS.political_literacy.safeMargin - 5, top: currentY - 30, fontSize: 160, fontWeight: '900',
+                    fill: BRAND_TOKENS.political_literacy.accentPrimary, fontFamily: BRAND_TOKENS.political_literacy.fontHeading, selectable: false
                 });
                 targetCanvas.add(quoteGlyph);
 
                 currentY += 100;
 
                 const quoteDef = {
-                    left: 80, top: currentY, width: CANVAS_W - 160,
-                    fontSize: 64, fontWeight: '700', fill: '#FFFFFF',
-                    fontFamily: 'Georgia', lineHeight: 1.25, fontStyle: 'italic',
+                    left: BRAND_TOKENS.political_literacy.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.political_literacy.safeMargin * 2),
+                    fontSize: 64, fontWeight: '700', fill: BRAND_TOKENS.political_literacy.textHeading,
+                    fontFamily: BRAND_TOKENS.political_literacy.fontHeading, lineHeight: 1.25, fontStyle: 'italic',
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...quoteDef, ...(slideData.titleStyle || {}) });
@@ -2012,17 +2081,17 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 currentY += slideTitle.getScaledHeight() + 45;
 
                 const divLine = new fabric.Rect({
-                    left: 80, top: currentY, width: 140, height: 4,
-                    fill: '#F59E0B', selectable: false
+                    left: BRAND_TOKENS.political_literacy.safeMargin, top: currentY, width: 140, height: 4,
+                    fill: BRAND_TOKENS.political_literacy.accentPrimary, selectable: false
                 });
                 targetCanvas.add(divLine);
 
                 currentY += 30;
 
                 const authorDef = {
-                    left: 80, top: currentY, width: CANVAS_W - 160,
-                    fontSize: 44, fontWeight: '500', fill: '#94A3B8',
-                    fontFamily: headingFont, lineHeight: 1.4,
+                    left: BRAND_TOKENS.political_literacy.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.political_literacy.safeMargin * 2),
+                    fontSize: 44, fontWeight: '500', fill: BRAND_TOKENS.political_literacy.textBody,
+                    fontFamily: BRAND_TOKENS.political_literacy.fontBody, lineHeight: 1.4,
                     selectable: true, isPlaceholder: 'body', customType: 'body'
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '— Political Literacy Project', { ...authorDef, ...(slideData.bodyStyle || {}) });
@@ -2032,9 +2101,9 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 let currentY = 160;
 
                 const titleDef = {
-                    left: 80, top: currentY, width: CANVAS_W - 160,
-                    fontSize: 72, fontWeight: '900', fill: '#FFFFFF',
-                    fontFamily: headingFont, lineHeight: 1.15,
+                    left: BRAND_TOKENS.political_literacy.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.political_literacy.safeMargin * 2),
+                    fontSize: 72, fontWeight: '900', fill: BRAND_TOKENS.political_literacy.textHeading,
+                    fontFamily: BRAND_TOKENS.political_literacy.fontHeading, lineHeight: 1.15,
                     selectable: true, isPlaceholder: 'title', customType: 'title'
                 };
                 const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
@@ -2044,36 +2113,36 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
 
                 const items = (slideData.content || '').split('\n').filter(l => l.trim().length > 0);
                 const listItems = items.length > 0 ? items : [
-                    '1. Key takeaway point or principle breakdown',
-                    '2. Secondary evidentiary data or insight',
-                    '3. Practical application and action steps'
+                    '1. Context: Historical background and policy origin',
+                    '2. Mechanism: Structural breakdown of regulatory framework',
+                    '3. Stakes: Long-term economic & civic implications'
                 ];
 
                 const cardHeight = Math.min(130, Math.floor((CANVAS_H - currentY - 140) / listItems.length));
 
                 listItems.forEach((itemText, idx) => {
                     const itemCard = new fabric.Rect({
-                        left: 80, top: currentY, width: CANVAS_W - 160, height: cardHeight - 15,
-                        fill: 'rgba(30, 41, 59, 0.75)', stroke: '#334155', strokeWidth: 1.5,
-                        rx: 14, ry: 14, selectable: true
+                        left: BRAND_TOKENS.political_literacy.safeMargin, top: currentY, width: CANVAS_W - (BRAND_TOKENS.political_literacy.safeMargin * 2), height: cardHeight - 15,
+                        fill: BRAND_TOKENS.political_literacy.bgSecondary, stroke: '#E2E8F0', strokeWidth: 1.5,
+                        rx: BRAND_TOKENS.political_literacy.radiusCard, ry: BRAND_TOKENS.political_literacy.radiusCard, selectable: true
                     });
                     targetCanvas.add(itemCard);
 
                     const numCircle = new fabric.Circle({
-                        left: 105, top: currentY + (cardHeight - 15) / 2, radius: 22, originY: 'center',
-                        fill: '#3B82F6', selectable: false
+                        left: BRAND_TOKENS.political_literacy.safeMargin + 25, top: currentY + (cardHeight - 15) / 2, radius: 22, originY: 'center',
+                        fill: BRAND_TOKENS.political_literacy.accentPrimary, selectable: false
                     });
                     targetCanvas.add(numCircle);
 
                     const numText = new fabric.IText(String(idx + 1), {
-                        left: 105, top: currentY + (cardHeight - 15) / 2, originX: 'center', originY: 'center',
-                        fontSize: 24, fontWeight: '800', fill: '#FFFFFF', fontFamily: headingFont, selectable: false
+                        left: BRAND_TOKENS.political_literacy.safeMargin + 25, top: currentY + (cardHeight - 15) / 2, originX: 'center', originY: 'center',
+                        fontSize: 24, fontWeight: '800', fill: '#FFFFFF', fontFamily: BRAND_TOKENS.political_literacy.fontHeading, selectable: false
                     });
                     targetCanvas.add(numText);
 
                     const itemTB = new fabric.Textbox(itemText.replace(/^\d+\.\s*/, ''), {
-                        left: 160, top: currentY + 20, width: CANVAS_W - 260,
-                        fontSize: 38, fontWeight: '500', fill: '#F1F5F9', fontFamily: bodyFont, selectable: true
+                        left: BRAND_TOKENS.political_literacy.safeMargin + 75, top: currentY + 20, width: CANVAS_W - (BRAND_TOKENS.political_literacy.safeMargin * 2) - 100,
+                        fontSize: 38, fontWeight: '500', fill: BRAND_TOKENS.political_literacy.textBody, fontFamily: BRAND_TOKENS.political_literacy.fontBody, selectable: true
                     });
                     targetCanvas.add(itemTB);
 
