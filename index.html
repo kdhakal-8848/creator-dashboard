@@ -227,6 +227,11 @@
                                         <option value="theme-facebook">Theme: Facebook (Light)</option>
                                         <option value="theme-slate">Theme: Slate (Dark)</option>
                                     </select>
+                                    <select id="canvas-aspect-selector" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border-default); background: var(--color-canvas-default); color: var(--color-fg-default); height: 24px;">
+                                        <option value="4:5">4:5 (Portrait 1080x1350)</option>
+                                        <option value="1:1">1:1 (Square 1080x1080)</option>
+                                        <option value="9:16">9:16 (Story 1080x1920)</option>
+                                    </select>
                                     <input type="color" id="editor-bg-color" title="Canvas Background Color" value="#ffffff" style="width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer;">
                                     <input type="color" id="editor-font-color" title="Selected Text Font Color" value="#000000" style="width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer;">
                                     <button class="btn-secondary" id="canvas-delete" style="padding: 3px 8px; font-size: 12px; color: var(--color-danger-fg);" title="Delete Selected"><i data-feather="trash-2" style="width:13px;height:13px;"></i></button>
@@ -328,6 +333,11 @@
                         <h3>Template</h3>
                         <select id="template-selector" class="margin-bottom" style="width: 100%;">
                             <option value="template-classic">Classic Minimalist</option>
+                            <option value="tpl_news_editorial">📰 Loksewa News Editorial</option>
+                            <option value="tpl_gamified_quiz">🎯 Loksewa Gamified Quiz</option>
+                            <option value="tpl_curiosity_hook">🧠 Psychology Curiosity Hook</option>
+                            <option value="tpl_editorial_quote">🏛️ Political Literacy Quote</option>
+                            <option value="tpl_structured_list">📊 Structured Infographic List</option>
                             <option value="template-glass">Glassmorphism</option>
                             <option value="template-bold">Bold Impact</option>
                             <option value="template-visual">Visual Heavy (75% Image)</option>
@@ -339,6 +349,8 @@
                             <option value="template-news-image">📰 News Flash (Visual Image)</option>
                             <option value="template-news-text">📰 News Editorial (Text Focus)</option>
                             <option value="template-news-single-image">📰 News Single (Image Frame)</option>
+                            <option value="template-psych-dark">Psychology Dark Mode</option>
+                            <option value="template-psych-quote">Psychology Insight Quote</option>
                             <option value="template-custom">Custom Advanced</option>
                         </select>
                         <div id="saved-templates-section">
@@ -703,6 +715,11 @@
                             <select id="canvas-base-template" style="height: 36px; border-radius: 6px; padding: 0 12px; font-size: 14px; min-width: 150px;">
                                 <option value="">None (Blank)</option>
                                 <option value="template-classic">Classic Template</option>
+                                <option value="tpl_news_editorial">📰 Loksewa News Editorial</option>
+                                <option value="tpl_gamified_quiz">🎯 Loksewa Gamified Quiz</option>
+                                <option value="tpl_curiosity_hook">🧠 Psychology Curiosity Hook</option>
+                                <option value="tpl_editorial_quote">🏛️ Political Literacy Quote</option>
+                                <option value="tpl_structured_list">📊 Structured Infographic List</option>
                                 <option value="template-bold">Bold Typography</option>
                                 <option value="template-glass">Glassmorphism</option>
                                 <option value="template-visual">Visual Centric</option>

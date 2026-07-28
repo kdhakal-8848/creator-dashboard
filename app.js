@@ -10,6 +10,36 @@ var PREVIEW_W = 400;
 var PREVIEW_H = 500;
 var CANVAS_ZOOM = PREVIEW_W / CANVAS_W;
 
+var CURRENT_ASPECT_RATIO = '4:5';
+
+function setCanvasAspectRatio(ratio) {
+    CURRENT_ASPECT_RATIO = ratio || '4:5';
+    if (CURRENT_ASPECT_RATIO === '1:1') {
+        CANVAS_H = 1080;
+    } else if (CURRENT_ASPECT_RATIO === '9:16') {
+        CANVAS_H = 1920;
+    } else {
+        CANVAS_H = 1350; // 4:5
+    }
+    PREVIEW_H = Math.round(PREVIEW_W * (CANVAS_H / CANVAS_W));
+    CANVAS_ZOOM = PREVIEW_W / CANVAS_W;
+
+    if (fabricCanvas) {
+        fabricCanvas.setDimensions({ width: PREVIEW_W, height: PREVIEW_H });
+        fabricCanvas.setZoom(CANVAS_ZOOM);
+    }
+    if (freeformCanvas) {
+        freeformCanvas.setDimensions({ width: PREVIEW_W, height: PREVIEW_H });
+        freeformCanvas.setZoom(CANVAS_ZOOM);
+    }
+
+    const aspectSel = document.getElementById('canvas-aspect-selector');
+    if (aspectSel && aspectSel.value !== CURRENT_ASPECT_RATIO) {
+        aspectSel.value = CURRENT_ASPECT_RATIO;
+    }
+}
+window.setCanvasAspectRatio = setCanvasAspectRatio;
+
 var fabricCanvas = null;
 var studioCanvas = null;
 var freeformCanvas = null;
@@ -738,7 +768,7 @@ if (document.readyState === 'loading') {
 // DATA HELPERS
 // ============================================================
 async function getPosts() {
-    if (isMockMode) return mockPosts;
+    if (window.isMockMode || isMockMode) return mockPosts;
     const { data, error } = await supabase.from('posts').select('*').order('updated_at', { ascending: false });
     if (error) {
         console.error("DB error:", error.message);
@@ -844,7 +874,8 @@ async function loadDashboardStats() {
 async function loadQueue() {
     const posts = await getPosts();
     const grid = document.getElementById('queue-grid');
-    const statusFilter = document.getElementById('status-filter').value;
+    if (!grid) return;
+    const statusFilter = document.getElementById('status-filter')?.value || 'All';
     const brandFilter = document.getElementById('queue-brand-filter')?.value || 'All';
     grid.innerHTML = '';
     let filtered = posts;
@@ -1052,6 +1083,11 @@ function initFabricCanvas() {
 // ============================================================
 const DEFAULT_PRESETS = [
     { id: 'template-classic', defaultName: 'Classic Template' },
+    { id: 'tpl_news_editorial', defaultName: '📰 Loksewa News Editorial' },
+    { id: 'tpl_gamified_quiz', defaultName: '🎯 Loksewa Gamified Quiz' },
+    { id: 'tpl_curiosity_hook', defaultName: '🧠 Psychology Curiosity Hook' },
+    { id: 'tpl_editorial_quote', defaultName: '🏛️ Political Literacy Quote' },
+    { id: 'tpl_structured_list', defaultName: '📊 Structured Infographic List' },
     { id: 'template-psych-dark', defaultName: 'Psychology Dark Mode' },
     { id: 'template-psych-quote', defaultName: 'Psychology Insight Quote' },
     { id: 'template-bold', defaultName: 'Bold Typography' },
@@ -1360,6 +1396,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
     const bodyFont = brand?.bodyFont || 'Inter';
 
     let bgColor = primaryColor;
+    if (selectedPreset === 'tpl_news_editorial') bgColor = '#0f172a';
+    if (selectedPreset === 'tpl_gamified_quiz') bgColor = '#0f0c29';
+    if (selectedPreset === 'tpl_curiosity_hook') bgColor = '#0b0c10';
+    if (selectedPreset === 'tpl_editorial_quote') bgColor = '#0a1128';
+    if (selectedPreset === 'tpl_structured_list') bgColor = '#0f172a';
     if (selectedPreset === 'template-bold') bgColor = '#0d0d0d';
     if (selectedPreset === 'template-glass') bgColor = '#0a192f';
     if (selectedPreset === 'template-visual') bgColor = '#0f172a';
@@ -1391,6 +1432,11 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
     const addObjects = () => {
         // --- 1. Overlay Layer ---
         let overlayFill = 'rgba(0,0,0,0.65)';
+        if (selectedPreset === 'tpl_news_editorial') overlayFill = 'rgba(15, 23, 42, 0.65)';
+        if (selectedPreset === 'tpl_gamified_quiz') overlayFill = 'rgba(15, 12, 41, 0.75)';
+        if (selectedPreset === 'tpl_curiosity_hook') overlayFill = 'rgba(11, 12, 16, 0.85)';
+        if (selectedPreset === 'tpl_editorial_quote') overlayFill = 'rgba(10, 17, 40, 0.90)';
+        if (selectedPreset === 'tpl_structured_list') overlayFill = 'rgba(15, 23, 42, 0.90)';
         if (selectedPreset === 'template-bold') overlayFill = 'rgba(10,10,10,0.85)';
         if (selectedPreset === 'template-glass') overlayFill = 'rgba(10, 25, 47, 0.75)';
         if (selectedPreset === 'template-visual') overlayFill = 'rgba(0,0,0,0.25)';
@@ -1781,6 +1827,258 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                 };
                 const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
                 targetCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'tpl_news_editorial') {
+                let currentY = 160;
+
+                // Category Pill / Badge
+                const badgeTextVal = (document.getElementById('canvas-badge-selector')?.value || '🇳🇵 LOKSEWA NEWS').toUpperCase();
+                const badgeBg = new fabric.Rect({
+                    left: 0, top: 0, width: 260 + (badgeTextVal.length * 10), height: 50,
+                    fill: '#2563EB', rx: 8, ry: 8, customType: 'news-badge-bg'
+                });
+                const badgeText = new fabric.IText(badgeTextVal, {
+                    left: 18, top: 12, fontSize: 22, fontWeight: '800', fill: '#FFFFFF',
+                    fontFamily: headingFont, customType: 'news-badge-text'
+                });
+                const badgeGroup = new fabric.Group([badgeBg, badgeText], {
+                    left: 80, top: currentY, selectable: true, customType: 'news-badge-group'
+                });
+                targetCanvas.add(badgeGroup);
+                currentY += 75;
+
+                // Headline
+                const titleDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 76, fontWeight: '900', fill: '#FFFFFF',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                targetCanvas.add(slideTitle);
+
+                currentY += slideTitle.getScaledHeight() + 30;
+
+                // Media Frame / Image Placeholder
+                const frameHeight = Math.round(CANVAS_H * 0.35);
+                if (!imageUrl) {
+                    const placeholderBg = new fabric.Rect({
+                        left: 80, top: currentY, width: CANVAS_W - 160, height: frameHeight,
+                        fill: 'rgba(30, 41, 59, 0.7)', stroke: '#3B82F6', strokeWidth: 2, strokeDashArray: [8, 4],
+                        rx: 16, ry: 16, selectable: true, customType: 'image-placeholder-bg'
+                    });
+                    targetCanvas.add(placeholderBg);
+                    const placeholderText = new fabric.IText('📰 Editorial Media Slot (Upload / AI)', {
+                        left: CANVAS_W / 2, top: currentY + frameHeight / 2, originX: 'center', originY: 'center',
+                        fontSize: 28, fontWeight: '600', fill: '#94A3B8', fontFamily: headingFont, selectable: false
+                    });
+                    targetCanvas.add(placeholderText);
+                }
+                currentY += frameHeight + 35;
+
+                // Body Text
+                const bodyDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 44, fontWeight: '400', fill: '#CBD5E1',
+                    fontFamily: bodyFont, lineHeight: 1.5,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                targetCanvas.add(slideBody);
+
+                // Source Tag
+                const sourceTag = new fabric.IText('SOURCE: PUBLIC SERVICE COMMISSION (NEPAL) • VERIFIED REPORT', {
+                    left: 80, top: CANVAS_H - 120, fontSize: 20, fontWeight: '700', fill: '#64748B',
+                    fontFamily: headingFont, letterSpacing: 1.5, selectable: true
+                });
+                targetCanvas.add(sourceTag);
+
+            } else if (selectedPreset === 'tpl_gamified_quiz') {
+                let currentY = 150;
+
+                const quizTag = new fabric.IText('🎯 LOKSEWA MODEL TEST • QUIZ SLIDE', {
+                    left: 80, top: currentY, fontSize: 24, fontWeight: '800', fill: '#F59E0B',
+                    fontFamily: headingFont, letterSpacing: 2, selectable: true
+                });
+                targetCanvas.add(quizTag);
+                currentY += 45;
+
+                const qTitleDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 72, fontWeight: '900', fill: '#FFFFFF',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...qTitleDef, ...(slideData.titleStyle || {}) });
+                targetCanvas.add(slideTitle);
+
+                currentY += slideTitle.getScaledHeight() + 40;
+
+                const rawLines = (slideData.content || '').split('\n').filter(l => l.trim().length > 0);
+                const options = rawLines.length >= 2 ? rawLines : [
+                    'A. Option First (Primary Choice)',
+                    'B. Option Second (Secondary Choice)',
+                    'C. Option Third (Alternative)',
+                    'D. Option Fourth (Final Choice)'
+                ];
+
+                options.slice(0, 4).forEach((optText, i) => {
+                    const isCorrect = optText.includes('✓') || optText.includes('(Correct)') || i === 0;
+                    const cardBg = new fabric.Rect({
+                        left: 80, top: currentY, width: CANVAS_W - 160, height: 95,
+                        fill: isCorrect ? 'rgba(16, 185, 129, 0.2)' : 'rgba(30, 41, 59, 0.8)',
+                        stroke: isCorrect ? '#10B981' : '#475569', strokeWidth: 2,
+                        rx: 16, ry: 16, selectable: true
+                    });
+                    targetCanvas.add(cardBg);
+
+                    const optLabel = new fabric.Textbox(optText, {
+                        left: 110, top: currentY + 24, width: CANVAS_W - 220,
+                        fontSize: 38, fontWeight: isCorrect ? '700' : '500',
+                        fill: isCorrect ? '#6EE7B7' : '#E2E8F0', fontFamily: bodyFont, selectable: true
+                    });
+                    targetCanvas.add(optLabel);
+
+                    currentY += 115;
+                });
+
+            } else if (selectedPreset === 'tpl_curiosity_hook') {
+                const glowCircle = new fabric.Circle({
+                    left: CANVAS_W / 2, top: CANVAS_H / 3, radius: 350, originX: 'center', originY: 'center',
+                    fill: new fabric.Gradient({
+                        type: 'radial', coords: { x1: 350, y1: 350, r1: 0, x2: 350, y2: 350, r2: 350 },
+                        colorStops: [{ offset: 0, color: 'rgba(99, 102, 241, 0.35)' }, { offset: 1, color: 'rgba(11, 12, 16, 0)' }]
+                    }),
+                    selectable: false, evented: false
+                });
+                targetCanvas.add(glowCircle);
+
+                const cardMargin = 70;
+                const cardTop = 160;
+                const cardHeight = CANVAS_H - 320;
+                const glassCard = new fabric.Rect({
+                    left: cardMargin, top: cardTop, width: CANVAS_W - (cardMargin * 2), height: cardHeight,
+                    fill: 'rgba(255, 255, 255, 0.05)', stroke: 'rgba(255, 255, 255, 0.18)', strokeWidth: 2,
+                    rx: 28, ry: 28, selectable: true, customType: 'glass-card'
+                });
+                targetCanvas.add(glassCard);
+
+                const accentPill = new fabric.Rect({
+                    left: cardMargin + 40, top: cardTop + 45, width: 100, height: 8,
+                    fill: '#818CF8', rx: 4, ry: 4, selectable: false
+                });
+                targetCanvas.add(accentPill);
+
+                const titleDef = {
+                    left: cardMargin + 40, top: cardTop + 75, width: CANVAS_W - (cardMargin * 2) - 80,
+                    fontSize: 78, fontWeight: '900', fill: '#FFFFFF',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                targetCanvas.add(slideTitle);
+
+                const titleBottom = cardTop + 75 + slideTitle.getScaledHeight() + 40;
+
+                const bodyDef = {
+                    left: cardMargin + 40, top: titleBottom, width: CANVAS_W - (cardMargin * 2) - 80,
+                    fontSize: 46, fontWeight: '400', fill: '#E2E8F0',
+                    fontFamily: bodyFont, lineHeight: 1.55,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '', { ...bodyDef, ...(slideData.bodyStyle || {}) });
+                targetCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'tpl_editorial_quote') {
+                let currentY = 160;
+
+                const quoteGlyph = new fabric.IText('“', {
+                    left: 75, top: currentY - 30, fontSize: 160, fontWeight: '900',
+                    fill: '#F59E0B', fontFamily: 'Georgia', selectable: false
+                });
+                targetCanvas.add(quoteGlyph);
+
+                currentY += 100;
+
+                const quoteDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 64, fontWeight: '700', fill: '#FFFFFF',
+                    fontFamily: 'Georgia', lineHeight: 1.25, fontStyle: 'italic',
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...quoteDef, ...(slideData.titleStyle || {}) });
+                targetCanvas.add(slideTitle);
+
+                currentY += slideTitle.getScaledHeight() + 45;
+
+                const divLine = new fabric.Rect({
+                    left: 80, top: currentY, width: 140, height: 4,
+                    fill: '#F59E0B', selectable: false
+                });
+                targetCanvas.add(divLine);
+
+                currentY += 30;
+
+                const authorDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 44, fontWeight: '500', fill: '#94A3B8',
+                    fontFamily: headingFont, lineHeight: 1.4,
+                    selectable: true, isPlaceholder: 'body', customType: 'body'
+                };
+                const slideBody = new fabric.Textbox(slideData.content || '— Political Literacy Project', { ...authorDef, ...(slideData.bodyStyle || {}) });
+                targetCanvas.add(slideBody);
+
+            } else if (selectedPreset === 'tpl_structured_list') {
+                let currentY = 160;
+
+                const titleDef = {
+                    left: 80, top: currentY, width: CANVAS_W - 160,
+                    fontSize: 72, fontWeight: '900', fill: '#FFFFFF',
+                    fontFamily: headingFont, lineHeight: 1.15,
+                    selectable: true, isPlaceholder: 'title', customType: 'title'
+                };
+                const slideTitle = new fabric.Textbox(slideData.title || '', { ...titleDef, ...(slideData.titleStyle || {}) });
+                targetCanvas.add(slideTitle);
+
+                currentY += slideTitle.getScaledHeight() + 40;
+
+                const items = (slideData.content || '').split('\n').filter(l => l.trim().length > 0);
+                const listItems = items.length > 0 ? items : [
+                    '1. Key takeaway point or principle breakdown',
+                    '2. Secondary evidentiary data or insight',
+                    '3. Practical application and action steps'
+                ];
+
+                const cardHeight = Math.min(130, Math.floor((CANVAS_H - currentY - 140) / listItems.length));
+
+                listItems.forEach((itemText, idx) => {
+                    const itemCard = new fabric.Rect({
+                        left: 80, top: currentY, width: CANVAS_W - 160, height: cardHeight - 15,
+                        fill: 'rgba(30, 41, 59, 0.75)', stroke: '#334155', strokeWidth: 1.5,
+                        rx: 14, ry: 14, selectable: true
+                    });
+                    targetCanvas.add(itemCard);
+
+                    const numCircle = new fabric.Circle({
+                        left: 105, top: currentY + (cardHeight - 15) / 2, radius: 22, originY: 'center',
+                        fill: '#3B82F6', selectable: false
+                    });
+                    targetCanvas.add(numCircle);
+
+                    const numText = new fabric.IText(String(idx + 1), {
+                        left: 105, top: currentY + (cardHeight - 15) / 2, originX: 'center', originY: 'center',
+                        fontSize: 24, fontWeight: '800', fill: '#FFFFFF', fontFamily: headingFont, selectable: false
+                    });
+                    targetCanvas.add(numText);
+
+                    const itemTB = new fabric.Textbox(itemText.replace(/^\d+\.\s*/, ''), {
+                        left: 160, top: currentY + 20, width: CANVAS_W - 260,
+                        fontSize: 38, fontWeight: '500', fill: '#F1F5F9', fontFamily: bodyFont, selectable: true
+                    });
+                    targetCanvas.add(itemTB);
+
+                    currentY += cardHeight;
+                });
 
             } else if (selectedPreset === 'template-minimal' || selectedPreset === 'template-bright-minimal' || selectedPreset === 'template-psych-dark' || selectedPreset === 'template-psych-quote') {
                 const titleColor = selectedPreset === 'template-bright-minimal' ? '#111827' : '#ffffff';
@@ -2730,7 +3028,8 @@ function updateSlidePreview() {
     document.getElementById('current-slide-indicator').innerText = `Slide ${currentSlideIndex + 1} / ${currentSlides.length}`;
     updateSidebarImagePreview(currentSlideIndex);
     updateCTABadge();
-}
+window.updateSlidePreview = updateSlidePreview;
+window.renderSlidesForm = renderSlidesForm;
 
 function renderSlidesForm() {
     const container = document.getElementById('slides-form-container');
@@ -4281,7 +4580,7 @@ function initPsychLab() {
         link.download = `Psychology_Lab_Deck_${Date.now()}.zip`;
         link.click();
         showToast('Deck exported successfully!');
-    });
+window.initPsychLab = initPsychLab;
 
     document.getElementById('psych-submit-btn')?.addEventListener('click', async () => {
         const topic = document.getElementById('psych-topic-input')?.value;
@@ -4291,7 +4590,7 @@ function initPsychLab() {
         }
 
         const brandId = document.getElementById('psych-brand-select')?.value;
-        const brandObj = allBrands.find(b => b.id === brandId) || allBrands[0] || currentBranding;
+        const brandObj = (typeof allBrands !== 'undefined' && allBrands && allBrands.length > 0) ? (allBrands.find(b => b.id === brandId) || allBrands[0]) : (currentBranding || { name: "Creator's Den", handle: "@ammaazzingg" });
         const targetMetric = document.getElementById('psych-metric-select')?.value || 'SAVES';
         const formatType = document.getElementById('psych-format-select')?.value || 'CAROUSEL';
 
@@ -4345,14 +4644,14 @@ function initPsychLab() {
                     generatedSlides = outputData.carousel.slides.map((s, idx) => ({
                         title: s.title_text || s.title || `Slide ${idx + 1}`,
                         content: s.body_text || s.content || '',
-                        header: s.header_text || brandObj.handle || '@amazingfacts.lab',
+                        header: s.header_text || brandObj?.handle || '@amazingfacts.lab',
                         is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
                     }));
                 } else if (outputData.single_slide) {
                     generatedSlides = [{
                         title: outputData.single_slide.quote_text || 'Psychology Insight',
                         content: '',
-                        header: outputData.single_slide.attribution || brandObj.handle || '@amazingfacts.lab',
+                        header: outputData.single_slide.attribution || brandObj?.handle || '@amazingfacts.lab',
                         is_cta: false
                     }];
                 }
@@ -4373,7 +4672,7 @@ function initPsychLab() {
                     updated_at: new Date().toISOString()
                 };
 
-                if (isMockMode || !data.post) {
+                if (window.isMockMode || isMockMode || !data.post) {
                     const existingIdx = mockPosts.findIndex(p => p.id === newPost.id);
                     if (existingIdx >= 0) mockPosts[existingIdx] = newPost;
                     else mockPosts.unshift(newPost);
