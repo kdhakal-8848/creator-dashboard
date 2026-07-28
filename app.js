@@ -4580,6 +4580,7 @@ function initPsychLab() {
         link.download = `Psychology_Lab_Deck_${Date.now()}.zip`;
         link.click();
         showToast('Deck exported successfully!');
+    });
 window.initPsychLab = initPsychLab;
 
     document.getElementById('psych-submit-btn')?.addEventListener('click', async () => {
