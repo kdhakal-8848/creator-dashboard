@@ -3028,6 +3028,7 @@ function updateSlidePreview() {
     document.getElementById('current-slide-indicator').innerText = `Slide ${currentSlideIndex + 1} / ${currentSlides.length}`;
     updateSidebarImagePreview(currentSlideIndex);
     updateCTABadge();
+}
 window.updateSlidePreview = updateSlidePreview;
 window.renderSlidesForm = renderSlidesForm;
 
