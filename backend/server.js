@@ -816,7 +816,8 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
             success: true,
             mode: "GENERATE",
             data: parsed,
-            post_id: postId
+            post_id: postId,
+            post: (typeof data !== 'undefined' && data && data[0]) ? data[0] : null
         });
     } catch (err) {
         console.error("Psychology Lab error:", err);

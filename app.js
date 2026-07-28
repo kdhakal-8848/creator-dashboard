@@ -765,10 +765,49 @@ function parseImageUrls(image_url) {
 // Parse the post text — handles both old (plain text) and new (structured JSON) formats
 function parsePostText(text) {
     try {
-        const parsed = JSON.parse(text);
-        return parsed; // { slides, caption }
+        let parsed = typeof text === 'string' ? JSON.parse(text) : text;
+        if (!parsed) return { slides: [], caption: '' };
+
+        let slides = [];
+        if (Array.isArray(parsed.slides) && parsed.slides.length > 0) {
+            slides = parsed.slides;
+        } else if (parsed.carousel && Array.isArray(parsed.carousel.slides)) {
+            slides = parsed.carousel.slides.map((s, idx) => ({
+                title: s.title_text || s.title || `Slide ${idx + 1}`,
+                content: s.body_text || s.content || '',
+                header: s.header_text || '@amazingfacts.lab',
+                is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
+            }));
+        } else if (parsed.single_slide && (parsed.single_slide.quote_text || parsed.single_slide.title)) {
+            slides = [{
+                title: parsed.single_slide.quote_text || parsed.single_slide.title || 'Psychology Insight',
+                content: parsed.single_slide.content || '',
+                header: parsed.single_slide.attribution || '@amazingfacts.lab',
+                is_cta: false
+            }];
+        } else if (parsed.data && parsed.data.carousel && Array.isArray(parsed.data.carousel.slides)) {
+            slides = parsed.data.carousel.slides.map((s, idx) => ({
+                title: s.title_text || s.title || `Slide ${idx + 1}`,
+                content: s.body_text || s.content || '',
+                header: s.header_text || '@amazingfacts.lab',
+                is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
+            }));
+        }
+
+        const normalizedSlides = slides.map((s, idx) => ({
+            title: s.title || s.title_text || `Slide ${idx + 1}`,
+            content: s.content || s.body_text || '',
+            header: s.header || s.header_text || '@amazingfacts.lab',
+            is_cta: s.is_cta || false,
+            ...s
+        }));
+
+        return {
+            slides: normalizedSlides,
+            caption: parsed.caption || ''
+        };
     } catch {
-        return { slides: [{ title: "Content", content: text }], caption: text };
+        return { slides: [{ title: "Content", content: String(text) }], caption: text };
     }
 }
 
@@ -2638,7 +2677,15 @@ window.openEditor = async (id) => {
     }
 
     const templateSel = document.getElementById('template-selector');
-    if (templateSel) templateSel.value = currentBranding.themePreset || 'template-classic';
+    if (templateSel) {
+        if (post.topic && (post.topic.includes('[Psychology') || post.topic.includes('[LabEngine'))) {
+            templateSel.value = 'template-psych-dark';
+        } else if (post.topic && post.topic.includes('[Facts')) {
+            templateSel.value = 'template-facts-single';
+        } else {
+            templateSel.value = currentBranding.themePreset || 'template-classic';
+        }
+    }
 
     // Init Fabric canvas
     initFabricCanvas();
@@ -4284,57 +4331,63 @@ function initPsychLab() {
             resultsContainer.style.display = 'block';
 
             if (data.mode === 'RESEARCH') {
+                resultsContainer.style.display = 'block';
                 researchCard.style.display = 'block';
                 generateCard.style.display = 'none';
                 renderPsychResearchMarkdown(data.markdown);
             } else {
-                researchCard.style.display = 'none';
-                generateCard.style.display = 'block';
+                // GENERATE mode: Do not show output card in Psychology Lab
+                resultsContainer.style.display = 'none';
 
-                const outputData = data.data;
-                // Store the Supabase post ID so "Edit in Studio" can open the editor
-                window.lastPsychPostId = data.post_id || null;
-                
+                const outputData = data.data || {};
+                let generatedSlides = [];
                 if (outputData.carousel && outputData.carousel.slides) {
-                    currentPsychSlides = outputData.carousel.slides;
+                    generatedSlides = outputData.carousel.slides.map((s, idx) => ({
+                        title: s.title_text || s.title || `Slide ${idx + 1}`,
+                        content: s.body_text || s.content || '',
+                        header: s.header_text || brandObj.handle || '@amazingfacts.lab',
+                        is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
+                    }));
                 } else if (outputData.single_slide) {
-                    currentPsychSlides = [{
-                        slide_number: 1,
-                        type: 'SINGLE_SLIDE',
-                        header_text: outputData.single_slide.attribution || brandObj.handle || '@amazingfacts.lab',
-                        title_text: outputData.single_slide.quote_text,
-                        body_text: ''
+                    generatedSlides = [{
+                        title: outputData.single_slide.quote_text || 'Psychology Insight',
+                        content: '',
+                        header: outputData.single_slide.attribution || brandObj.handle || '@amazingfacts.lab',
+                        is_cta: false
                     }];
-                } else {
-                    currentPsychSlides = [];
-                }
-
-                currentPsychSlideIndex = 0;
-                renderPsychCurrentSlide();
-
-                const reelCard = document.getElementById('psych-reel-card');
-                if (outputData.reel_blueprint && (outputData.reel_blueprint.enabled || formatType === 'REEL_BLUEPRINT')) {
-                    reelCard.style.display = 'block';
-                    document.getElementById('psych-reel-hook').textContent = outputData.reel_blueprint.hook_text || '';
-                    document.getElementById('psych-reel-body').textContent = outputData.reel_blueprint.body_text || '';
-                    
-                    const audioScriptText = outputData.reel_blueprint.audio_script || outputData.reel_blueprint.audio_prompt || '';
-                    const videoScriptText = outputData.reel_blueprint.video_script || outputData.reel_blueprint.background_video_prompt || '';
-                    
-                    const elAudio = document.getElementById('psych-reel-audio-script');
-                    if (elAudio) elAudio.value = audioScriptText;
-                    
-                    const elVideo = document.getElementById('psych-reel-video-script');
-                    if (elVideo) elVideo.value = videoScriptText;
-                    
-                    window.currentPsychFullReelScript = outputData.reel_blueprint.full_script_markdown || `# REEL PRODUCTION SCRIPT: ${topic}\n\n## AUDIO SCRIPT (VOICEOVER & SFX)\n${audioScriptText}\n\n## VIDEO SCRIPT (B-ROLL & OVERLAYS)\n${videoScriptText}`;
-                } else {
-                    reelCard.style.display = 'none';
                 }
 
                 const capObj = outputData.caption || {};
-                const captionStr = `${capObj.hook || ''}\n\n${capObj.body || ''}\n\n${capObj.cta || ''}\n\n${(capObj.hashtags || []).join(' ')}`;
-                document.getElementById('psych-caption-text').value = captionStr.trim();
+                const postPayload = {
+                    slides: generatedSlides,
+                    caption: capObj
+                };
+
+                const newPost = data.post || {
+                    id: data.post_id || ('psych_' + Date.now()),
+                    topic: `[Psychology Lab] ${topic.substring(0, 60)}`,
+                    text: JSON.stringify(postPayload),
+                    image_url: JSON.stringify(generatedSlides.map(() => null)),
+                    status: 'Draft',
+                    brand_id: brandId,
+                    updated_at: new Date().toISOString()
+                };
+
+                if (isMockMode || !data.post) {
+                    const existingIdx = mockPosts.findIndex(p => p.id === newPost.id);
+                    if (existingIdx >= 0) mockPosts[existingIdx] = newPost;
+                    else mockPosts.unshift(newPost);
+                    saveMockPosts();
+                }
+
+                ['queue-brand-filter', 'status-filter'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = 'All';
+                });
+                await loadQueue();
+
+                showToast('Psychology deck generated! Opening in Editor...');
+                window.openEditor(newPost.id);
             }
         } catch (err) {
             btn.disabled = false;
