@@ -1152,8 +1152,31 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
     }
 });
 
+function pcmToWav(pcmBuffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16) {
+    const header = Buffer.alloc(44);
+    const dataSize = pcmBuffer.length;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const byteRate = sampleRate * blockAlign;
+
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + dataSize, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(numChannels, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(byteRate, 28);
+    header.writeUInt16LE(blockAlign, 32);
+    header.writeUInt16LE(bitsPerSample, 34);
+    header.write('data', 36);
+    header.writeUInt32LE(dataSize, 40);
+
+    return Buffer.concat([header, pcmBuffer]);
+}
+
 // ============================================================
-// POST /generate-tts — Human Voice Audio Narration Endpoint
+// POST /generate-tts — Gemini AI Native Text-to-Speech Endpoint
 // ============================================================
 app.post('/generate-tts', async (req, res) => {
     try {
@@ -1168,42 +1191,48 @@ app.post('/generate-tts', async (req, res) => {
         };
         const targetLangCode = langCodeMap[lang] || 'ne';
 
-        // Check if Google TTS API key is configured
-        const googleApiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY;
+        // Use existing Gemini API Key!
+        const geminiApiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY || process.env.GOOGLE_TTS_API_KEY;
 
-        if (googleApiKey && process.env.ENABLE_GOOGLE_CLOUD_TTS === 'true') {
+        if (geminiApiKey) {
             try {
-                const voiceMap = {
-                    'ne': { languageCode: 'ne-NP', name: 'ne-NP-Standard-A' },
-                    'en': { languageCode: 'en-US', name: 'en-US-Neural2-F' },
-                    'hi': { languageCode: 'hi-IN', name: 'hi-IN-Neural2-A' }
-                };
-                const voiceConfig = voiceMap[targetLangCode] || voiceMap['ne'];
-
-                const gRes = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleApiKey}`, {
+                const ttsModel = 'gemini-2.5-flash-preview-tts';
+                const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${geminiApiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        input: { text: text.substring(0, 500) },
-                        voice: voiceConfig,
-                        audioConfig: { audioEncoding: 'MP3', speakingRate: 1.0, pitch: 0 }
+                        contents: [{
+                            parts: [{ text: `Synthesize audio for the following text transcript: ${text.substring(0, 500)}` }]
+                        }],
+                        generationConfig: {
+                            responseModalities: ['AUDIO']
+                        }
                     })
                 });
 
                 const gData = await gRes.json();
-                if (gRes.ok && gData.audioContent) {
-                    return res.json({
-                        success: true,
-                        audio_url: `data:audio/mp3;base64,${gData.audioContent}`,
-                        provider: 'google_cloud_tts'
-                    });
+                if (gRes.ok && gData.candidates && gData.candidates[0]?.content?.parts) {
+                    const audioPart = gData.candidates[0].content.parts.find(p => p.inlineData && p.inlineData.data);
+                    if (audioPart) {
+                        const pcmBuf = Buffer.from(audioPart.inlineData.data, 'base64');
+                        const wavBuf = pcmToWav(pcmBuf, 24000);
+                        const wavBase64 = wavBuf.toString('base64');
+                        console.log(`[/generate-tts] Successfully synthesized Gemini AI voice (${lang}, ${wavBuf.length} bytes)`);
+                        return res.json({
+                            success: true,
+                            audio_url: `data:audio/wav;base64,${wavBase64}`,
+                            provider: 'gemini_ai_tts'
+                        });
+                    }
+                } else {
+                    console.warn("Gemini API TTS response warning:", JSON.stringify(gData).substring(0, 180));
                 }
             } catch (ge) {
-                console.warn("Google Cloud TTS API failed, falling back to Voice Engine:", ge.message);
+                console.warn("Gemini Native TTS failed, falling back:", ge.message);
             }
         }
 
-        // Fallback: Natural Google Voice Engine Stream URL
+        // Fallback: Natural Voice Engine Stream URL
         const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.substring(0, 300))}&tl=${targetLangCode}&client=tw-ob`;
         res.json({
             success: true,
