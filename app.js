@@ -199,7 +199,7 @@ try {
     isMockMode = true;
 }
 
-if (!isMockMode && supabase) {
+if (supabase) {
     try {
         supabase.auth.getSession().then(({ data, error }) => {
             if (error && error.message && error.message.includes('Invalid API key')) {
@@ -207,28 +207,31 @@ if (!isMockMode && supabase) {
                 isMockMode = true;
                 return;
             }
-            handleAuthChange(data ? data.session : null);
+            if (data && data.session) {
+                handleAuthChange(data.session);
+            }
         }).catch(e => {
-            console.warn("getSession error, switching to mock mode:", e);
-            isMockMode = true;
+            console.warn("getSession error:", e);
         });
 
         supabase.auth.onAuthStateChange((_event, session) => {
-            handleAuthChange(session);
+            if (session) {
+                handleAuthChange(session);
+            }
         });
     } catch (e) {
         console.warn("AuthStateChange error:", e);
     }
-} else {
-    document.getElementById('login-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
 }
 
 function handleAuthChange(session) {
-    if (isGuest || isMockMode) return;
     if (session) {
         currentUser = session.user;
         window.currentUser = currentUser;
+        isMockMode = false;
+        isGuest = false;
+        window.isGuest = false;
+
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app-container').style.display = 'flex';
 
@@ -242,7 +245,7 @@ function handleAuthChange(session) {
         }
         document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
 
-        if (!isMockMode) {
+        if (supabase) {
             supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
                 if (data && (data.currentLevel === 'aal2' || data.nextLevel === 'aal2')) {
                     const mfaText = document.getElementById('mfa-status-text');
@@ -250,12 +253,12 @@ function handleAuthChange(session) {
                     if (mfaText) { mfaText.innerText = 'Enabled'; mfaText.style.color = 'var(--color-success-fg)'; }
                     if (mfaBtn) mfaBtn.style.display = 'none';
                 }
-            });
+            }).catch(() => {});
         }
 
         fetchBrands();
         loadDashboardStats();
-    } else {
+    } else if (!isGuest && !isMockMode) {
         currentUser = null;
         document.getElementById('login-container').style.display = 'flex';
         document.getElementById('app-container').style.display = 'none';
@@ -288,23 +291,12 @@ function setLoginLoading(on) {
     }
 }
 
-
-async function signInWithTimeout(email, password, timeoutMs = 12000) {
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Sign-in request timed out. Check your connection or continue in Demo mode.")), timeoutMs)
-    );
-    return Promise.race([
-        supabase.auth.signInWithPassword({ email, password }),
-        timeoutPromise
-    ]);
-}
-
 // --- Auth UI ---
 let isSigningIn = false;
 
 async function handleLoginAction(e) {
     if (e) e.preventDefault();
-    if (isSigningIn) return; // Prevent double invocation
+    if (isSigningIn) return;
     isSigningIn = true;
 
     const emailEl = document.getElementById('login-email');
@@ -320,77 +312,32 @@ async function handleLoginAction(e) {
 
     setLoginLoading(true);
 
-    if (isMockMode || !supabase) {
-        showLoginSuccess("✅ Signed in (Demo Mode)!");
-        setTimeout(() => {
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            const nameParam = email.split('@')[0].substring(0, 2).toUpperCase();
-            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
-            fetchBrands();
-            loadDashboardStats();
-            setLoginLoading(false);
-            isSigningIn = false;
-        }, 200);
-        return;
-    }
-
     try {
-        // 1. Try Signing In with Supabase
-        const { data, error } = await signInWithTimeout(email, password, 6000);
-        if (!error && data && data.session) {
-            showLoginSuccess('✅ Signed in! Loading dashboard...');
-            setTimeout(() => {
-                handleAuthChange(data.session);
-                isSigningIn = false;
-            }, 100);
+        isMockMode = false;
+        isGuest = false;
+        window.isGuest = false;
+
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            console.error("Supabase Auth Error:", error.message);
+            showLoginError(error.message || 'Invalid email or password.');
             return;
         }
 
-        // 2. Try Creating Account if not registered
-        if (error && (error.message.includes('Invalid login credentials') || error.message.includes('User not found'))) {
-            const { data: signUpData } = await supabase.auth.signUp({ email, password }).catch(() => ({ data: null }));
-            if (signUpData && signUpData.session) {
-                showLoginSuccess('✅ Account created & signed in!');
-                setTimeout(() => {
-                    handleAuthChange(signUpData.session);
-                    isSigningIn = false;
-                }, 100);
-                return;
-            }
+        if (data && data.session) {
+            showLoginSuccess('✅ Signed in! Loading dashboard...');
+            setTimeout(() => {
+                handleAuthChange(data.session);
+            }, 100);
+            return;
+        } else {
+            showLoginError('Sign in failed: No active session returned.');
         }
 
-        // 3. Guaranteed Failover: Grant instant access in Demo Mode so user is NEVER blocked!
-        console.warn("Supabase auth non-session fallback, granting instant access");
-        showLoginSuccess("⚡ Signed in!");
-        setTimeout(() => {
-            window.isGuest = true;
-            isGuest = true;
-            isMockMode = true;
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            const nameParam = email ? email.split('@')[0].substring(0, 2).toUpperCase() : 'AD';
-            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
-            fetchBrands();
-            loadDashboardStats();
-            setLoginLoading(false);
-            isSigningIn = false;
-        }, 150);
-
     } catch (err) {
-        console.warn("Sign-in fallback to instant access:", err);
-        showLoginSuccess("⚡ Signed in!");
-        setTimeout(() => {
-            window.isGuest = true;
-            isGuest = true;
-            isMockMode = true;
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            fetchBrands();
-            loadDashboardStats();
-            setLoginLoading(false);
-            isSigningIn = false;
-        }, 150);
+        console.error("Sign-in exception:", err);
+        showLoginError('Sign in error: ' + (err.message || err));
     } finally {
         setLoginLoading(false);
         isSigningIn = false;
