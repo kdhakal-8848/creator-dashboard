@@ -5792,6 +5792,7 @@ function updateMCQSectionPills() {
 }
 
 function jumpMCQToSection(qIndex, phase) {
+    mcqState.isExporting = false;
     stopMCQSequence(true);
 
     mcqState.currentIndex = qIndex;
@@ -6712,8 +6713,13 @@ function updateMCQEditorFields() {
     if (expInput) expInput.value = qData.explanation || '';
 }
 
-async function startMCQSequence() {
-    stopMCQSequence(true);
+async function startMCQSequence(isExportingRun = false) {
+    if (!isExportingRun) {
+        mcqState.isExporting = false;
+        stopMCQSequence(false);
+    } else {
+        stopMCQSequence(true);
+    }
     const lang = document.getElementById('mcq-language')?.value || 'Nepali';
 
     if (mcqState.isPreloadingAudio) {
@@ -6996,7 +7002,7 @@ async function exportMCQVideo() {
         };
 
         recorder.start(100);
-        startMCQSequence();
+        startMCQSequence(true);
 
     } catch (err) {
         console.error("Video export error:", err);
