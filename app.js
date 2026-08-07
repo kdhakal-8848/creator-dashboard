@@ -1,8 +1,10 @@
 import { CONFIG } from './config.js';
-let psychCanvas = null;
-let currentPsychSlides = [];
-let currentPsychSlideIndex = 0;
-let psychCurrentMode = 'GENERATE';
+var psychCanvas = null;
+var currentPsychSlides = [];
+var currentPsychSlideIndex = 0;
+var psychCurrentMode = 'GENERATE';
+var psychLabListenersBound = false;
+var isGeneratingPsych = false;
 
 var CANVAS_W = 1080;
 var CANVAS_H = 1350;
@@ -49,6 +51,9 @@ var currentSlideIndex = 0;
 var currentImageUrls = [];
 var canvasHistory = [];
 var canvasHistoryPointer = -1;
+
+let slideRenderVersion = 0;
+let isRenderingSlide = false;
 
 
 
@@ -160,7 +165,9 @@ let activeBrandId = allBrands[0].id;
 let currentBranding = allBrands[0];
 
 
-const API_URL = CONFIG.N8N_MANUAL_WEBHOOK_URL ? CONFIG.N8N_MANUAL_WEBHOOK_URL.replace(/\/generate$/, '') : 'https://loksewa-backend-ah2s.onrender.com';
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5680'
+    : (CONFIG.N8N_MANUAL_WEBHOOK_URL ? CONFIG.N8N_MANUAL_WEBHOOK_URL.replace(/\/generate$/, '') : 'https://loksewa-backend-ah2s.onrender.com');
 
 // Safe Supabase client retrieval
 const getCreateClient = () => {
@@ -221,6 +228,7 @@ function handleAuthChange(session) {
     if (isGuest || isMockMode) return;
     if (session) {
         currentUser = session.user;
+        window.currentUser = currentUser;
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app-container').style.display = 'flex';
 
@@ -281,9 +289,9 @@ function setLoginLoading(on) {
 }
 
 
-async function signInWithTimeout(email, password, timeoutMs = 2500) {
+async function signInWithTimeout(email, password, timeoutMs = 15000) {
     const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Sign-in request timed out. Please check your internet connection or try Guest Mode.")), timeoutMs)
+        setTimeout(() => reject(new Error("Sign-in request timed out. Please check your internet connection.")), timeoutMs)
     );
     return Promise.race([
         supabase.auth.signInWithPassword({ email, password }),
@@ -331,46 +339,12 @@ async function handleLoginAction(e) {
             return;
         }
 
-        // Auto fallback for unregistered accounts or API key issues
-        console.warn("Supabase auth returned notice:", error ? error.message : "No session");
-        
-        // Try auto signup or fallback to local session so user is never blocked
-        if (error && (error.message.includes('Invalid login credentials') || error.message.includes('User not found'))) {
-            try {
-                const signUpRes = await supabase.auth.signUp({ email, password });
-                if (signUpRes.data && signUpRes.data.session) {
-                    showLoginSuccess('✅ Account initialized! Loading...');
-                    setTimeout(() => handleAuthChange(signUpRes.data.session), 300);
-                    return;
-                }
-            } catch (signupErr) {
-                console.warn("Auto-signup notice:", signupErr);
-            }
+        if (error) {
+            showLoginError(error.message || 'Invalid email or password. Please check your credentials.');
+            return;
         }
-
-        // Direct Failproof Fallback: Grant session in Demo Mode
-        showLoginSuccess('⚡ Granted Access (Demo Mode)');
-        isMockMode = true;
-        setTimeout(() => {
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            const nameParam = email.split('@')[0].substring(0, 2).toUpperCase();
-            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
-            fetchBrands();
-            loadDashboardStats();
-        }, 400);
     } catch (err) {
-        console.warn("Login exception, defaulting to Demo Mode:", err);
-        showLoginSuccess('⚡ Granted Access (Demo Mode)');
-        isMockMode = true;
-        setTimeout(() => {
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
-            const nameParam = email.split('@')[0].substring(0, 2).toUpperCase();
-            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
-            fetchBrands();
-            loadDashboardStats();
-        }, 400);
+        showLoginError(err.message || 'Sign in failed. Please try again.');
     } finally {
         setLoginLoading(false);
     }
@@ -566,7 +540,7 @@ async function fetchBrands() {
 }
 
 function populateBrandSelectors() {
-    const selectors = ['brand-selector', 'manual-brand', 'queue-brand-filter', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector'];
+    const selectors = ['brand-selector', 'manual-brand', 'queue-brand-filter', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector', 'mcq-brand'];
     selectors.forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
@@ -578,10 +552,33 @@ function populateBrandSelectors() {
         allBrands.forEach(b => {
             const opt = document.createElement('option'); opt.value = b.id; opt.innerText = b.name; sel.appendChild(opt);
         });
-        if (['brand-selector', 'manual-brand', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector'].includes(id)) {
+        if (['brand-selector', 'manual-brand', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector', 'mcq-brand'].includes(id)) {
             sel.value = activeBrandId || (allBrands[0] ? allBrands[0].id : '');
         } else if (currentVal) {
             sel.value = currentVal;
+        }
+
+        if (!sel.dataset.boundBrandChange) {
+            sel.dataset.boundBrandChange = 'true';
+            sel.addEventListener('change', (e) => {
+                const selectedId = e.target.value;
+                if (id === 'queue-brand-filter') return;
+                activeBrandId = selectedId;
+                const found = allBrands.find(b => b.id === selectedId);
+                if (found) {
+                    currentBranding = found;
+                    updateBrandVisuals(currentBranding);
+                    selectors.forEach(otherId => {
+                        if (otherId !== id && otherId !== 'queue-brand-filter') {
+                            const otherSel = document.getElementById(otherId);
+                            if (otherSel) otherSel.value = selectedId;
+                        }
+                    });
+                    if (typeof updateSlidePreview === 'function' && document.getElementById('editor-view')?.classList.contains('active-view')) {
+                        updateSlidePreview();
+                    }
+                }
+            });
         }
     });
 }
@@ -601,18 +598,15 @@ function switchView(targetViewId, linkElement = null) {
     navLinks.forEach(l => l.classList.remove('active'));
     views.forEach(v => v.classList.remove('active-view'));
 
-    if (linkElement) {
-        linkElement.classList.add('active');
-    } else {
-        const matchingLink = document.querySelector(`.nav-links a[data-target="${targetViewId}"]`);
-        if (matchingLink) matchingLink.classList.add('active');
+    const matchingLink = linkElement || document.querySelector(`.nav-links a[data-target="${targetViewId}"]`);
+    if (matchingLink) {
+        matchingLink.classList.add('active');
+        const h1 = document.querySelector('.topbar h1');
+        if (h1) h1.textContent = matchingLink.textContent.trim();
     }
 
     const targetView = document.getElementById(targetViewId);
     if (targetView) targetView.classList.add('active-view');
-
-    const h1 = document.querySelector('.topbar h1');
-    if (h1 && linkElement) h1.textContent = linkElement.textContent.trim();
 
     if (targetViewId === 'home-view') loadDashboardStats();
     if (targetViewId === 'queue-view') loadQueue();
@@ -621,6 +615,9 @@ function switchView(targetViewId, linkElement = null) {
     if (targetViewId === 'branding-view') loadBrandingView();
     if (targetViewId === 'canvas-view') initDesignStudio();
     if (targetViewId === 'psych-view') initPsychLab();
+    if (targetViewId === 'mcq-video-view') {
+        try { initMCQVideoStudio(); } catch (err) { console.error("initMCQVideoStudio error:", err); }
+    }
 
     syncTemplateDropdowns();
 }
@@ -805,21 +802,21 @@ function parsePostText(text) {
             slides = parsed.carousel.slides.map((s, idx) => ({
                 title: s.title_text || s.title || `Slide ${idx + 1}`,
                 content: s.body_text || s.content || '',
-                header: s.header_text || '@amazingfacts.lab',
+                header: s.header_text || (currentBranding?.handle || '@ammaazzingg'),
                 is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
             }));
         } else if (parsed.single_slide && (parsed.single_slide.quote_text || parsed.single_slide.title)) {
             slides = [{
                 title: parsed.single_slide.quote_text || parsed.single_slide.title || 'Psychology Insight',
                 content: parsed.single_slide.content || '',
-                header: parsed.single_slide.attribution || '@amazingfacts.lab',
+                header: parsed.single_slide.attribution || (currentBranding?.handle || '@ammaazzingg'),
                 is_cta: false
             }];
         } else if (parsed.data && parsed.data.carousel && Array.isArray(parsed.data.carousel.slides)) {
             slides = parsed.data.carousel.slides.map((s, idx) => ({
                 title: s.title_text || s.title || `Slide ${idx + 1}`,
                 content: s.body_text || s.content || '',
-                header: s.header_text || '@amazingfacts.lab',
+                header: s.header_text || (currentBranding?.handle || '@ammaazzingg'),
                 is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
             }));
         }
@@ -827,14 +824,16 @@ function parsePostText(text) {
         const normalizedSlides = slides.map((s, idx) => ({
             title: s.title || s.title_text || `Slide ${idx + 1}`,
             content: s.content || s.body_text || '',
-            header: s.header || s.header_text || '@amazingfacts.lab',
+            header: s.header || s.header_text || (currentBranding?.handle || '@ammaazzingg'),
             is_cta: s.is_cta || false,
             ...s
         }));
 
         return {
             slides: normalizedSlides,
-            caption: parsed.caption || ''
+            caption: parsed.caption || (parsed.data && parsed.data.caption) || '',
+            brand_snapshot: parsed.brand_snapshot || null,
+            brand_id: parsed.brand_id || null
         };
     } catch {
         return { slides: [{ title: "Content", content: String(text) }], caption: text };
@@ -880,7 +879,7 @@ async function loadQueue() {
     grid.innerHTML = '';
     let filtered = posts;
     if (statusFilter !== 'All') filtered = filtered.filter(p => p.status === statusFilter);
-    if (brandFilter !== 'All') filtered = filtered.filter(p => p.brand_id === brandFilter);
+    if (brandFilter !== 'All') filtered = filtered.filter(p => p.brand_id === brandFilter || (!p.brand_id && brandFilter === 'All'));
     filtered.forEach(post => {
         const imageUrls = parseImageUrls(post.image_url);
         const firstImage = imageUrls[0] || 'https://via.placeholder.com/400x500?text=No+Image';
@@ -1289,16 +1288,28 @@ function initDesignStudio() {
 
 function syncFabricCanvasToCurrentSlide() {
     if (!fabricCanvas || !currentSlides[currentSlideIndex]) return;
+    if (isRenderingSlide) return; // Prevent overwriting state with an incomplete render
     // Only sync if canvas has objects (avoid syncing after a clear)
     const objects = fabricCanvas.getObjects();
     if (objects.length === 0) return;
+
+    if (!currentSlides[currentSlideIndex].objectStyles) {
+        currentSlides[currentSlideIndex].objectStyles = {};
+    }
+
     let updated = false;
-    objects.forEach(obj => {
+    objects.forEach((obj, idx) => {
         const style = {
-            left: obj.left, top: obj.top, width: obj.width, fontSize: obj.fontSize,
-            fill: obj.fill, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
-            fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign
+            left: obj.left, top: obj.top, width: obj.width, height: obj.height, fontSize: obj.fontSize,
+            fill: obj.fill, scaleX: obj.scaleX !== undefined ? obj.scaleX : 1, scaleY: obj.scaleY !== undefined ? obj.scaleY : 1,
+            angle: obj.angle || 0, originX: obj.originX || 'left', originY: obj.originY || 'top',
+            fontWeight: obj.fontWeight, fontStyle: obj.fontStyle, textAlign: obj.textAlign,
+            opacity: obj.opacity !== undefined ? obj.opacity : 1
         };
+
+        const key = obj.customType || obj.isPlaceholder || obj.id || `obj_${idx}`;
+        currentSlides[currentSlideIndex].objectStyles[key] = style;
+
         if (obj.isPlaceholder === 'title' || obj.customType === 'title') {
             if (obj.text !== undefined) currentSlides[currentSlideIndex].title = obj.text;
             currentSlides[currentSlideIndex].titleStyle = style;
@@ -1330,6 +1341,8 @@ function syncFabricCanvasToCurrentSlide() {
         } else if (['facts-image', 'image-placeholder-bg', 'single-image', 'background-image'].includes(obj.customType)) {
             currentSlides[currentSlideIndex].imageStyle = style;
             updated = true;
+        } else {
+            updated = true;
         }
     });
     if (!updated) return;
@@ -1339,6 +1352,7 @@ function syncFabricCanvasToCurrentSlide() {
     if (titleIn) titleIn.value = currentSlides[currentSlideIndex].title || '';
     if (contentIn) contentIn.value = currentSlides[currentSlideIndex].content || '';
 }
+window.syncFabricCanvasToCurrentSlide = syncFabricCanvasToCurrentSlide;
 
 function saveCanvasHistory() {
     if (!fabricCanvas) return;
@@ -1439,16 +1453,46 @@ const BRAND_TOKENS = {
         fontMono: 'Inter, monospace',
         radiusCard: 28,
         safeMargin: 60
+    },
+    claude: {
+        id: 'claude',
+        name: 'Claude Template',
+        handle: '@claude',
+        logoUrl: 'assets/icons/icon-192.png',
+        verified: true,
+        headerStyle: 'inset-hairline',
+        headerHeight: 72,
+        bgPrimary: '#faf9f5',
+        bgSecondary: '#e8e6dc',
+        headerBg: 'transparent',
+        headerText: '#141413',
+        accentPrimary: '#d97757',
+        accentSecondary: '#6a9bcc',
+        textHeading: '#141413',
+        textBody: '#141413',
+        textCaption: '#b0aea5',
+        fontHeading: 'Poppins, Arial, sans-serif',
+        fontBody: 'Lora, Georgia, serif',
+        fontMono: 'ui-monospace, SFMono-Regular, monospace',
+        radiusCard: 16,
+        safeMargin: 60
     }
 };
 
 // --- CORE RENDER FUNCTION: Render one slide to the Fabric canvas ---
 async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetCanvas = null) {
+    slideRenderVersion++;
+    const myRenderVersion = slideRenderVersion;
+    isRenderingSlide = true;
+
     if (!targetCanvas) {
         if (!fabricCanvas) initFabricCanvas();
         targetCanvas = fabricCanvas;
     }
-    if (!targetCanvas) return;
+    if (!targetCanvas) {
+        if (slideRenderVersion === myRenderVersion) isRenderingSlide = false;
+        return;
+    }
 
     targetCanvas.clear();
 
@@ -2702,8 +2746,44 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
             }
         }
 
+        // --- APPLY SLIDE OBJECT POSITION & TRANSFORM OVERRIDES ---
+        if (slideData.objectStyles) {
+            targetCanvas.getObjects().forEach((obj, idx) => {
+                const key = obj.customType || obj.isPlaceholder || obj.id || `obj_${idx}`;
+                const savedStyle = slideData.objectStyles[key];
+                if (savedStyle) {
+                    obj.set({
+                        left: savedStyle.left !== undefined ? savedStyle.left : obj.left,
+                        top: savedStyle.top !== undefined ? savedStyle.top : obj.top,
+                        scaleX: savedStyle.scaleX !== undefined ? savedStyle.scaleX : obj.scaleX,
+                        scaleY: savedStyle.scaleY !== undefined ? savedStyle.scaleY : obj.scaleY,
+                        angle: savedStyle.angle !== undefined ? savedStyle.angle : obj.angle,
+                        originX: savedStyle.originX || obj.originX,
+                        originY: savedStyle.originY || obj.originY,
+                        opacity: savedStyle.opacity !== undefined ? savedStyle.opacity : obj.opacity
+                    });
+                    if (savedStyle.fill && obj.fill) obj.set('fill', savedStyle.fill);
+                    if (savedStyle.fontSize && obj.fontSize) obj.set('fontSize', savedStyle.fontSize);
+                    obj.setCoords();
+                }
+            });
+        }
+
+        // --- DYNAMIC OVERLAP PREVENTION (Heading vs Body) ---
+        const titleObj = targetCanvas.getObjects().find(o => o.customType === 'title' || o.isPlaceholder === 'title');
+        const bodyObj = targetCanvas.getObjects().find(o => o.customType === 'body' || o.isPlaceholder === 'body');
+
+        if (titleObj && bodyObj) {
+            const minBodyTop = titleObj.top + titleObj.getScaledHeight() + 30;
+            if (bodyObj.top < minBodyTop) {
+                bodyObj.set('top', minBodyTop);
+                bodyObj.setCoords();
+            }
+        }
+
         targetCanvas.renderAll();
         saveCanvasHistory();
+        if (slideRenderVersion === myRenderVersion) isRenderingSlide = false;
     };
 
     // Set background image if available — with timeout fallback for slow Pollinations requests
@@ -2805,9 +2885,16 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
 }
 
 // Format controls wire-up
-document.getElementById('fmt-font-size')?.addEventListener('change', (e) => {
+document.getElementById('fmt-font-size')?.addEventListener('input', (e) => {
     const obj = fabricCanvas?.getActiveObject();
     if (obj && obj.set) { obj.set('fontSize', parseInt(e.target.value)); fabricCanvas.renderAll(); }
+});
+
+document.getElementById('canvas-aspect-selector')?.addEventListener('change', (e) => {
+    if (window.setCanvasAspectRatio) {
+        window.setCanvasAspectRatio(e.target.value);
+        if (window.updateSlidePreview) window.updateSlidePreview();
+    }
 });
 
 document.getElementById('fmt-color')?.addEventListener('input', (e) => {
@@ -2890,6 +2977,15 @@ document.getElementById('canvas-redo')?.addEventListener('click', () => {
 function renderCaption(caption) {
     if (!caption) return;
 
+    let capObj = caption;
+    if (typeof capObj === 'string') {
+        try {
+            if (capObj.trim().startsWith('{')) {
+                capObj = JSON.parse(capObj);
+            }
+        } catch(e) {}
+    }
+
     const hookEl = document.getElementById('caption-hook');
     const bodyEl = document.getElementById('caption-body');
     const ctaEl = document.getElementById('caption-cta');
@@ -2899,36 +2995,90 @@ function renderCaption(caption) {
     const fallbackEl = document.getElementById('caption-text-fallback');
     const structuredSections = ['caption-hook-section', 'caption-body-section', 'caption-cta-section', 'caption-hashtags-section'];
 
-    if (typeof caption === 'object' && caption.hook) {
-        // Structured caption
+    const renderHashtags = (el, tags) => {
+        if (!el) return;
+        el.innerHTML = '';
+        if (!tags) return;
+        const arr = Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(/\s+/) : []);
+        arr.filter(Boolean).forEach(tag => {
+            const cleanTag = tag.startsWith('#') ? tag : `#${tag}`;
+            const pill = document.createElement('span');
+            pill.className = 'hashtag-pill';
+            pill.textContent = cleanTag;
+            pill.addEventListener('click', () => window.copyToClipboard(cleanTag));
+            el.appendChild(pill);
+        });
+    };
+
+    if (typeof capObj === 'object' && capObj !== null) {
         structuredSections.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
         if (fallbackEl) fallbackEl.style.display = 'none';
-        if (hookEl) hookEl.innerText = caption.hook || '';
-        if (bodyEl) bodyEl.innerText = caption.body || '';
-        if (ctaEl) ctaEl.innerText = caption.cta || '';
 
-        const renderHashtags = (el, tags) => {
-            if (!el || !tags) return;
-            el.innerHTML = '';
-            (Array.isArray(tags) ? tags : tags.split(' ')).forEach(tag => {
-                const pill = document.createElement('span');
-                pill.className = 'hashtag-pill';
-                pill.textContent = tag;
-                pill.addEventListener('click', () => navigator.clipboard.writeText(tag).catch(() => {}));
-                el.appendChild(pill);
-            });
-        };
+        if (hookEl) hookEl.innerText = capObj.hook || capObj.title || '';
+        if (bodyEl) bodyEl.innerText = capObj.body || capObj.content || capObj.text || '';
+        if (ctaEl) ctaEl.innerText = capObj.cta || 'Save this post for later!';
 
-        const hashtags = caption.hashtags || {};
-        renderHashtags(nicheEl, hashtags.niche || []);
-        renderHashtags(broadEl, hashtags.broad || []);
-        renderHashtags(highIntentEl, hashtags.high_intent || []);
-    } else {
-        // Plain text fallback (old posts)
-        structuredSections.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-        if (fallbackEl) { fallbackEl.style.display = ''; fallbackEl.value = typeof caption === 'string' ? caption : JSON.stringify(caption); }
+        const hashtags = capObj.hashtags || [];
+        let nicheTags = [];
+        let broadTags = [];
+        let highIntentTags = [];
+
+        if (Array.isArray(hashtags)) {
+            nicheTags = hashtags;
+        } else if (typeof hashtags === 'string') {
+            nicheTags = hashtags.split(/\s+/).filter(t => t.length > 0);
+        } else {
+            nicheTags = Array.isArray(hashtags.niche) ? hashtags.niche : [];
+            broadTags = Array.isArray(hashtags.broad) ? hashtags.broad : [];
+            highIntentTags = Array.isArray(hashtags.high_intent) ? hashtags.high_intent : [];
+        }
+
+        renderHashtags(nicheEl, nicheTags);
+        renderHashtags(broadEl, broadTags);
+        renderHashtags(highIntentEl, highIntentTags);
+    } else if (typeof capObj === 'string') {
+        const lines = capObj.split('\n').map(l => l.trim()).filter(Boolean);
+        const tags = lines.filter(l => l.includes('#')).join(' ').split(/\s+/).filter(t => t.startsWith('#'));
+        const nonTags = lines.filter(l => !l.includes('#'));
+
+        structuredSections.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+        if (fallbackEl) fallbackEl.style.display = 'none';
+
+        if (hookEl) hookEl.innerText = nonTags[0] || '';
+        if (bodyEl) bodyEl.innerText = nonTags.slice(1, -1).join('\n\n') || nonTags[1] || '';
+        if (ctaEl) ctaEl.innerText = nonTags.length > 2 ? nonTags[nonTags.length - 1] : 'Save this post!';
+
+        renderHashtags(nicheEl, tags.length > 0 ? tags : ['#loksewaprep', '#nepalgk', '#growuploksewa']);
+        renderHashtags(broadEl, []);
+        renderHashtags(highIntentEl, []);
     }
 }
+
+window.copyToClipboard = async function(text) {
+    if (!text) return false;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch(e) {}
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return successful;
+    } catch(err) {
+        console.error('Clipboard copy failed:', err);
+        return false;
+    }
+};
 
 function getCaptionText() {
     const fallbackEl = document.getElementById('caption-text-fallback');
@@ -2949,23 +3099,37 @@ function getCaptionText() {
 
 document.getElementById('copy-caption')?.addEventListener('click', async () => {
     const text = getCaptionText();
-    try {
-        await navigator.clipboard.writeText(text);
-        const btn = document.getElementById('copy-caption');
+    const success = await window.copyToClipboard(text);
+    const btn = document.getElementById('copy-caption');
+    if (success && btn) {
         btn.innerHTML = '<i data-feather="check"></i> Copied!';
         if (window.feather) feather.replace();
-        setTimeout(() => { btn.innerHTML = '<i data-feather="copy"></i> Copy Full Caption'; feather.replace(); }, 2000);
-    } catch { alert('Caption copied!'); }
+        showToast('Caption copied to clipboard!');
+        setTimeout(() => { btn.innerHTML = '<i data-feather="copy"></i> Copy Full Caption'; if (window.feather) feather.replace(); }, 2000);
+    } else {
+        showToast(success ? 'Caption copied!' : 'Failed to copy caption', success ? 'info' : 'error');
+    }
 });
 
 // ============================================================
 // 3b. EDITOR — Open & Render
 // ============================================================
-window.openEditor = async (id) => {
-    console.log("openEditor:", id);
-    const posts = await getPosts();
-    const post = posts.find(p => p.id === id);
-    if (!post) { console.error("Post not found:", id); return; }
+window.openEditor = async (idOrPost) => {
+    console.log("openEditor:", idOrPost);
+    let post = null;
+    let id = null;
+    if (typeof idOrPost === 'object' && idOrPost && idOrPost.id) {
+        post = idOrPost;
+        id = post.id;
+    } else {
+        id = idOrPost;
+        let posts = await getPosts();
+        post = posts.find(p => String(p.id) === String(id));
+        if (!post && window.lastGeneratedPost && String(window.lastGeneratedPost.id) === String(id)) {
+            post = window.lastGeneratedPost;
+        }
+    }
+    if (!post) { console.error("Post not found:", idOrPost); return; }
 
     currentEditingId = id;
 
@@ -2977,16 +3141,19 @@ window.openEditor = async (id) => {
     // Parse content first to check for brand_snapshot
     const parsed = parsePostText(post.text);
     currentSlides = parsed.slides || [];
+    window.currentSlides = currentSlides;
     const caption = parsed.caption || '';
     currentImageUrls = parseImageUrls(post.image_url);
 
     // Set brand
-    if (post.brand_id) {
-        let postBrand = parsed.brand_snapshot || allBrands.find(b => b.id === post.brand_id);
-        if (postBrand) { 
-            currentBranding = postBrand; 
-            updateBrandVisuals(currentBranding); 
-        }
+    const targetBrandId = post.brand_id || activeBrandId;
+    let postBrand = parsed.brand_snapshot || allBrands.find(b => b.id === targetBrandId) || allBrands[0];
+    if (postBrand) { 
+        currentBranding = postBrand; 
+        activeBrandId = postBrand.id;
+        updateBrandVisuals(currentBranding); 
+        const canvasBrandSel = document.getElementById('canvas-brand-selector');
+        if (canvasBrandSel) canvasBrandSel.value = postBrand.id;
     }
 
     // Set UI
@@ -3101,6 +3268,61 @@ function updateSlidePreview() {
 window.updateSlidePreview = updateSlidePreview;
 window.renderSlidesForm = renderSlidesForm;
 
+window.addNewSlide = (targetIndex = null) => {
+    syncFabricCanvasToCurrentSlide();
+    const insertIdx = (targetIndex !== null && targetIndex >= 0) ? targetIndex : currentSlides.length;
+    const newSlide = {
+        title: `Slide ${insertIdx + 1}`,
+        content: 'Enter your content or key takeaway here...'
+    };
+    currentSlides.splice(insertIdx, 0, newSlide);
+    currentImageUrls.splice(insertIdx, 0, null);
+    currentSlideIndex = insertIdx;
+    renderSlidesForm();
+    updateSlidePreview();
+    updateSidebarImagePreview(currentSlideIndex);
+    updateCTABadge();
+    showToast(`Slide ${insertIdx + 1} added!`);
+};
+
+window.duplicateSlide = (index) => {
+    syncFabricCanvasToCurrentSlide();
+    if (!currentSlides[index]) return;
+    const clone = JSON.parse(JSON.stringify(currentSlides[index]));
+    clone.title = (clone.title || '') + ' (Copy)';
+    const targetIdx = index + 1;
+    currentSlides.splice(targetIdx, 0, clone);
+    currentImageUrls.splice(targetIdx, 0, currentImageUrls[index] || null);
+    currentSlideIndex = targetIdx;
+    renderSlidesForm();
+    updateSlidePreview();
+    updateSidebarImagePreview(currentSlideIndex);
+    updateCTABadge();
+    showToast(`Slide ${index + 1} duplicated!`);
+};
+
+window.deleteSlide = (index) => {
+    if (currentSlides.length <= 1) {
+        alert('A post must have at least 1 slide.');
+        return;
+    }
+    syncFabricCanvasToCurrentSlide();
+    currentSlides.splice(index, 1);
+    currentImageUrls.splice(index, 1);
+    if (currentSlideIndex >= currentSlides.length) {
+        currentSlideIndex = currentSlides.length - 1;
+    }
+    renderSlidesForm();
+    updateSlidePreview();
+    updateSidebarImagePreview(currentSlideIndex);
+    updateCTABadge();
+    showToast(`Slide deleted.`);
+};
+
+document.getElementById('add-new-slide-btn')?.addEventListener('click', () => {
+    window.addNewSlide();
+});
+
 function renderSlidesForm() {
     const container = document.getElementById('slides-form-container');
     container.innerHTML = '';
@@ -3110,10 +3332,12 @@ function renderSlidesForm() {
         div.style.cssText = `margin-bottom:12px;padding:14px;border:1px solid ${index===currentSlideIndex?'#0969da':'#d0d7de'};border-radius:8px;background:${index===currentSlideIndex?'#f0f6ff':'#fff'};cursor:pointer;`;
         div.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <h4 style="font-size:13px;font-weight:700;color:#656d76;">Slide ${index + 1}${isCTA?'<span style="font-size:10px;background:#10b981;color:#fff;padding:1px 7px;border-radius:20px;margin-left:8px;font-weight:600;">CTA</span>':''}</h4>
-                <div>
-                    <button onclick="window.jumpToSlide(${index})" style="background:none;border:none;cursor:pointer;color:#0969da;font-size:12px;font-weight:600;">▶ Preview</button>
-                    <button onclick="window.downloadSingleSlide(${index})" style="background:none;border:none;cursor:pointer;color:#10b981;font-size:12px;font-weight:600;margin-left:8px;" title="Download PNG for this slide">📥 PNG</button>
+                <h4 style="font-size:13px;font-weight:700;color:#656d76;margin:0;">Slide ${index + 1}${isCTA?'<span style="font-size:10px;background:#10b981;color:#fff;padding:1px 7px;border-radius:20px;margin-left:8px;font-weight:600;">CTA</span>':''}</h4>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button onclick="window.jumpToSlide(${index})" style="background:none;border:none;cursor:pointer;color:#0969da;font-size:12px;font-weight:600;" title="Preview slide">▶ Preview</button>
+                    <button onclick="window.duplicateSlide(${index})" style="background:none;border:none;cursor:pointer;color:#6e40c9;font-size:12px;font-weight:600;" title="Duplicate slide">📋 Copy</button>
+                    ${currentSlides.length > 1 ? `<button onclick="window.deleteSlide(${index})" style="background:none;border:none;cursor:pointer;color:var(--color-danger-fg);font-size:12px;font-weight:600;" title="Delete slide">🗑️ Delete</button>` : ''}
+                    <button onclick="window.downloadSingleSlide(${index})" style="background:none;border:none;cursor:pointer;color:#10b981;font-size:12px;font-weight:600;" title="Download PNG for this slide">📥 PNG</button>
                 </div>
             </div>
             <input type="text" id="slide-title-${index}" class="full-width" style="margin-bottom:8px;padding:5px 10px;border:1px solid #d0d7de;border-radius:5px;font-size:13px;" value="${(slide.title||'').replace(/"/g, '&quot;')}" oninput="window.updateSlideData(${index},'title',this.value)">
@@ -3122,10 +3346,63 @@ function renderSlidesForm() {
         div.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') window.jumpToSlide(index); });
         container.appendChild(div);
     });
+    if (window.feather) feather.replace();
 }
 
-window.jumpToSlide = (index) => {
-    syncFabricCanvasToCurrentSlide();
+window.saveCurrentSlideAndPost = async function(silent = false) {
+    if (fabricCanvas) {
+        const activeObj = fabricCanvas.getActiveObject();
+        if (activeObj && activeObj.isEditing) {
+            activeObj.exitEditing();
+        }
+        if (!isRenderingSlide) {
+            syncFabricCanvasToCurrentSlide();
+        }
+    }
+
+    const updatedStatus = document.getElementById('editor-status')?.value || 'Draft';
+    const updatedText = JSON.stringify({ slides: currentSlides, caption: typeof getCaptionText === 'function' ? getCaptionText() : '' });
+    const updatedImageUrl = JSON.stringify(currentImageUrls);
+
+    if (window.lastGeneratedPost && String(window.lastGeneratedPost.id) === String(currentEditingId)) {
+        window.lastGeneratedPost.text = updatedText;
+        window.lastGeneratedPost.status = updatedStatus;
+        window.lastGeneratedPost.image_url = updatedImageUrl;
+    }
+
+    if (isMockMode) {
+        const i = mockPosts.findIndex(p => p.id === currentEditingId);
+        if (i > -1) {
+            mockPosts[i].text = updatedText;
+            mockPosts[i].status = updatedStatus;
+            mockPosts[i].image_url = updatedImageUrl;
+            mockPosts[i].updated_at = new Date().toISOString();
+            saveMockPosts();
+        }
+        if (!silent) showToast('💾 Slide changes saved!');
+        return;
+    }
+
+    if (!currentEditingId) {
+        if (!silent) showToast('No post selected for saving.', 'error');
+        return;
+    }
+
+    const { error } = await supabase
+        .from('posts')
+        .update({ text: updatedText, status: updatedStatus, image_url: updatedImageUrl })
+        .eq('id', currentEditingId);
+
+    if (error) {
+        console.error('[Save] Supabase error:', error);
+        if (!silent) showToast('Error saving: ' + error.message, 'error');
+    } else {
+        if (!silent) showToast('💾 Slide changes saved!');
+    }
+};
+
+window.jumpToSlide = async (index) => {
+    await window.saveCurrentSlideAndPost(true);
     currentSlideIndex = index;
     renderSlidesForm();
     updateSlidePreview();
@@ -3142,9 +3419,9 @@ window.updateSlideData = (index, field, value) => {
 };
 
 // Prev/Next Slide
-document.getElementById('prev-slide')?.addEventListener('click', () => {
+document.getElementById('prev-slide')?.addEventListener('click', async () => {
     if (currentSlideIndex > 0) {
-        syncFabricCanvasToCurrentSlide();
+        await window.saveCurrentSlideAndPost(true);
         currentSlideIndex--;
         renderSlidesForm();
         updateSlidePreview();
@@ -3152,9 +3429,9 @@ document.getElementById('prev-slide')?.addEventListener('click', () => {
         updateCTABadge();
     }
 });
-document.getElementById('next-slide')?.addEventListener('click', () => {
+document.getElementById('next-slide')?.addEventListener('click', async () => {
     if (currentSlideIndex < currentSlides.length - 1) {
-        syncFabricCanvasToCurrentSlide();
+        await window.saveCurrentSlideAndPost(true);
         currentSlideIndex++;
         renderSlidesForm();
         updateSlidePreview();
@@ -3162,6 +3439,9 @@ document.getElementById('next-slide')?.addEventListener('click', () => {
         updateCTABadge();
     }
 });
+
+document.getElementById('editor-top-save-btn')?.addEventListener('click', () => window.saveCurrentSlideAndPost(false));
+document.getElementById('editor-quick-save-btn')?.addEventListener('click', () => window.saveCurrentSlideAndPost(false));
 
 document.getElementById('toggle-brand-logo')?.addEventListener('change', () => updateSlidePreview());
 document.getElementById('toggle-brand-handle')?.addEventListener('change', () => updateSlidePreview());
@@ -3362,21 +3642,56 @@ document.getElementById('download-current-slide')?.addEventListener('click', () 
 // 3e. SAVE POST
 // ============================================================
 document.getElementById('save-post')?.addEventListener('click', async () => {
-    syncFabricCanvasToCurrentSlide();
+    // Sync canvas position/style overrides — but only if canvas render is complete
+    // Text edits are already captured in currentSlides via updateSlideData
+    if (!isRenderingSlide) {
+        syncFabricCanvasToCurrentSlide();
+    }
+
     const updatedStatus = document.getElementById('editor-status').value;
     const updatedText = JSON.stringify({ slides: currentSlides, caption: getCaptionText() });
     const updatedImageUrl = JSON.stringify(currentImageUrls);
 
+    console.log('[Save] Saving slides:', currentSlides.length, 'currentEditingId:', currentEditingId, 'isMockMode:', isMockMode);
+
+    const btn = document.getElementById('save-post');
+    const originalHTML = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i data-feather="loader" class="spin"></i> Saving...'; if (window.feather) feather.replace(); }
+
     if (isMockMode) {
         const i = mockPosts.findIndex(p => p.id === currentEditingId);
-        if (i > -1) { mockPosts[i].text = updatedText; mockPosts[i].status = updatedStatus; mockPosts[i].image_url = updatedImageUrl; mockPosts[i].updated_at = new Date().toISOString(); saveMockPosts(); }
-        showToast('Saved successfully (Mock)');
-        document.querySelector('[data-target="queue-view"]')?.click();
+        if (i > -1) {
+            mockPosts[i].text = updatedText;
+            mockPosts[i].status = updatedStatus;
+            mockPosts[i].image_url = updatedImageUrl;
+            mockPosts[i].updated_at = new Date().toISOString();
+            saveMockPosts();
+        }
+        showToast('✓ Saved!');
+        if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; if (window.feather) feather.replace(); }
         return;
     }
-    const { error } = await supabase.from('posts').update({ text: updatedText, status: updatedStatus, image_url: updatedImageUrl }).eq('id', currentEditingId);
-    if (error) showToast('Error saving: ' + error.message, 'error');
-    else { showToast('Saved successfully!'); document.querySelector('[data-target="queue-view"]')?.click(); }
+
+    if (!currentEditingId) {
+        showToast('Error: No post selected for saving.', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; if (window.feather) feather.replace(); }
+        return;
+    }
+
+    const { error } = await supabase
+        .from('posts')
+        .update({ text: updatedText, status: updatedStatus, image_url: updatedImageUrl })
+        .eq('id', currentEditingId);
+
+    if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; if (window.feather) feather.replace(); }
+
+    if (error) {
+        console.error('[Save] Supabase error:', error);
+        showToast('Error saving: ' + error.message, 'error');
+    } else {
+        console.log('[Save] ✓ Saved to Supabase, id:', currentEditingId);
+        showToast('✓ Saved successfully!');
+    }
 });
 
 // ============================================================
@@ -3465,12 +3780,16 @@ document.getElementById('apply-saved-template')?.addEventListener('click', () =>
 // ============================================================
 // 4. MANUAL CONTENT LAB
 // ============================================================
+let isGeneratingManual = false;
 document.getElementById('trigger-manual')?.addEventListener('click', async () => {
+    if (isGeneratingManual) return;
+    isGeneratingManual = true;
+
     const topic = document.getElementById('manual-topic').value.trim();
     const contentType = document.getElementById('manual-content-type').value;
     const brandId = document.getElementById('manual-brand').value;
     const feedback = document.getElementById('manual-feedback');
-    if (!topic) { feedback.innerText = "Please enter a topic."; feedback.style.color = "var(--color-danger-fg)"; return; }
+    if (!topic) { feedback.innerText = "Please enter a topic."; feedback.style.color = "var(--color-danger-fg)"; isGeneratingManual = false; return; }
 
     const btn = document.getElementById('trigger-manual');
     const overlay = document.getElementById('manual-loading-overlay');
@@ -3480,13 +3799,13 @@ document.getElementById('trigger-manual')?.addEventListener('click', async () =>
 
     try {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
-        const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL, {
+        const response = await fetch(`${API_URL}/generate`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ topic, contentType, brand_id: brandId, promptTemplate: currentPromptTemplate, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unknown error");
-        if (data.db_error && !isMockMode) { isMockMode = true; alert(`DB Error: ${data.db_error}\n\nUsing local storage.`); }
+        if (data.db_error && !isMockMode) { isMockMode = true; }
         const newPost = data.post || { id: Date.now().toString(), topic: `[${contentType}] ${topic}`, text: data.text, image_url: data.image_url, status: 'Draft', brand_id: brandId, updated_at: new Date().toISOString() };
         if (isMockMode && !mockPosts.find(p => p.id === newPost.id)) { mockPosts.unshift(newPost); saveMockPosts(); }
         await loadQueue();
@@ -3497,11 +3816,10 @@ document.getElementById('trigger-manual')?.addEventListener('click', async () =>
         feedback.innerText = "Error: " + err.message;
         feedback.style.color = "var(--color-danger-fg)";
         feedback.style.display = 'block';
-        btn.style.display = 'block';
-        overlay.style.display = 'none';
     } finally {
         btn.style.display = 'block';
         overlay.style.display = 'none';
+        isGeneratingManual = false;
     }
 });
 
@@ -3513,7 +3831,11 @@ document.getElementById('refresh-topic-btn')?.addEventListener('click', suggestR
 // ============================================================
 // 5. NEWS LAB
 // ============================================================
+let isGeneratingNews = false;
 document.getElementById('trigger-news')?.addEventListener('click', async () => {
+    if (isGeneratingNews) return;
+    isGeneratingNews = true;
+
     const topic = document.getElementById('news-topic-input')?.value.trim() || '';
     const category = document.getElementById('news-category-select')?.value || '';
     const slideCount = parseInt(document.getElementById('news-slide-format')?.value) || 4;
@@ -3526,7 +3848,7 @@ document.getElementById('trigger-news')?.addEventListener('click', async () => {
     btn.style.display = 'none'; feedback.style.display = 'none'; overlay.style.display = 'block';
     try {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
-        const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-news'), {
+        const response = await fetch(`${API_URL}/generate-news`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ topic, category, slide_count: slideCount, brand_id: brandId, language, contentType, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
@@ -3553,7 +3875,11 @@ document.getElementById('trigger-news')?.addEventListener('click', async () => {
         window.openEditor(data.post?.id || newPost.id);
     } catch (err) {
         feedback.innerText = "Error: " + err.message; feedback.style.color = "var(--color-danger-fg)"; feedback.style.display = 'block';
-    } finally { btn.style.display = 'block'; overlay.style.display = 'none'; }
+    } finally { 
+        btn.style.display = 'block'; 
+        overlay.style.display = 'none'; 
+        isGeneratingNews = false;
+    }
 });
 
 // ============================================================
@@ -3563,7 +3889,11 @@ document.querySelectorAll('.fact-niche-preset').forEach(btn => {
     btn.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('facts-topic').value = btn.getAttribute('data-niche'); });
 });
 
+let isGeneratingFacts = false;
 document.getElementById('trigger-facts-single')?.addEventListener('click', async () => {
+    if (isGeneratingFacts) return;
+    isGeneratingFacts = true;
+
     const topic = document.getElementById('facts-topic').value.trim() || "Sharks are older than trees";
     const language = document.getElementById('facts-language').value;
     const brandId = document.getElementById('facts-brand').value;
@@ -3576,14 +3906,13 @@ document.getElementById('trigger-facts-single')?.addEventListener('click', async
     
     try {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
-        const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
+        const response = await fetch(`${API_URL}/generate-facts`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            // Using slide_count 1 and a hint for single slide fact
             body: JSON.stringify({ topic, language, slide_count: 1, brand_id: brandId, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Facts generation failed");
-        if (data.db_error && !isMockMode) { isMockMode = true; alert(`DB Error: ${data.db_error}`); }
+        if (data.db_error && !isMockMode) { isMockMode = true; }
         
         const newPost = data.post || { id: Date.now().toString(), topic: `[Single Fact] ${topic.substring(0, 50)}`, text: data.text, image_url: data.image_url, status: 'Draft', brand_id: brandId, updated_at: new Date().toISOString() };
         if (isMockMode && !mockPosts.find(p => p.id === newPost.id)) { mockPosts.unshift(newPost); saveMockPosts(); }
@@ -3594,7 +3923,6 @@ document.getElementById('trigger-facts-single')?.addEventListener('click', async
         const ts = document.getElementById('template-selector');
         if (ts) {
             ts.value = 'template-facts-single';
-            // Also update the legacy one if it exists
             const tsOld = document.getElementById('template-selector-old');
             if (tsOld) tsOld.value = 'template-facts-single';
         }
@@ -3603,10 +3931,14 @@ document.getElementById('trigger-facts-single')?.addEventListener('click', async
         feedback.innerText = "Error: " + err.message; feedback.style.color = "var(--color-danger-fg)"; feedback.style.display = 'block';
     } finally { 
         btnSingle.style.display = 'block'; btnCarousel.style.display = 'block'; overlay.style.display = 'none'; 
+        isGeneratingFacts = false;
     }
 });
 
 document.getElementById('trigger-facts')?.addEventListener('click', async () => {
+    if (isGeneratingFacts) return;
+    isGeneratingFacts = true;
+
     const topic = document.getElementById('facts-topic').value.trim() || "Sharks are older than trees";
     const language = document.getElementById('facts-language').value;
     const slideCount = parseInt(document.getElementById('facts-slide-count').value) || 5;
@@ -3620,21 +3952,25 @@ document.getElementById('trigger-facts')?.addEventListener('click', async () => 
     
     try {
         const activeBrand = allBrands.find(b => b.id === brandId) || currentBranding;
-        const response = await fetch(CONFIG.N8N_MANUAL_WEBHOOK_URL.replace('/generate', '/generate-facts'), {
+        const response = await fetch(`${API_URL}/generate-facts`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ topic, language, slide_count: slideCount, brand_id: brandId, brand_context: getBrandContext(activeBrand), brand_snapshot: activeBrand })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Facts generation failed");
-        if (data.db_error && !isMockMode) { isMockMode = true; alert(`DB Error: ${data.db_error}`); }
+        if (data.db_error && !isMockMode) { isMockMode = true; }
         const newPost = data.post || { id: Date.now().toString(), topic: `[Facts Lab] ${topic.substring(0, 50)}`, text: data.text, image_url: data.image_url, status: 'Draft', brand_id: brandId, updated_at: new Date().toISOString() };
-        if (isMockMode && !mockPosts.find(p => p.id === newPost.id)) { mockPosts.unshift(newPost); saveMockPosts(); }
+        if (!mockPosts.find(p => p.id === newPost.id)) { mockPosts.unshift(newPost); saveMockPosts(); }
+        window.lastGeneratedPost = newPost;
         ['queue-brand-filter', 'status-filter'].forEach(id => { const el = document.getElementById(id); if (el) el.value = el.id === 'queue-brand-filter' ? 'All' : 'All'; });
         await loadQueue();
         window.openEditor(data.post?.id || newPost.id);
     } catch (err) {
         feedback.innerText = "Error: " + err.message; feedback.style.color = "var(--color-danger-fg)"; feedback.style.display = 'block';
-    } finally { btnCarousel.style.display = 'block'; btnSingle.style.display = 'block'; overlay.style.display = 'none'; }
+    } finally { 
+        btnCarousel.style.display = 'block'; btnSingle.style.display = 'block'; overlay.style.display = 'none'; 
+        isGeneratingFacts = false;
+    }
 });
 
 // ============================================================
@@ -4233,25 +4569,85 @@ window.onload = () => {
 };
 
 // --- Custom AI Image Generation ---
+let pendingAiImageUrl = null;
+
+function resetAiImageProgress() {
+    const progress = document.getElementById('ai-image-progress');
+    const previewWrap = document.getElementById('ai-image-preview-wrap');
+    const bar = document.getElementById('ai-image-progress-bar');
+    const statusText = document.getElementById('ai-image-status-text');
+    if (progress) progress.style.display = 'none';
+    if (previewWrap) previewWrap.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (statusText) statusText.textContent = 'Generating image...';
+    pendingAiImageUrl = null;
+}
+
 document.getElementById('generate-custom-image-btn')?.addEventListener('click', () => {
     const promptEl = document.getElementById('custom-ai-image-prompt');
-    const promptText = promptEl.value.trim();
+    const promptText = promptEl ? promptEl.value.trim() : '';
     if (!promptText) {
-        showToast('Please enter an image prompt', 'error');
+        showToast('Please describe the image you want to generate', 'error');
         return;
     }
-    
-    showToast('Generating AI Image...', 'info');
+
+    // Reset state
+    resetAiImageProgress();
+    pendingAiImageUrl = null;
+
+    // Show progress section
+    const progress = document.getElementById('ai-image-progress');
+    const bar = document.getElementById('ai-image-progress-bar');
+    const statusText = document.getElementById('ai-image-status-text');
+    const previewWrap = document.getElementById('ai-image-preview-wrap');
+    const genBtn = document.getElementById('generate-custom-image-btn');
+    if (progress) { progress.style.display = 'flex'; }
+    if (genBtn) { genBtn.disabled = true; }
+    if (window.feather) feather.replace();
+
+    // Animate progress bar while loading (indeterminate feel)
+    let fakeProgress = 5;
+    const progressInterval = setInterval(() => {
+        fakeProgress = Math.min(fakeProgress + (Math.random() * 8), 85);
+        if (bar) bar.style.width = fakeProgress + '%';
+    }, 600);
+
     const seed = Math.floor(Math.random() * 100000);
     const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?seed=${seed}&nologo=true&width=1080&height=1350`;
-    
-    // Simulate slight delay then apply
-    setTimeout(() => {
-        currentImageUrls[currentSlideIndex] = imageUrl;
-        document.getElementById('editor-image').src = imageUrl;
-        updateSlidePreview();
-        showToast('AI Image applied to slide!');
-    }, 1000);
+    pendingAiImageUrl = imageUrl;
+
+    // Detect when the image actually loads
+    const tempImg = new Image();
+    tempImg.onload = () => {
+        clearInterval(progressInterval);
+        if (bar) bar.style.width = '100%';
+        if (statusText) statusText.textContent = '✓ Image ready — click below to apply';
+        // Show preview and apply button
+        const previewImg = document.getElementById('ai-image-preview');
+        if (previewImg) previewImg.src = imageUrl;
+        if (previewWrap) { previewWrap.style.display = 'block'; }
+        if (genBtn) { genBtn.disabled = false; }
+        if (window.feather) feather.replace();
+        showToast('Image generated! Click "Apply to Current Slide" to use it.');
+    };
+    tempImg.onerror = () => {
+        clearInterval(progressInterval);
+        if (bar) bar.style.width = '0%';
+        if (statusText) statusText.textContent = '✗ Generation failed. Try a different prompt.';
+        if (genBtn) { genBtn.disabled = false; }
+        showToast('Image generation failed. Please try again.', 'error');
+    };
+    tempImg.src = imageUrl;
+});
+
+// Apply the pending generated image to the current slide
+document.getElementById('ai-image-apply-btn')?.addEventListener('click', () => {
+    if (!pendingAiImageUrl) return;
+    currentImageUrls[currentSlideIndex] = pendingAiImageUrl;
+    document.getElementById('editor-image').src = pendingAiImageUrl;
+    updateSlidePreview();
+    showToast('✓ Image applied to Slide ' + (currentSlideIndex + 1) + '!');
+    resetAiImageProgress();
 });
 
 // ============================================================
@@ -4270,7 +4666,7 @@ function onCanvasLabSelection() {
     
     // Color/Fill
     const colorGroup = document.getElementById('canvas-prop-color-group');
-    if (obj.type === 'i-text' || obj.type === 'rect' || obj.type === 'circle') {
+    if (obj.type === 'i-text' || obj.type === 'textbox' || obj.text !== undefined || obj.type === 'rect' || obj.type === 'circle') {
         colorGroup.style.display = 'block';
         document.getElementById('canvas-prop-color').value = obj.fill || '#000000';
     } else {
@@ -4280,7 +4676,7 @@ function onCanvasLabSelection() {
     // Text specific properties
     const textGroup = document.getElementById('canvas-prop-text-group');
     const fontGroup = document.getElementById('canvas-prop-fontsize-group');
-    if (obj.type === 'i-text') {
+    if (obj.type === 'i-text' || obj.type === 'textbox' || obj.text !== undefined) {
         textGroup.style.display = 'block';
         fontGroup.style.display = 'block';
         document.getElementById('canvas-prop-text').value = obj.text || '';
@@ -4293,23 +4689,31 @@ function onCanvasLabSelection() {
 
 // Format property listeners
 document.getElementById('canvas-prop-opacity')?.addEventListener('input', (e) => {
-    const obj = freeformCanvas?.getActiveObject();
-    if (obj) { obj.set('opacity', parseFloat(e.target.value)); freeformCanvas.renderAll(); }
+    const obj = (fabricCanvas || freeformCanvas)?.getActiveObject();
+    if (obj) { obj.set('opacity', parseFloat(e.target.value)); (fabricCanvas || freeformCanvas).renderAll(); syncFabricCanvasToCurrentSlide(); }
 });
 
 document.getElementById('canvas-prop-color')?.addEventListener('input', (e) => {
-    const obj = freeformCanvas?.getActiveObject();
-    if (obj) { obj.set('fill', e.target.value); freeformCanvas.renderAll(); }
+    const obj = (fabricCanvas || freeformCanvas)?.getActiveObject();
+    if (obj) { obj.set('fill', e.target.value); (fabricCanvas || freeformCanvas).renderAll(); syncFabricCanvasToCurrentSlide(); }
 });
 
 document.getElementById('canvas-prop-fontsize')?.addEventListener('input', (e) => {
-    const obj = freeformCanvas?.getActiveObject();
-    if (obj && obj.type === 'i-text') { obj.set('fontSize', parseInt(e.target.value, 10)); freeformCanvas.renderAll(); }
+    const obj = (fabricCanvas || freeformCanvas)?.getActiveObject();
+    if (obj && (obj.type === 'i-text' || obj.type === 'textbox' || obj.text !== undefined)) { 
+        obj.set('fontSize', parseInt(e.target.value, 10) || 40); 
+        (fabricCanvas || freeformCanvas).renderAll(); 
+        syncFabricCanvasToCurrentSlide(); 
+    }
 });
 
 document.getElementById('canvas-prop-text')?.addEventListener('input', (e) => {
-    const obj = freeformCanvas?.getActiveObject();
-    if (obj && obj.type === 'i-text') { obj.set('text', e.target.value); freeformCanvas.renderAll(); }
+    const obj = (fabricCanvas || freeformCanvas)?.getActiveObject();
+    if (obj && (obj.type === 'i-text' || obj.type === 'textbox' || obj.text !== undefined)) { 
+        obj.set('text', e.target.value); 
+        (fabricCanvas || freeformCanvas).renderAll(); 
+        syncFabricCanvasToCurrentSlide(); 
+    }
 });
 
 // Header Background Color
@@ -4567,7 +4971,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-
 function initPsychLab() {
     const brandSelect = document.getElementById('psych-brand-select');
     if (brandSelect) {
@@ -4580,6 +4983,9 @@ function initPsychLab() {
         });
     }
 
+    if (window.psychLabInitialized) return;
+    window.psychLabInitialized = true;
+
     if (!psychCanvas) {
         const cEl = document.getElementById('psych-slide-canvas');
         if (cEl) {
@@ -4589,6 +4995,10 @@ function initPsychLab() {
             });
         }
     }
+
+    // Guard: only bind listeners once to prevent multiple submissions per click
+    if (psychLabListenersBound) return;
+    psychLabListenersBound = true;
 
     document.querySelectorAll('.psych-mode-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -4651,12 +5061,16 @@ function initPsychLab() {
         link.click();
         showToast('Deck exported successfully!');
     });
-window.initPsychLab = initPsychLab;
 
+    let isGeneratingPsych = false;
     document.getElementById('psych-submit-btn')?.addEventListener('click', async () => {
+        if (isGeneratingPsych) return; // Prevent double click / duplicate submissions
+        isGeneratingPsych = true;
+
         const topic = document.getElementById('psych-topic-input')?.value;
         if (!topic || !topic.trim()) {
             alert('Please enter a psychology topic or select a preset topic first.');
+            isGeneratingPsych = false;
             return;
         }
 
@@ -4684,7 +5098,8 @@ window.initPsychLab = initPsychLab;
                     target_metric: targetMetric,
                     content_type: formatType,
                     brand_context: brandObj,
-                    brand_id: brandId
+                    brand_id: brandId,
+                    user_id: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null
                 })
             });
 
@@ -4692,6 +5107,7 @@ window.initPsychLab = initPsychLab;
             btn.disabled = false;
             btn.innerHTML = '<i data-feather="zap"></i> Run LabEngine Intelligence';
             if (window.feather) feather.replace();
+            isGeneratingPsych = false;
 
             if (!data.success) {
                 alert('Generation error: ' + (data.error || 'Unknown error'));
@@ -4706,60 +5122,166 @@ window.initPsychLab = initPsychLab;
                 generateCard.style.display = 'none';
                 renderPsychResearchMarkdown(data.markdown);
             } else {
-                // GENERATE mode: Do not show output card in Psychology Lab
-                resultsContainer.style.display = 'none';
+                // GENERATE mode: Display preview card with generated slides
+                resultsContainer.style.display = 'block';
+                generateCard.style.display = 'block';
+                researchCard.style.display = 'none';
 
                 const outputData = data.data || {};
                 let generatedSlides = [];
                 if (outputData.carousel && outputData.carousel.slides) {
-                    generatedSlides = outputData.carousel.slides.map((s, idx) => ({
-                        title: s.title_text || s.title || `Slide ${idx + 1}`,
-                        content: s.body_text || s.content || '',
-                        header: s.header_text || brandObj?.handle || '@amazingfacts.lab',
-                        is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
-                    }));
+                    generatedSlides = outputData.carousel.slides.map((s, idx) => {
+                        let bodyContent = s.body_text || s.content || '';
+                        if (idx === 0 && !bodyContent && s.subtitle_text) {
+                            bodyContent = s.subtitle_text;
+                        } else if (s.subtitle_text && bodyContent && !bodyContent.includes(s.subtitle_text)) {
+                            bodyContent = `${s.subtitle_text}\n\n${bodyContent}`;
+                        }
+                        return {
+                            slide_number: idx + 1,
+                            type: s.type || (idx === 0 ? 'HOOK_COVER' : (idx === outputData.carousel.slides.length - 1 ? 'CTA_FINAL' : 'BODY_VAL')),
+                            title_text: s.title_text || s.title || `Slide ${idx + 1}`,
+                            title: s.title_text || s.title || `Slide ${idx + 1}`,
+                            subtitle_text: s.subtitle_text || '',
+                            body_text: bodyContent,
+                            content: bodyContent,
+                            header_text: s.header_text || brandObj?.handle || '@ammaazzingg',
+                            is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
+                        };
+                    });
                 } else if (outputData.single_slide) {
                     generatedSlides = [{
+                        slide_number: 1,
+                        type: 'HOOK_COVER',
+                        title_text: outputData.single_slide.quote_text || 'Psychology Insight',
                         title: outputData.single_slide.quote_text || 'Psychology Insight',
+                        subtitle_text: '',
+                        body_text: '',
                         content: '',
-                        header: outputData.single_slide.attribution || brandObj?.handle || '@amazingfacts.lab',
+                        header_text: outputData.single_slide.attribution || brandObj?.handle || '@ammaazzingg',
                         is_cta: false
                     }];
                 }
+                if (generatedSlides.length < 8 && generatedSlides.length >= 2) {
+                    let expanded = [];
+                    const hookSlide = generatedSlides[0];
+                    const ctaSlide = generatedSlides[generatedSlides.length - 1];
+                    const middleSlides = generatedSlides.slice(1, generatedSlides.length - 1);
+
+                    expanded.push(hookSlide);
+
+                    let bodyPool = [];
+                    middleSlides.forEach(s => {
+                        const text = (s.body_text || s.content || s.subtitle_text || '');
+                        const parts = text.split(/\n\n|\n(?=[0-9]\.|Shift|Step|Solution)/i).filter(p => p.trim().length > 10);
+                        if (parts.length > 1) {
+                            parts.forEach((pt, pIdx) => {
+                                bodyPool.push({
+                                    type: s.type || 'BODY_VAL',
+                                    header_text: s.header_text || brandObj?.handle || '@ammaazzingg',
+                                    title_text: pIdx === 0 ? (s.title_text || s.title) : `Key Practical Action #${pIdx + 1}`,
+                                    title: pIdx === 0 ? (s.title_text || s.title) : `Key Practical Action #${pIdx + 1}`,
+                                    body_text: pt.trim(),
+                                    content: pt.trim(),
+                                    is_cta: false
+                                });
+                            });
+                        } else {
+                            bodyPool.push(s);
+                        }
+                    });
+
+                    while (bodyPool.length < 6) {
+                        bodyPool.push({
+                            type: 'BODY_VAL',
+                            header_text: brandObj?.handle || '@ammaazzingg',
+                            title_text: `Practical Reframe & Action Plan`,
+                            title: `Practical Reframe & Action Plan`,
+                            body_text: `Apply this daily: When you feel this psychological trigger, take 3 slow breaths, name the cognitive pattern without judgment, and re-center on your current task.`,
+                            content: `Apply this daily: When you feel this psychological trigger, take 3 slow breaths, name the cognitive pattern without judgment, and re-center on your current task.`,
+                            is_cta: false
+                        });
+                    }
+
+                    bodyPool.slice(0, 7).forEach(s => expanded.push(s));
+                    expanded.push(ctaSlide);
+                    generatedSlides = expanded.map((s, idx) => ({ ...s, slide_number: idx + 1 }));
+                }
+
+                currentPsychSlides = generatedSlides;
+                currentPsychSlideIndex = 0;
+                renderPsychCurrentSlide();
 
                 const capObj = outputData.caption || {};
                 const postPayload = {
                     slides: generatedSlides,
-                    caption: capObj
+                    caption: capObj,
+                    brand_snapshot: brandObj,
+                    brand_id: brandId
                 };
 
-                const newPost = data.post || {
-                    id: data.post_id || ('psych_' + Date.now()),
-                    topic: `[Psychology Lab] ${topic.substring(0, 60)}`,
-                    text: JSON.stringify(postPayload),
-                    image_url: JSON.stringify(generatedSlides.map(() => null)),
-                    status: 'Draft',
-                    brand_id: brandId,
-                    updated_at: new Date().toISOString()
-                };
+                let newPost = data.post;
+                if (newPost) {
+                    newPost.text = JSON.stringify(postPayload);
+                    newPost.brand_id = brandId;
+                    newPost.image_url = JSON.stringify(generatedSlides.map(() => null));
+                } else {
+                    newPost = {
+                        id: data.post_id || ('psych_' + Date.now()),
+                        topic: `[Psychology Lab] ${topic.substring(0, 60)}`,
+                        text: JSON.stringify(postPayload),
+                        image_url: JSON.stringify(generatedSlides.map(() => null)),
+                        status: 'Draft',
+                        brand_id: brandId,
+                        updated_at: new Date().toISOString()
+                    };
+                }
 
-                if (window.isMockMode || isMockMode || !data.post) {
+                // Populate caption & scripts UI
+                const capEl = document.getElementById('psych-caption-text');
+                if (capEl) {
+                    const tagStr = (capObj.hashtags && Array.isArray(capObj.hashtags)) ? capObj.hashtags.join(' ') : '#psychology #mentalmodels';
+                    capEl.value = `${capObj.hook || ''}\n\n${capObj.body || ''}\n\n${capObj.cta || ''}\n\n${tagStr}`.trim();
+                }
+
+                const reelObj = outputData.reel_blueprint || {};
+                const reelCard = document.getElementById('psych-reel-card');
+                if (reelCard && reelObj.enabled) {
+                    reelCard.style.display = 'block';
+                    const audioIn = document.getElementById('psych-reel-audio-script');
+                    const videoIn = document.getElementById('psych-reel-video-script');
+                    if (audioIn) audioIn.value = reelObj.audio_script || '';
+                    if (videoIn) videoIn.value = reelObj.video_script || '';
+                    window.currentPsychFullReelScript = reelObj.full_script_markdown || reelObj.audio_script || '';
+                } else if (reelCard) {
+                    reelCard.style.display = 'none';
+                }
+
+                // Only save to mockPosts if backend didn't save to Supabase
+                if (!data.post && (window.isMockMode || isMockMode)) {
                     const existingIdx = mockPosts.findIndex(p => p.id === newPost.id);
                     if (existingIdx >= 0) mockPosts[existingIdx] = newPost;
                     else mockPosts.unshift(newPost);
                     saveMockPosts();
                 }
 
+                window.lastGeneratedPost = newPost;
                 ['queue-brand-filter', 'status-filter'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.value = 'All';
                 });
                 await loadQueue();
 
-                showToast('Psychology deck generated! Opening in Editor...');
-                window.openEditor(newPost.id);
+                showToast('Psychology deck generated! Opening in Design Studio...');
+                if (document.getElementById('psych-open-in-studio-btn')) {
+                    document.getElementById('psych-open-in-studio-btn').dataset.postId = newPost.id;
+                }
+                if (window.openEditor && newPost) {
+                    window.openEditor(newPost);
+                }
             }
         } catch (err) {
+            isGeneratingPsych = false;
             btn.disabled = false;
             btn.innerHTML = '<i data-feather="zap"></i> Run LabEngine Intelligence';
             if (window.feather) feather.replace();
@@ -4771,19 +5293,24 @@ window.initPsychLab = initPsychLab;
     document.getElementById('psych-open-in-studio-btn')?.addEventListener('click', transferPsychToStudio);
     document.getElementById('psych-send-to-queue-btn')?.addEventListener('click', savePsychToQueue);
 
-    document.getElementById('psych-copy-audio')?.addEventListener('click', () => {
+    document.getElementById('psych-copy-audio')?.addEventListener('click', async () => {
         const val = document.getElementById('psych-reel-audio-script')?.value;
-        if (val) { navigator.clipboard.writeText(val); showToast('Detailed Audio Script copied!'); }
+        if (val) { await window.copyToClipboard(val); showToast('Detailed Audio Script copied!'); }
     });
 
-    document.getElementById('psych-copy-video')?.addEventListener('click', () => {
+    document.getElementById('psych-copy-video')?.addEventListener('click', async () => {
         const val = document.getElementById('psych-reel-video-script')?.value;
-        if (val) { navigator.clipboard.writeText(val); showToast('Detailed Video Script copied!'); }
+        if (val) { await window.copyToClipboard(val); showToast('Detailed Video Script copied!'); }
     });
 
-    document.getElementById('psych-copy-full-reel')?.addEventListener('click', () => {
+    document.getElementById('psych-copy-full-reel')?.addEventListener('click', async () => {
         const fullScript = window.currentPsychFullReelScript || document.getElementById('psych-reel-audio-script')?.value;
-        if (fullScript) { navigator.clipboard.writeText(fullScript); showToast('Full Teleprompter Reel Script copied!'); }
+        if (fullScript) { await window.copyToClipboard(fullScript); showToast('Full Teleprompter Reel Script copied!'); }
+    });
+    
+    document.getElementById('psych-copy-caption')?.addEventListener('click', async () => {
+        const val = document.getElementById('psych-caption-text')?.value;
+        if (val) { await window.copyToClipboard(val); showToast('Psychology Caption copied!'); }
     });
 
     document.getElementById('psych-convert-angle-btn')?.addEventListener('click', () => {
@@ -4791,6 +5318,8 @@ window.initPsychLab = initPsychLab;
         window.scrollTo({ top: document.getElementById('psych-view').offsetTop, behavior: 'smooth' });
     });
 }
+
+window.initPsychLab = initPsychLab;
 
 let lastGeneratedPsychData = null;
 
@@ -4828,14 +5357,11 @@ function transferPsychToManual() {
 }
 
 function transferPsychToStudio() {
-    const postId = window.lastPsychPostId;
+    const postId = document.getElementById('psych-open-in-studio-btn').dataset.postId;
     if (!postId) {
-        showToast('No saved Psychology post found. Please generate content first.');
+        showToast('Please generate a deck first.');
         return;
     }
-
-    // Use the same flow as Facts Lab / News Lab:
-    // open the post in the Editor view via openEditor(id)
     window.openEditor(postId);
     showToast('Opening Psychology post in Editor...');
 }
@@ -4845,6 +5371,11 @@ window.transferPsychToStudio = transferPsychToStudio;
 window.savePsychToQueue = savePsychToQueue;
 
 async function savePsychToQueue() {
+    const existingPostId = document.getElementById('psych-open-in-studio-btn')?.dataset?.postId;
+    if (existingPostId) {
+        showToast('✓ This deck is already saved in your Content Queue!');
+        return;
+    }
     if (!currentPsychSlides || currentPsychSlides.length === 0) {
         showToast('No generated Psychology content to save.');
         return;
@@ -4856,7 +5387,7 @@ async function savePsychToQueue() {
 
     const newPost = {
         id: 'psych_' + Date.now(),
-        topic: `[Psychology] ${topic}`,
+        topic: `[Psychology Lab] ${topic}`,
         text: JSON.stringify({
             slides: currentPsychSlides,
             caption: { body: captionStr }
@@ -4873,8 +5404,11 @@ async function savePsychToQueue() {
     } else {
         await supabase.from('posts').insert([newPost]);
     }
-
-    showToast('Psychology post saved to Content Queue!');
+    if (document.getElementById('psych-open-in-studio-btn')) {
+        document.getElementById('psych-open-in-studio-btn').dataset.postId = newPost.id;
+    }
+    await loadQueue();
+    showToast('✓ Psychology post saved to Content Queue!');
 }
 
 function renderPsychResearchMarkdown(markdownStr) {
@@ -4895,6 +5429,7 @@ function renderPsychResearchMarkdown(markdownStr) {
 }
 
 function renderPsychCurrentSlide() {
+    window.currentPsychSlides = currentPsychSlides;
     if (!psychCanvas || currentPsychSlides.length === 0) return;
     const slide = currentPsychSlides[currentPsychSlideIndex];
 
@@ -4906,7 +5441,7 @@ function renderPsychCurrentSlide() {
     psychCanvas.clear();
     psychCanvas.backgroundColor = '#0B0C10';
 
-    const headerText = new fabric.Text(slide.header_text || '@amazingfacts.lab', {
+    const headerText = new fabric.Text(slide.header_text || (currentBranding?.handle || '@ammaazzingg'), {
         left: 40, top: 40,
         fontSize: 14, fontFamily: 'Inter, sans-serif',
         fontWeight: '700', fill: '#6366f1', letterSpacing: 2
@@ -4929,12 +5464,20 @@ function renderPsychCurrentSlide() {
     });
     psychCanvas.add(titleText);
 
-    const bodyStr = slide.subtitle_text || slide.body_text || '';
+    const titleHeight = titleText.getScaledHeight();
+    const bodyTop = Math.max(110 + titleHeight + 25, 230);
+
+    const bodyStr = (slide.type === 'HOOK_COVER' && slide.subtitle_text)
+        ? slide.subtitle_text
+        : (slide.body_text || slide.content || slide.subtitle_text || '');
+
     if (bodyStr) {
         const bodyText = new fabric.Textbox(bodyStr, {
-            left: 40, top: 250, width: 460,
-            fontSize: 17, fontFamily: 'Inter, sans-serif',
-            fontWeight: '400', fill: '#94a3b8',
+            left: 40, top: bodyTop, width: 460,
+            fontSize: slide.type === 'HOOK_COVER' ? 20 : 17,
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: slide.type === 'HOOK_COVER' ? '500' : '400',
+            fill: slide.type === 'HOOK_COVER' ? '#e2e8f0' : '#94a3b8',
             lineHeight: 1.5
         });
         psychCanvas.add(bodyText);
@@ -4949,3 +5492,705 @@ function renderPsychCurrentSlide() {
 
     psychCanvas.renderAll();
 }
+
+// ============================================================
+// 10. MCQ VIDEO CREATOR & ANIMATED REEL STUDIO
+// ============================================================
+let mcqStudioInitialized = false;
+let mcqState = {
+    questions: [
+        {
+            id: 1,
+            question: "नेपालको सबैभन्दा गहिरो नदी कुन हो?",
+            options: ["A. कोशी नदी", "B. गण्डकी नदी", "C. कर्णाली नदी", "D. महाकाली नदी"],
+            correct_index: 1,
+            correct_option: "B. गण्डकी नदी",
+            explanation: "गण्डकी (त्रिशूली-नारायणी) नदी नेपालको सबैभन्दा गहिरो नदी हो। यसको गहिराइ ३,९०४ मिटर रहेको छ।"
+        },
+        {
+            id: 2,
+            question: "विश्वको सर्वोच्च शिखर सगरमाथाको उचाइ कति मिटर छ?",
+            options: ["A. 8,848.86m", "B. 8,844.43m", "C. 8,850.00m", "D. 8,840.50m"],
+            correct_index: 0,
+            correct_option: "A. 8,848.86m",
+            explanation: "नेपाल र चीनद्वारा संयुक्त रूपमा मापन गरिएको सगरमाथाको पछिल्लो आधिकारिक उचाइ ८,८४८.८६ मिटर हो।"
+        },
+        {
+            id: 3,
+            question: "क्षेत्रफलको हिसाबले नेपालको सबैभन्दा ठूलो जिल्ला कुन हो?",
+            options: ["A. हुम्ला", "B. मनाङ", "C. डोल्पा", "D. मुस्ताङ"],
+            correct_index: 2,
+            correct_option: "C. डोल्पा",
+            explanation: "डोल्पा नेपालको सबैभन्दा ठूलो जिल्ला हो, जसको क्षेत्रफल ७,८८९ वर्ग किलोमिटर रहेको छ।"
+        }
+    ],
+    currentIndex: 0,
+    phase: 'IDLE', // 'IDLE', 'QUESTION', 'OPTIONS', 'COUNTDOWN', 'ANSWER'
+    qCharCount: 0,
+    optCharCounts: [0, 0, 0, 0],
+    countdownSec: 3,
+    countdownArc: 1.0,
+    expCharCount: 0,
+    isPlaying: false,
+    isExporting: false,
+    animFrameId: null,
+    stepTimer: null
+};
+
+function playMCQBeep(freq, durationMs) {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (durationMs / 1000));
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + (durationMs / 1000));
+    } catch (e) {}
+}
+
+function speakMCQText(text, lang, onEnd) {
+    if (!window.speechSynthesis) {
+        if (onEnd) setTimeout(onEnd, 1500);
+        return;
+    }
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+
+    const voices = window.speechSynthesis.getVoices() || [];
+    let selectedVoice = null;
+    if (lang === 'Nepali') {
+        selectedVoice = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi'));
+    }
+    if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+    }
+    if (selectedVoice) utter.voice = selectedVoice;
+
+    let ended = false;
+    utter.onend = () => { if (!ended) { ended = true; if (onEnd) onEnd(); } };
+    utter.onerror = () => { if (!ended) { ended = true; if (onEnd) onEnd(); } };
+    
+    // Safety fallback timer in case speech synthesis hangs
+    setTimeout(() => { if (!ended) { ended = true; if (onEnd) onEnd(); } }, Math.max(2500, text.length * 120));
+
+    window.speechSynthesis.speak(utter);
+}
+
+function wrapCanvasText(ctx, text, maxWidth) {
+    if (!text) return [];
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (let i = 0; i < words.length; i++) {
+        const testLine = currentLine ? currentLine + ' ' + words[i] : words[i];
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && currentLine) {
+            lines.push(currentLine);
+            currentLine = words[i];
+        } else {
+            currentLine = testLine;
+        }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+}
+
+function drawMCQCanvas() {
+    const canvas = document.getElementById('mcq-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = 1080;
+    const height = 1920;
+
+    const qData = mcqState.questions[mcqState.currentIndex] || mcqState.questions[0];
+    const brandId = document.getElementById('mcq-brand')?.value;
+    const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
+    const brandName = activeBrand?.name || 'GROWUP LOKSEWA';
+    const brandHandle = activeBrand?.handle || '@growuploksewa';
+
+    // 1. Background Gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, '#0b0f19');
+    bgGrad.addColorStop(0.5, '#1e1b4b');
+    bgGrad.addColorStop(1, '#090d16');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle Radial Glow behind Question
+    const radGlow = ctx.createRadialGradient(width / 2, 400, 50, width / 2, 400, 600);
+    radGlow.addColorStop(0, 'rgba(147, 51, 234, 0.25)');
+    radGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = radGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Top Header Brand Pill
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 2;
+    const headerW = 720; const headerH = 76; const headerX = (width - headerW) / 2; const headerY = 90;
+    ctx.beginPath();
+    ctx.roundRect(headerX, headerY, headerW, headerH, 38);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = 'bold 30px "Inter", sans-serif';
+    ctx.fillStyle = '#a855f7';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${brandName.toUpperCase()} • Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, width / 2, headerY + headerH / 2);
+    ctx.restore();
+
+    // 3. Question Card Container
+    ctx.save();
+    const qBoxW = 960; const qBoxH = 340; const qBoxX = (width - qBoxW) / 2; const qBoxY = 210;
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+    ctx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = 'rgba(168, 85, 247, 0.3)';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // Top purple accent line
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath();
+    ctx.roundRect(qBoxX, qBoxY, qBoxW, 10, [24, 24, 0, 0]);
+    ctx.fill();
+
+    // Question Label
+    ctx.font = 'bold 26px "Inter", sans-serif';
+    ctx.fillStyle = '#c084fc';
+    ctx.textAlign = 'left';
+    ctx.fillText('QUESTION / प्रश्न:', qBoxX + 40, qBoxY + 50);
+
+    // Typewriter Question Text
+    const visibleQText = qData ? qData.question.substring(0, mcqState.qCharCount) : '';
+    ctx.font = '700 40px "Mukta", "Inter", sans-serif';
+    ctx.fillStyle = '#ffffff';
+    const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 80);
+    let qLineY = qBoxY + 110;
+    qLines.forEach(line => {
+        ctx.fillText(line, qBoxX + 40, qLineY);
+        qLineY += 56;
+    });
+    ctx.restore();
+
+    // 4. Options List (4 Cards)
+    const optYStart = 600;
+    const optCardH = 140;
+    const optGap = 24;
+
+    if (qData && qData.options) {
+        qData.options.forEach((optText, idx) => {
+            const optY = optYStart + idx * (optCardH + optGap);
+            const isCorrect = idx === qData.correct_index;
+            const isAnswerPhase = mcqState.phase === 'ANSWER';
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 20);
+
+            if (isAnswerPhase && isCorrect) {
+                // Highlight Correct Option in glowing green gradient
+                const greenGrad = ctx.createLinearGradient(qBoxX, optY, qBoxX + qBoxW, optY + optCardH);
+                greenGrad.addColorStop(0, '#15803d');
+                greenGrad.addColorStop(1, '#22c55e');
+                ctx.fillStyle = greenGrad;
+                ctx.strokeStyle = '#4ade80';
+                ctx.lineWidth = 4;
+                ctx.shadowColor = '#22c55e';
+                ctx.shadowBlur = 30;
+            } else if (isAnswerPhase && !isCorrect) {
+                // Dim non-correct options
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.lineWidth = 2;
+            } else {
+                // Standard option card state
+                ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.lineWidth = 2;
+            }
+            ctx.fill();
+            ctx.stroke();
+
+            // Option Letter Badge Circle (A, B, C, D)
+            const badgeX = qBoxX + 50;
+            const badgeY = optY + optCardH / 2;
+            const badgeR = 34;
+            ctx.beginPath();
+            ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.1)' : '#6366f1');
+            ctx.fill();
+
+            ctx.font = 'bold 30px "Inter", sans-serif';
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const letter = String.fromCharCode(65 + idx);
+            ctx.fillText(letter, badgeX, badgeY + 2);
+
+            // Typewriter Option Text
+            const charCount = mcqState.optCharCounts[idx] || 0;
+            const visibleOptText = optText.substring(0, charCount);
+            ctx.font = '600 36px "Mukta", "Inter", sans-serif';
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.4)' : '#f1f5f9');
+            ctx.textAlign = 'left';
+            ctx.fillText(visibleOptText, qBoxX + 110, badgeY);
+
+            // If correct in answer phase, draw Checkmark icon ✓
+            if (isAnswerPhase && isCorrect) {
+                ctx.font = 'bold 44px "Inter", sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'right';
+                ctx.fillText('✓', qBoxX + qBoxW - 40, badgeY);
+            }
+            ctx.restore();
+        });
+    }
+
+    // 5. Phase 3: 3-Second Countdown Visual Arc Widget
+    if (mcqState.phase === 'COUNTDOWN') {
+        const cdX = width / 2;
+        const cdY = 1360;
+        const cdR = 90;
+
+        ctx.save();
+        // Background Circle
+        ctx.beginPath();
+        ctx.arc(cdX, cdY, cdR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 8;
+        ctx.fill();
+        ctx.stroke();
+
+        // Progress Arc
+        const startAngle = -Math.PI / 2;
+        const endAngle = startAngle + (Math.PI * 2 * mcqState.countdownArc);
+        ctx.beginPath();
+        ctx.arc(cdX, cdY, cdR, startAngle, endAngle);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 12;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Big Countdown Digit (3, 2, 1)
+        ctx.font = 'bold 84px "Inter", sans-serif';
+        ctx.fillStyle = '#fbbf24';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(mcqState.countdownSec.toString(), cdX, cdY);
+        ctx.restore();
+    }
+
+    // 6. Phase 4: Explanation Card Box
+    if (mcqState.phase === 'ANSWER') {
+        const expBoxW = 960; const expBoxH = 500; const expBoxX = (width - expBoxW) / 2; const expBoxY = 1280;
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = 'rgba(34, 197, 94, 0.3)';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.roundRect(expBoxX, expBoxY, expBoxW, expBoxH, 24);
+        ctx.fill();
+        ctx.stroke();
+
+        // Top green line
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.roundRect(expBoxX, expBoxY, expBoxW, 10, [24, 24, 0, 0]);
+        ctx.fill();
+
+        // Label
+        ctx.font = 'bold 26px "Inter", sans-serif';
+        ctx.fillStyle = '#4ade80';
+        ctx.textAlign = 'left';
+        ctx.fillText('EXPLANATION / उत्तर व्याख्या:', expBoxX + 40, expBoxY + 50);
+
+        // Correct Option Highlight Banner
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+        ctx.beginPath();
+        ctx.roundRect(expBoxX + 35, expBoxY + 75, expBoxW - 70, 60, 10);
+        ctx.fill();
+
+        ctx.font = 'bold 30px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = '#86efac';
+        ctx.fillText(`सही उत्तर: ${qData.correct_option}`, expBoxX + 50, expBoxY + 115);
+
+        // Typewriter Explanation Body
+        const visibleExpText = qData.explanation ? qData.explanation.substring(0, mcqState.expCharCount) : '';
+        ctx.font = '500 34px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = '#e2e8f0';
+        const expLines = wrapCanvasText(ctx, visibleExpText, expBoxW - 80);
+        let expLineY = expBoxY + 195;
+        expLines.forEach(line => {
+            ctx.fillText(line, expBoxX + 40, expLineY);
+            expLineY += 48;
+        });
+        ctx.restore();
+    }
+}
+
+function updateMCQEditorFields() {
+    const qData = mcqState.questions[mcqState.currentIndex];
+    if (!qData) return;
+
+    const selectEl = document.getElementById('mcq-select-question');
+    if (selectEl) {
+        selectEl.innerHTML = '';
+        mcqState.questions.forEach((q, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.innerText = `Q${idx + 1}: ${q.question.substring(0, 30)}...`;
+            if (idx === mcqState.currentIndex) opt.selected = true;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    const qInput = document.getElementById('mcq-edit-question');
+    if (qInput) qInput.value = qData.question || '';
+
+    if (qData.options) {
+        [0, 1, 2, 3].forEach(i => {
+            const optIn = document.getElementById(`mcq-edit-opt${i}`);
+            if (optIn) optIn.value = qData.options[i] || '';
+        });
+    }
+
+    const corrSel = document.getElementById('mcq-edit-correct');
+    if (corrSel) corrSel.value = qData.correct_index !== undefined ? qData.correct_index : 0;
+
+    const expInput = document.getElementById('mcq-edit-explanation');
+    if (expInput) expInput.value = qData.explanation || '';
+}
+
+function startMCQSequence() {
+    stopMCQSequence();
+    mcqState.isPlaying = true;
+    mcqState.phase = 'QUESTION';
+    mcqState.qCharCount = 0;
+    mcqState.optCharCounts = [0, 0, 0, 0];
+    mcqState.countdownSec = 3;
+    mcqState.countdownArc = 1.0;
+    mcqState.expCharCount = 0;
+
+    const qData = mcqState.questions[mcqState.currentIndex] || mcqState.questions[0];
+    const lang = document.getElementById('mcq-language')?.value || 'Nepali';
+
+    const phaseLabel = document.getElementById('mcq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "Phase 1: Question Typewriter & Voiceover";
+
+    // 1. Typewriter Question loop
+    const qInterval = setInterval(() => {
+        if (mcqState.qCharCount < qData.question.length) {
+            mcqState.qCharCount++;
+            drawMCQCanvas();
+        } else {
+            clearInterval(qInterval);
+        }
+    }, 45);
+
+    // Speak Question, then proceed to Options Phase
+    speakMCQText(qData.question, lang, () => {
+        if (!mcqState.isPlaying) return;
+        mcqState.phase = 'OPTIONS';
+        mcqState.qCharCount = qData.question.length;
+        if (phaseLabel) phaseLabel.innerText = "Phase 2: Options Display";
+
+        let optIdx = 0;
+        function animateNextOption() {
+            if (!mcqState.isPlaying) return;
+            if (optIdx < 4) {
+                const text = qData.options[optIdx] || '';
+                const oInt = setInterval(() => {
+                    if (mcqState.optCharCounts[optIdx] < text.length) {
+                        mcqState.optCharCounts[optIdx]++;
+                        drawMCQCanvas();
+                    } else {
+                        clearInterval(oInt);
+                    }
+                }, 30);
+
+                speakMCQText(text, lang, () => {
+                    mcqState.optCharCounts[optIdx] = text.length;
+                    optIdx++;
+                    setTimeout(animateNextOption, 300);
+                });
+            } else {
+                // All options read! Start Phase 3: 3-Second Countdown
+                startMCQCountdown(lang, qData);
+            }
+        }
+        animateNextOption();
+    });
+
+    // Continuous Canvas Render Loop
+    function renderLoop() {
+        if (mcqState.isPlaying) {
+            drawMCQCanvas();
+            mcqState.animFrameId = requestAnimationFrame(renderLoop);
+        }
+    }
+    mcqState.animFrameId = requestAnimationFrame(renderLoop);
+}
+
+function startMCQCountdown(lang, qData) {
+    if (!mcqState.isPlaying) return;
+    mcqState.phase = 'COUNTDOWN';
+    mcqState.countdownSec = 3;
+    mcqState.countdownArc = 1.0;
+
+    const phaseLabel = document.getElementById('mcq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "Phase 3: 3-Second Countdown";
+
+    playMCQBeep(800, 200);
+
+    const startTime = Date.now();
+    const duration = 3000;
+
+    const cdInterval = setInterval(() => {
+        if (!mcqState.isPlaying) { clearInterval(cdInterval); return; }
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, duration - elapsed);
+        mcqState.countdownArc = remaining / duration;
+        const currentSec = Math.ceil(remaining / 1000);
+
+        if (currentSec !== mcqState.countdownSec && currentSec > 0) {
+            mcqState.countdownSec = currentSec;
+            playMCQBeep(800, 200);
+        }
+
+        if (remaining <= 0) {
+            clearInterval(cdInterval);
+            // Finish Countdown -> Proceed to Phase 4: Answer Reveal
+            revealMCQAnswer(lang, qData);
+        }
+    }, 50);
+}
+
+function revealMCQAnswer(lang, qData) {
+    if (!mcqState.isPlaying) return;
+    mcqState.phase = 'ANSWER';
+    mcqState.expCharCount = 0;
+
+    const phaseLabel = document.getElementById('mcq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "Phase 4: Correct Answer & Explanation";
+
+    // Play Victory Chime Sound
+    playMCQBeep(1200, 400);
+
+    // Typewriter Explanation text loop
+    const expInterval = setInterval(() => {
+        if (mcqState.expCharCount < qData.explanation.length) {
+            mcqState.expCharCount++;
+            drawMCQCanvas();
+        } else {
+            clearInterval(expInterval);
+        }
+    }, 40);
+
+    const speakText = `सही उत्तर: ${qData.correct_option}। ${qData.explanation}`;
+    speakMCQText(speakText, lang, () => {
+        mcqState.expCharCount = qData.explanation.length;
+        if (phaseLabel) phaseLabel.innerText = "Playback Complete";
+        if (mcqState.isExporting && mcqState.mediaRecorder) {
+            setTimeout(() => {
+                try { mcqState.mediaRecorder.stop(); } catch(e){}
+            }, 1000);
+        }
+    });
+}
+
+function stopMCQSequence() {
+    mcqState.isPlaying = false;
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (mcqState.animFrameId) cancelAnimationFrame(mcqState.animFrameId);
+    const phaseLabel = document.getElementById('mcq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "Stopped";
+    drawMCQCanvas();
+}
+
+async function exportMCQVideo() {
+    const canvas = document.getElementById('mcq-canvas');
+    if (!canvas) return;
+
+    mcqState.isExporting = true;
+    mcqState.recordedChunks = [];
+
+    const stream = canvas.captureStream(30); // 30 FPS
+    let mimeType = 'video/webm;codecs=vp9';
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+    }
+
+    try {
+        const recorder = new MediaRecorder(stream, { mimeType });
+        mcqState.mediaRecorder = recorder;
+
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                mcqState.recordedChunks.push(e.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(mcqState.recordedChunks, { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mcq_loksewa_reel_${Date.now()}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            mcqState.isExporting = false;
+            const phaseLabel = document.getElementById('mcq-phase-label');
+            if (phaseLabel) phaseLabel.innerText = "Video Exported Successfully!";
+        };
+
+        recorder.start();
+        startMCQSequence();
+
+    } catch (err) {
+        console.error("Video export error:", err);
+        alert("Failed to record video stream: " + err.message);
+        mcqState.isExporting = false;
+    }
+}
+
+function initMCQVideoStudio() {
+    populateBrandSelectors();
+    updateMCQEditorFields();
+    drawMCQCanvas();
+
+    if (mcqStudioInitialized) return;
+    mcqStudioInitialized = true;
+
+    // AI MCQ Generator Trigger
+    document.getElementById('trigger-mcq-generate')?.addEventListener('click', async () => {
+        const topic = document.getElementById('mcq-topic')?.value || 'Nepal Geography';
+        const difficulty = document.getElementById('mcq-difficulty')?.value || 'Medium';
+        const language = document.getElementById('mcq-language')?.value || 'Nepali';
+        const questionCount = document.getElementById('mcq-count')?.value || '3';
+        const brandId = document.getElementById('mcq-brand')?.value;
+        const feedback = document.getElementById('mcq-feedback');
+        const btn = document.getElementById('trigger-mcq-generate');
+
+        if (btn) btn.disabled = true;
+        if (feedback) { feedback.style.display = 'block'; feedback.style.color = '#38bdf8'; feedback.innerText = 'Generating MCQ Deck with AI...'; }
+
+        try {
+            const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
+            const response = await fetch(`${API_URL}/generate-mcq`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic,
+                    difficulty,
+                    language,
+                    question_count: questionCount,
+                    brand_id: brandId,
+                    brand_context: getBrandContext(activeBrand)
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to generate MCQ');
+
+            if (data.mcq_data && data.mcq_data.questions && data.mcq_data.questions.length > 0) {
+                mcqState.questions = data.mcq_data.questions;
+                mcqState.currentIndex = 0;
+                updateMCQEditorFields();
+                stopMCQSequence();
+                drawMCQCanvas();
+                if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.mcq_data.questions.length} questions!`; }
+            } else {
+                throw new Error('Invalid MCQ schema returned');
+            }
+        } catch (err) {
+            console.error("MCQ Generate Error:", err);
+            if (feedback) { feedback.style.color = '#f87171'; feedback.innerText = 'Error: ' + err.message; }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+
+    // Player Transport Listeners
+    document.getElementById('mcq-play-btn')?.addEventListener('click', () => {
+        startMCQSequence();
+    });
+
+    document.getElementById('mcq-stop-btn')?.addEventListener('click', () => {
+        stopMCQSequence();
+    });
+
+    document.getElementById('mcq-export-btn')?.addEventListener('click', () => {
+        exportMCQVideo();
+    });
+
+    // Question Selector Dropdown Change
+    document.getElementById('mcq-select-question')?.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.value) || 0;
+        mcqState.currentIndex = idx;
+        updateMCQEditorFields();
+        stopMCQSequence();
+        drawMCQCanvas();
+    });
+
+    // Live Editor Sync Handlers
+    document.getElementById('mcq-edit-question')?.addEventListener('input', (e) => {
+        if (mcqState.questions[mcqState.currentIndex]) {
+            mcqState.questions[mcqState.currentIndex].question = e.target.value;
+            drawMCQCanvas();
+        }
+    });
+
+    [0, 1, 2, 3].forEach(i => {
+        document.getElementById(`mcq-edit-opt${i}`)?.addEventListener('input', (e) => {
+            if (mcqState.questions[mcqState.currentIndex]?.options) {
+                mcqState.questions[mcqState.currentIndex].options[i] = e.target.value;
+                drawMCQCanvas();
+            }
+        });
+    });
+
+    document.getElementById('mcq-edit-correct')?.addEventListener('change', (e) => {
+        if (mcqState.questions[mcqState.currentIndex]) {
+            const idx = parseInt(e.target.value) || 0;
+            mcqState.questions[mcqState.currentIndex].correct_index = idx;
+            const letter = String.fromCharCode(65 + idx);
+            const text = mcqState.questions[mcqState.currentIndex].options[idx] || '';
+            mcqState.questions[mcqState.currentIndex].correct_option = `${letter}. ${text}`;
+            drawMCQCanvas();
+        }
+    });
+
+    document.getElementById('mcq-edit-explanation')?.addEventListener('input', (e) => {
+        if (mcqState.questions[mcqState.currentIndex]) {
+            mcqState.questions[mcqState.currentIndex].explanation = e.target.value;
+            drawMCQCanvas();
+        }
+    });
+
+    document.getElementById('mcq-brand')?.addEventListener('change', () => {
+        drawMCQCanvas();
+    });
+}
+

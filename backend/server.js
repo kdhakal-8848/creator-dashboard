@@ -16,6 +16,7 @@ const port = process.env.PORT || 5680;
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+app.use(express.static('../frontend'));
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL || "https://tbgkhbmsmdfpdcjnztvz.supabase.co";
@@ -111,7 +112,12 @@ function getGeminiApiKeys() {
     if (process.env.GEMINI_API_KEY_3) keys.push(process.env.GEMINI_API_KEY_3.trim());
     if (process.env.GEMINI_API_KEY_4) keys.push(process.env.GEMINI_API_KEY_4.trim());
     if (process.env.GEMINI_API_KEY_5) keys.push(process.env.GEMINI_API_KEY_5.trim());
-    return [...new Set(keys)].filter(Boolean);
+    // Filter out placeholder/template keys
+    const validKeys = [...new Set(keys)].filter(k =>
+        k && k.length > 20 && !k.includes('YOUR_') && !k.includes('PLACEHOLDER') && !k.startsWith('AQ.')
+    );
+    console.log(`[API Keys] Found ${validKeys.length} valid API key(s)`);
+    return validKeys;
 }
 
 async function generateAIContent(prompt) {
@@ -122,12 +128,12 @@ async function generateAIContent(prompt) {
 
     // Valid Gemini API models in order of fallback priority
     const models = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
         "gemini-1.5-flash",
         "gemini-1.5-flash-8b",
-        "gemini-2.0-flash-lite-preview-02-05",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro"
+        "gemini-1.5-pro"
     ];
     let lastError = null;
 
@@ -148,16 +154,32 @@ async function generateAIContent(prompt) {
                     const errMsg = err.message || '';
                     console.warn(`[AI Failover] Key ${kIdx + 1}/${apiKeys.length} (${keyTag}) | Model ${m} | Attempt ${attempt + 1} failed: ${errMsg.substring(0, 120)}`);
 
-                    const isQuotaOrLimit = err.status === 429 || 
-                        errMsg.includes('429') || 
-                        errMsg.includes('Quota exceeded') || 
-                        errMsg.includes('quota') || 
+                    const isQuotaOrLimit = err.status === 429 ||
+                        errMsg.includes('429') ||
+                        errMsg.includes('Quota exceeded') ||
+                        errMsg.includes('quota') ||
                         errMsg.includes('RESOURCE_EXHAUSTED') ||
                         errMsg.includes('limit');
 
-                    if (isQuotaOrLimit) {
-                        console.warn(`[AI Failover] Quota/Rate limit on key (${keyTag}) for model ${m}. Trying next model...`);
-                        break;
+                    // Skip deprecated/not-found models immediately, no retry
+                    const isDeprecatedOrNotFound = err.status === 404 ||
+                        errMsg.includes('404') ||
+                        errMsg.includes('not found') ||
+                        errMsg.includes('not supported');
+
+                    // Skip invalid/forbidden API key immediately
+                    const isBadKey = err.status === 403 ||
+                        errMsg.includes('403') ||
+                        errMsg.includes('PERMISSION_DENIED') ||
+                        errMsg.includes('API key not valid') ||
+                        errMsg.includes('unregistered callers');
+
+                    if (isQuotaOrLimit || isDeprecatedOrNotFound) {
+                        console.warn(`[AI Failover] ${isDeprecatedOrNotFound ? 'Model deprecated/not found' : 'Quota/Rate limit'} — skipping model ${m}`);
+                        break; // Move to next model immediately
+                    } else if (isBadKey) {
+                        console.warn(`[AI Failover] Bad/invalid API key (${keyTag}) — skipping all models for this key`);
+                        break; // Move to next key
                     } else if (attempt === 0) {
                         await new Promise(r => setTimeout(r, 1000));
                     }
@@ -174,8 +196,44 @@ async function generateAIContent(prompt) {
  */
 function sanitizeBrandId(brand_id) {
     if (!brand_id || typeof brand_id !== 'string') return null;
-    if (brand_id.startsWith('default') || brand_id.startsWith('mock') || brand_id.startsWith('new-')) return null;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(brand_id)) return null;
     return brand_id;
+}
+
+// --- In-Memory Request Deduplication Cache (15-second window) ---
+const recentGenerations = new Map();
+
+function getDedupKey(req, topicStr) {
+    const route = req.path || '';
+    const topicClean = String(topicStr || '').toLowerCase().trim();
+    const brandClean = String(req.body?.brand_id || '').trim();
+    return `${route}:${brandClean}:${topicClean}`;
+}
+
+async function getExistingGeneration(dedupKey) {
+    if (!dedupKey) return null;
+    const entry = recentGenerations.get(dedupKey);
+    if (entry && (Date.now() - entry.timestamp < 15000)) {
+        console.log(`[DEDUP] Duplicate request detected for key: "${dedupKey}" within 15s`);
+        if (entry.promise) {
+            return await entry.promise;
+        }
+        return entry.result;
+    }
+    return null;
+}
+
+function setExistingGeneration(dedupKey, result, promise = null) {
+    if (!dedupKey) return;
+    recentGenerations.set(dedupKey, {
+        timestamp: Date.now(),
+        result: result,
+        promise: promise
+    });
+    setTimeout(() => {
+        recentGenerations.delete(dedupKey);
+    }, 30000);
 }
 
 // Health check
@@ -192,6 +250,10 @@ app.post('/generate', async (req, res) => {
     if (!topic || !contentType) {
         return res.status(400).json({ error: "Missing topic or contentType" });
     }
+
+    const dedupKey = getDedupKey(req, topic);
+    const existing = await getExistingGeneration(dedupKey);
+    if (existing) return res.json(existing);
 
     try {
         console.log(`[/generate] [${contentType}] topic: "${topic}"`);
@@ -256,8 +318,9 @@ ${SLIDE_SCHEMA}`;
             return res.json({ success: true, text: JSON.stringify(parsed), image_url: JSON.stringify(imageUrls), db_error: error.message });
         }
 
-        console.log("Saved post:", data[0].id);
-        res.json({ success: true, post: data[0] });
+        const resObj = { success: true, post: data[0] };
+        setExistingGeneration(dedupKey, resObj);
+        res.json(resObj);
 
     } catch (err) {
         console.error("Server error /generate:", err);
@@ -334,6 +397,10 @@ app.post('/generate-news', async (req, res) => {
     const brandCtx = getBrandContextBlock(brand_context);
     const requestedSlides = parseInt(slide_count) === 1 ? 1 : 4;
     const handle = brand_context?.handle || '@ammaazzingg';
+
+    const dedupKey = getDedupKey(req, topic || category);
+    const existing = await getExistingGeneration(dedupKey);
+    if (existing) return res.json(existing);
 
     try {
         console.log(`[/generate-news] topic: "${topic || 'auto'}", category: "${selectedCategory}", style: "${templateStyle}", lang: ${targetLanguage}, slides: ${requestedSlides}`);
@@ -474,12 +541,14 @@ ${SLIDE_SCHEMA}`;
             });
         }
 
-        res.json({
+        const resObj = {
             success: true,
             topic: storyTitle,
             category: selectedCategory,
             post: data ? data[0] : null
-        });
+        };
+        setExistingGeneration(dedupKey, resObj);
+        res.json(resObj);
 
     } catch (error) {
         console.error("Error in /generate-news:", error);
@@ -497,6 +566,14 @@ app.post('/generate-facts', async (req, res) => {
     const factTopic = topic || "Sharks are older than trees";
     const brandCtx = getBrandContextBlock(brand_context);
     const handle = brand_context?.handle || '@ammaazzingg';
+    const dedupKey = getDedupKey(req, factTopic);
+    const existing = await getExistingGeneration(dedupKey);
+    if (existing) return res.json(existing);
+
+    let resolveInflight;
+    const inflightPromise = new Promise(resolve => { resolveInflight = resolve; });
+    setExistingGeneration(dedupKey, null, inflightPromise);
+
     try {
         console.log(`[/generate-facts] "${factTopic}", ${count} slides, ${targetLanguage}`);
 
@@ -604,14 +681,20 @@ ${SLIDE_SCHEMA}`;
 
         if (error) {
             console.error("Supabase error:", error);
-            return res.json({ success: true, text: JSON.stringify(parsed), image_url: JSON.stringify(imageUrls), db_error: error.message });
+            const resObj = { success: true, text: JSON.stringify(parsed), image_url: JSON.stringify(imageUrls), db_error: error.message };
+            setExistingGeneration(dedupKey, resObj);
+            if (resolveInflight) resolveInflight(resObj);
+            return res.json(resObj);
         }
 
-        console.log("Saved Facts Lab post:", data[0].id, "Image URLs:", imageUrls.length, "slides");
-        res.json({ success: true, post: data[0] });
+        const resObj = { success: true, post: data[0] };
+        setExistingGeneration(dedupKey, resObj);
+        if (resolveInflight) resolveInflight(resObj);
+        res.json(resObj);
 
     } catch (err) {
         console.error("Facts Lab error:", err);
+        if (resolveInflight) resolveInflight({ error: err.message });
         res.status(500).json({ error: "Internal server error: " + err.message });
     }
 });
@@ -624,11 +707,15 @@ app.post('/generate-psych', async (req, res) => {
     try {
         const { mode, topic, content_type, target_metric, brand_context, brand_id } = req.body;
         const brandCtx = getBrandContextBlock(brand_context);
-        const handle = brand_context?.handle || '@amazingfacts.lab';
+        const handle = brand_context?.handle || (brand_context?.name ? `@${brand_context.name.toLowerCase().replace(/\s+/g, '')}` : '@ammaazzingg');
 
         if (!topic || !topic.trim()) {
             return res.status(400).json({ error: "Topic is required for Psychology Lab generation." });
         }
+
+        const dedupKey = getDedupKey(req, topic);
+        const existing = await getExistingGeneration(dedupKey);
+        if (existing) return res.json(existing);
 
         const isResearchMode = (mode || '').toUpperCase() === 'RESEARCH';
 
@@ -661,34 +748,56 @@ Keep facts grounded in real cognitive science, behavioral psychology, or neurobi
         const targetMetric = (target_metric || 'SAVES').toUpperCase();
         const contentType = (content_type || 'CAROUSEL').toUpperCase();
 
-        const generatePrompt = `You are the primary engine behind "LabEngine-v1", an automated content intelligence system for psychological and mind topics.
+        const generatePrompt = `You are LabEngine-v1, an elite psychology content intelligence system for social media.
 
-Your goal is to generate social media content designed to maximize ${targetMetric === 'SHARES' ? 'DM SHARES (relational recognition)' : 'SAVES (high utility & reference)'}.
+CONTENT STRUCTURE RULES — MANDATORY 8 TO 9 SLIDE DECK:
+You MUST generate 8 to 9 slides. Each slide MUST focus on ONE topic only. Never pack multiple solutions onto one slide. Never use psychological jargon without explaining it in simple terms with a real-life example.
+
+DECK FRAMEWORK:
+- SLIDE 1 [HOOK_COVER]: Conversational, curiosity-driving hook title (10-20 words). A relatable real-world question or scenario. NOT a 3-word title. E.g.: "Why you feel like everyone is judging your new outfit the second you walk into a room"
+
+- SLIDE 2 [BODY_VAL - RECOGNITION]: Make the reader feel SEEN. "You know that feeling when..." Describe the exact internal experience. Pure human recognition, no science or solutions yet.
+
+- SLIDE 3 [BODY_VAL - THE SCIENCE]: Explain WHY the brain does this. Describe the evolutionary or neurobiological mechanism in simple, friendly terms. End with the theory/phenomenon name in brackets. E.g. "...Your brain inflates how much others notice you. This is called the Spotlight Effect [Gilovich & Savitsky, 1999]."
+
+- SLIDE 4 [BODY_VAL - THE UNSPOKEN COST]: Emotional stakes. What does living with this unexamined pattern cost you? (Anxiety, self-censorship, avoiding opportunities, overthinking).
+
+- SLIDE 5 [BODY_VAL - DECODING THE THEORY]: If any technical psychology terms, mechanisms, or theories were mentioned (or are central to the fix, e.g. "Decentering", "Cognitive Restructuring", "Default Mode Network", "Negativity Bias"), EXPLAIN WHAT IT MEANS IN PLAIN ENGLISH. What is it, why does it happen, and how does it manifest? Make the audience feel smart without being confused.
+
+- SLIDE 6 [BODY_VAL - SOLUTION #1: THE MENTAL REFRAME]: Solution 1 gets its OWN dedicated slide.
+  * Title: Name of Solution 1 (e.g. "Shift #1: The Spotlight Reality Check")
+  * What it is: Clear explanation of the reframe.
+  * Real-World Scenario Example: Give an exact "When X happens, say/think Y" example.
+
+- SLIDE 7 [BODY_VAL - SOLUTION #2: THE IMMEDIATE ACTION]: Solution 2 gets its OWN dedicated slide.
+  * Title: Name of Solution 2 (e.g. "Shift #2: The 10-Second Physical Decenter")
+  * How to do it: Concrete physical or mental action step.
+  * Real-World Scenario Example: Give an exact scenario of applying it in the moment.
+
+- SLIDE 8 [BODY_VAL - SOLUTION #3: THE LONG-TERM HABIT]: Solution 3 gets its OWN dedicated slide.
+  * Title: Name of Solution 3 (e.g. "Shift #3: The 48-Hour Evidence Log")
+  * How to do it: Daily or weekly micro-habit.
+  * Real-World Scenario Example: Give an exact scenario of how to build this habit.
+
+- SLIDE 9 [CTA_FINAL]: Warm, relatable, human closing. Summarize the core takeaway in 1 sentence. Include a comment question OR a save prompt. (is_cta: true).
+
+LANGUAGE RULES:
+- Write like a smart, warm friend explaining human behavior over coffee.
+- Short sentences. Maximum 2 per paragraph.
+- NEVER use jargon like "decentering", "cognitive bias", or "reframing" without defining what it means in plain English and giving a concrete example.
+- NO fluff words: "delve", "tapestry", "nuanced", "moreover", "in conclusion", "pivotal", "crucial".
 
 Topic: "${topic}"
 Target Metric: ${targetMetric}
-Content Type: ${contentType}
-Handle/Brand: ${handle}
+Brand Handle: ${handle}
 ${brandCtx}
 
-Audience: "The Curious Optimizer" (Ages 18-35). Introspective, ambitious, seeking to understand human nature.
-Visual Style: Dark mode (#0B0C10 background), off-white high contrast text, minimal clean typography.
+Audience: Ages 18-35. Self-aware, curious, ambitious. They save content that gives them practical tools for their mind.
 
-CONTENT RESILIENCE RULES:
-- Hooks must create an open cognitive loop within 2 seconds.
-- Grounded in real cognitive science, behavioral psychology, or neurobiology.
-- Never write superficial fluff; frame facts as quiet revelations.
-- Focus heavily on triggers that urge users to ${targetMetric}.
-
-OUTPUT REQUIREMENT:
-You MUST output ONLY valid JSON matching the exact schema below without any markdown wrappers (no \`\`\`json or \`\`\`):
+OUTPUT FORMAT: Valid JSON only. No markdown formatting wrappers.
 
 {
-  "generation_metadata": {
-    "topic": "${topic}",
-    "content_type": "${contentType}",
-    "target_metric": "${targetMetric}"
-  },
+  "generation_metadata": { "topic": "${topic}", "content_type": "${contentType}", "target_metric": "${targetMetric}" },
   "carousel": {
     "enabled": ${contentType === 'CAROUSEL' ? 'true' : 'false'},
     "slides": [
@@ -696,56 +805,96 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
         "slide_number": 1,
         "type": "HOOK_COVER",
         "header_text": "${handle}",
-        "title_text": "Hook Title",
-        "subtitle_text": "Sub-hook statement",
-        "design_notes": "Dark background, high contrast title text"
+        "title_text": "A 10-20 word conversational hook asking a relatable question or describing a real-world moment.",
+        "subtitle_text": "One sentence deepening the curiosity.",
+        "design_notes": "Dark background, high contrast text"
       },
       {
         "slide_number": 2,
         "type": "BODY_VAL",
-        "header_text": "01 / THE MECHANISM",
-        "title_text": "Concept Name",
-        "body_text": "Clear explanation of the psychology principle.",
-        "highlight_words": ["words", "to", "highlight"]
+        "header_text": "01 / YOU'VE FELT THIS",
+        "title_text": "Short label (3-5 words)",
+        "body_text": "3-4 sentences starting with 'You know that feeling when...' Describe the exact experience. Pure recognition.",
+        "highlight_words": ["key emotional words"]
       },
       {
         "slide_number": 3,
         "type": "BODY_VAL",
-        "header_text": "02 / THE TRIGGER",
-        "title_text": "Behavioral Pattern",
-        "body_text": "Deep insight into cognitive response.",
-        "highlight_words": ["key", "insight"]
+        "header_text": "02 / THE SCIENCE",
+        "title_text": "Why your brain does this",
+        "body_text": "3-4 sentences explaining the brain mechanism in simple language. End with theory name in brackets.",
+        "highlight_words": ["theory name"]
       },
       {
         "slide_number": 4,
+        "type": "BODY_VAL",
+        "header_text": "03 / THE REAL COST",
+        "title_text": "What this costs you",
+        "body_text": "3-4 sentences showing the emotional and practical cost of staying stuck in this pattern.",
+        "highlight_words": ["cost words"]
+      },
+      {
+        "slide_number": 5,
+        "type": "BODY_VAL",
+        "header_text": "04 / DECODING THE THEORY",
+        "title_text": "What [Term] actually means",
+        "body_text": "Explain the psychological term or mechanism in simple everyday words. Define it clearly so anyone understands it, and give a brief example.",
+        "highlight_words": ["defined term"]
+      },
+      {
+        "slide_number": 6,
+        "type": "BODY_VAL",
+        "header_text": "05 / SOLUTION #1",
+        "title_text": "Shift #1: [Name of Mental Reframe]",
+        "body_text": "Explain Solution #1 in detail. What it is, step-by-step how to do it, plus a real-world scenario example (e.g. 'When X happens, do Y'). Minimum 60 words.",
+        "highlight_words": ["solution name", "action step"]
+      },
+      {
+        "slide_number": 7,
+        "type": "BODY_VAL",
+        "header_text": "06 / SOLUTION #2",
+        "title_text": "Shift #2: [Name of Immediate Action]",
+        "body_text": "Explain Solution #2 in detail. What it is, step-by-step how to do it, plus a real-world scenario example. Minimum 60 words.",
+        "highlight_words": ["solution name", "action step"]
+      },
+      {
+        "slide_number": 8,
+        "type": "BODY_VAL",
+        "header_text": "07 / SOLUTION #3",
+        "title_text": "Shift #3: [Name of Long-Term Habit]",
+        "body_text": "Explain Solution #3 in detail. What it is, step-by-step how to do it, plus a real-world scenario example. Minimum 60 words.",
+        "highlight_words": ["solution name", "habit step"]
+      },
+      {
+        "slide_number": 9,
         "type": "CTA_FINAL",
-        "header_text": "RESEARCH LAB",
-        "title_text": "Actionable Takeaway",
-        "body_text": "Save this to remember it later. Follow ${handle} for daily insights.",
+        "header_text": "${handle}",
+        "title_text": "A warm, human closing line",
+        "body_text": "1-2 sentences. Single core takeaway + save prompt or question. E.g.: 'Your brain isn't broken — it just needs a new script. Save this for next time you catch yourself overthinking.'",
         "is_cta": true
       }
     ]
   },
   "single_slide": {
     "enabled": ${contentType === 'SINGLE_SLIDE' ? 'true' : 'false'},
-    "quote_text": "Powerful single psychology insight or quote",
+    "quote_text": "One insight explaining the pattern and the fix in under 20 words.",
     "attribution": "${handle}"
   },
   "reel_blueprint": {
     "enabled": ${contentType === 'REEL_BLUEPRINT' ? 'true' : 'false'},
-    "hook_text": "On-screen text (0-2s)",
-    "body_text": "On-screen text (2-7s)",
-    "audio_prompt": "Voiceover tone, acoustic style, and SFX cues",
-    "background_video_prompt": "Detailed B-roll video search terms and visual framing",
-    "audio_script": "[0:00-0:03 HOOK] (Energetic/Intriguing) Spoken hook line... [SFX: Whoosh]\n\n[0:03-0:12 BODY] (Explanatory & Calm) Spoken core concept breakdown... [SFX: Soft Riser]\n\n[0:12-0:20 CTA] (Direct & Friendly) Spoken call to action... [SFX: Pop]",
-    "video_script": "SCENE 1 (0-3s): Close-up shot of person looking thoughtful in dark lighting. Text Overlay: 'The Competence Paradox'\n\nSCENE 2 (3-12s): Macro B-roll of brain neural pathways / clock ticking. Text Overlay: Key psychological principle\n\nSCENE 3 (12-20s): Smooth transition to dark minimal aesthetic logo card with follow button animation.",
-    "full_script_markdown": "# REEL PRODUCTION SCRIPT\n\n## AUDIO (VOICEOVER & SFX)\n- [0:00-0:03] Spoken hook...\n- [0:03-0:12] Spoken body...\n- [0:12-0:20] Spoken CTA...\n\n## VIDEO (B-ROLL & TEXT OVERLAYS)\n- Scene 1: ...\n- Scene 2: ...\n- Scene 3: ..."
+    "hook_text": "First 2 seconds — relatable recognition hook",
+    "body_text": "3-7s — science + solution #1",
+    "audio_prompt": "Calm voiceover",
+    "background_video_prompt": "Matching B-roll",
+    "audio_script": "[0:00-0:02] Hook... [0:02-0:10] Science + Solution... [0:10-0:18] CTA...",
+    "video_script": "Scene 1: Hook... Scene 2: Science... Scene 3: Solution & CTA...",
+    "full_script_markdown": "# REEL SCRIPT\\n\\n## HOOK: ...\\n## SCIENCE: ...\\n## FIX: ...\\n## CTA: ..."
   },
   "caption": {
-    "hook": "First line of caption",
-    "body": "2-4 sentence deep dive explaining the psychology",
-    "cta": "Primary CTA sentence",
-    "hashtags": ["#psychologyfacts", "#humanbehavior", "#brainfacts", "#cognitivescience", "#mindfacts"]
+    "hook": "Opening line creating instant recognition.",
+    "body": "2-3 sentences explaining the science (with theory name).\\n\\n💡 3 ways to reframe it:\\n1. [Solution 1 from slide 6]\\n2. [Solution 2 from slide 7]\\n3. [Solution 3 from slide 8]",
+    "cta": "Save this post to come back to when you need a mental reset.",
+    "hashtags": ["#psychologyfacts", "#humanbehavior", "#mindsetshift", "#selfmastery", "#brainfacts", "#mentalhealth"]
   }
 }`;
 
@@ -765,16 +914,71 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
         let postId = null;
 
         // Normalize psych output into the standard {slides, caption} format
-        // that openEditor / parsePostText expects (same as Facts Lab, News Lab)
         let normalizedSlides = [];
         if (parsed.carousel && parsed.carousel.slides) {
-            normalizedSlides = parsed.carousel.slides.map((s, idx) => ({
-                title: s.title_text || s.title || `Slide ${idx + 1}`,
-                content: s.body_text || s.content || '',
-                header: s.header_text || handle,
-                image_prompt: s.design_notes || '',
-                is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
-            }));
+            let rawSlides = parsed.carousel.slides;
+
+            // If AI returned fewer than 8 slides, auto-expand combined body/solution slides into individual slides
+            if (rawSlides.length < 8 && rawSlides.length >= 2) {
+                console.log(`[Psychology Lab] AI returned ${rawSlides.length} slides. Expanding into full 8-9 slide deck...`);
+                let expanded = [];
+                const hookSlide = rawSlides[0];
+                const ctaSlide = rawSlides[rawSlides.length - 1];
+                const middleSlides = rawSlides.slice(1, rawSlides.length - 1);
+
+                expanded.push(hookSlide);
+
+                // Add Recognition, Science, Cost, Definition, Solution 1, Solution 2, Solution 3
+                let bodyPool = [];
+                middleSlides.forEach(s => {
+                    const text = (s.body_text || s.content || s.subtitle_text || '');
+                    // Split double-paragraph or combined solution text
+                    const parts = text.split(/\n\n|\n(?=[0-9]\.|Shift|Step|Solution)/i).filter(p => p.trim().length > 10);
+                    if (parts.length > 1) {
+                        parts.forEach((pt, pIdx) => {
+                            bodyPool.push({
+                                type: s.type || 'BODY_VAL',
+                                header_text: s.header_text || `0${expanded.length + 1} / INSIGHT`,
+                                title_text: pIdx === 0 ? (s.title_text || s.title) : `Key Practical Action #${pIdx + 1}`,
+                                body_text: pt.trim()
+                            });
+                        });
+                    } else {
+                        bodyPool.push(s);
+                    }
+                });
+
+                // Ensure we have at least 6 body slides before CTA
+                while (bodyPool.length < 6) {
+                    const last = bodyPool[bodyPool.length - 1] || hookSlide;
+                    bodyPool.push({
+                        type: 'BODY_VAL',
+                        header_text: `0${bodyPool.length + 1} / STRATEGY`,
+                        title_text: `Practical Reframe & Action Plan`,
+                        body_text: `Apply this daily: When you feel this psychological trigger, take 3 slow breaths, name the cognitive pattern without judgment, and re-center on your current task.`
+                    });
+                }
+
+                bodyPool.slice(0, 7).forEach(s => expanded.push(s));
+                expanded.push(ctaSlide);
+                rawSlides = expanded;
+            }
+
+            normalizedSlides = rawSlides.map((s, idx) => {
+                let bodyContent = s.body_text || s.content || '';
+                if (idx === 0 && !bodyContent && s.subtitle_text) {
+                    bodyContent = s.subtitle_text;
+                } else if (s.subtitle_text && bodyContent && !bodyContent.includes(s.subtitle_text)) {
+                    bodyContent = `${s.subtitle_text}\n\n${bodyContent}`;
+                }
+                return {
+                    title: s.title_text || s.title || `Slide ${idx + 1}`,
+                    content: bodyContent,
+                    header: s.header_text || handle,
+                    image_prompt: s.design_notes || '',
+                    is_cta: s.is_cta || s.type === 'CTA_FINAL' || false
+                };
+            });
         } else if (parsed.single_slide && parsed.single_slide.enabled) {
             normalizedSlides = [{
                 title: parsed.single_slide.quote_text || 'Psychology Insight',
@@ -799,8 +1003,9 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
             }
         };
 
+        let insertedPost = null;
         try {
-            const { data, error } = await supabase
+            const { data: insertData, error: insertError } = await supabase
                 .from('posts')
                 .insert([{
                     topic: `[Psychology Lab] ${topic.substring(0, 60)}`,
@@ -809,18 +1014,136 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
                     brand_id: cleanBrandId
                 }])
                 .select();
-            if (data && data[0]) postId = data[0].id;
-        } catch (e) {}
+            if (insertData && insertData[0]) {
+                postId = insertData[0].id;
+                insertedPost = insertData[0];
+                // Patch the returned post's text with the frontend-normalized format
+                insertedPost.text = JSON.stringify(normalizedPost);
+            }
+            if (insertError) console.error("Supabase insert error:", insertError.message);
+        } catch (e) { console.error("Insert exception:", e.message); }
 
-        res.json({
+        const resObj = {
             success: true,
             mode: "GENERATE",
             data: parsed,
             post_id: postId,
-            post: (typeof data !== 'undefined' && data && data[0]) ? data[0] : null
-        });
+            post: insertedPost
+        };
+        setExistingGeneration(dedupKey, resObj);
+        res.json(resObj);
     } catch (err) {
         console.error("Psychology Lab error:", err);
+        res.status(500).json({ error: "Internal server error: " + err.message });
+    }
+});
+
+// ============================================================
+// POST /generate-mcq — MCQ Video Lab Generator Endpoint
+// ============================================================
+app.post('/generate-mcq', async (req, res) => {
+    try {
+        const { topic, question_count, difficulty, language, brand_id, brand_context } = req.body;
+        const mcqTopic = topic || "Loksewa General Knowledge & Geography of Nepal";
+        const count = parseInt(question_count) || 3;
+        const level = difficulty || "Medium";
+        const targetLanguage = language || "Nepali";
+        const brandCtx = getBrandContextBlock(brand_context);
+
+        const dedupKey = getDedupKey(req, `mcq_${mcqTopic}_${count}_${level}_${targetLanguage}`);
+        const existing = await getExistingGeneration(dedupKey);
+        if (existing) return res.json(existing);
+
+        let resolveInflight;
+        const inflightPromise = new Promise(resolve => { resolveInflight = resolve; });
+        setExistingGeneration(dedupKey, null, inflightPromise);
+
+        console.log(`[/generate-mcq] "${mcqTopic}", ${count} questions, Level: ${level}, Lang: ${targetLanguage}`);
+
+        const prompt = `You are an expert educational content engine for Loksewa and Competitive Exams.${brandCtx}
+
+Create a set of ${count} high-converting Multiple Choice Questions (MCQ) for video reels.
+Topic: "${mcqTopic}"
+Difficulty Level: ${level}
+Language: ${targetLanguage}
+
+CRITICAL RULES:
+- Generate EXACTLY ${count} questions.
+- Each question MUST have EXACTLY 4 options (labeled A., B., C., D.).
+- The question must be crisp and highly engaging for video formats (10-25 words).
+- Specify the 0-based index of the correct option (0 for A, 1 for B, 2 for C, 3 for D).
+- Provide a clear, educational, and fascinating explanation for the correct answer (20-45 words).
+- All text MUST be written in ${targetLanguage}.
+
+OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
+
+{
+  "topic": "${mcqTopic}",
+  "language": "${targetLanguage}",
+  "questions": [
+    {
+      "id": 1,
+      "question": "Question text here?",
+      "options": [
+        "A. Option 1",
+        "B. Option 2",
+        "C. Option 3",
+        "D. Option 4"
+      ],
+      "correct_index": 1,
+      "correct_option": "B. Option 2",
+      "explanation": "Clear explanation of why this answer is correct."
+    }
+  ]
+}`;
+
+        const aiRes = await generateAIContent(prompt);
+        let rawText = aiRes.response.text();
+        rawText = cleanJsonString(rawText);
+
+        let parsed;
+        try {
+            parsed = JSON.parse(rawText);
+        } catch (pe) {
+            console.error("JSON parse error in /generate-mcq:", pe.message, "Raw:", rawText.substring(0, 200));
+            return res.status(500).json({ error: "Failed to parse structured MCQ JSON: " + pe.message });
+        }
+
+        const cleanBrandId = sanitizeBrandId(brand_id);
+        let postId = null;
+        let insertedPost = null;
+
+        try {
+            const { data: insertData, error: insertError } = await supabase
+                .from('posts')
+                .insert([{
+                    topic: `[MCQ Video] ${mcqTopic.substring(0, 50)}`,
+                    text: JSON.stringify(parsed),
+                    status: 'Draft',
+                    brand_id: cleanBrandId
+                }])
+                .select();
+
+            if (insertData && insertData[0]) {
+                postId = insertData[0].id;
+                insertedPost = insertData[0];
+            }
+            if (insertError) console.error("Supabase insert error for MCQ:", insertError.message);
+        } catch (e) { console.error("Insert exception in MCQ:", e.message); }
+
+        const resObj = {
+            success: true,
+            mcq_data: parsed,
+            post_id: postId,
+            post: insertedPost
+        };
+
+        if (resolveInflight) resolveInflight(resObj);
+        setExistingGeneration(dedupKey, resObj);
+        res.json(resObj);
+
+    } catch (err) {
+        console.error("MCQ Lab error:", err);
         res.status(500).json({ error: "Internal server error: " + err.message });
     }
 });
@@ -828,3 +1151,4 @@ You MUST output ONLY valid JSON matching the exact schema below without any mark
 app.listen(port, () => {
     console.log(`Creator's Den Backend v2.0 running on port ${port}`);
 });
+
