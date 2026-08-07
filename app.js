@@ -5479,11 +5479,33 @@ let mcqState = {
     outroCharCount: 0,
     isPlaying: false,
     isExporting: false,
+    isPreloadingAudio: false,
+    speechId: 0,
     animFrameId: null,
     stepTimer: null,
     typewriterInterval: null,
     audioCache: {}
 };
+window.mcqState = mcqState;
+window.getMCQAudioDestination = getMCQAudioDestination;
+window.stopCurrentMCQAudio = stopCurrentMCQAudio;
+window.playMCQBeep = playMCQBeep;
+window.fetchAudioBuffer = fetchAudioBuffer;
+window.updateMCQAudioProgress = updateMCQAudioProgress;
+window.getMCQExplanationText = getMCQExplanationText;
+window.formatMMSS = formatMMSS;
+window.buildMCQTimelineMap = buildMCQTimelineMap;
+window.updateMCQSectionPills = updateMCQSectionPills;
+window.jumpMCQToSection = jumpMCQToSection;
+window.seekMCQToTime = seekMCQToTime;
+window.updateMCQTimelineProgress = updateMCQTimelineProgress;
+window.preloadMCQAudioDeck = preloadMCQAudioDeck;
+window.speakMCQText = speakMCQText;
+window.drawMCQCanvas = drawMCQCanvas;
+window.startMCQSequence = startMCQSequence;
+window.stopMCQSequence = stopMCQSequence;
+window.exportMCQVideo = exportMCQVideo;
+window.initMCQVideoStudio = initMCQVideoStudio;
 
 let mcqAudioCtx = null;
 let mcqAudioDest = null;
@@ -5495,27 +5517,34 @@ function getMCQAudioDestination() {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return null;
         if (!mcqAudioCtx) {
-            mcqAudioCtx = new AudioCtx();
+            mcqAudioCtx = new AudioCtx({ sampleRate: 44100 });
         }
         if (mcqAudioCtx.state === 'suspended') {
-            mcqAudioCtx.resume();
+            mcqAudioCtx.resume().catch(() => {});
         }
         if (!mcqAudioDest) {
             mcqAudioDest = mcqAudioCtx.createMediaStreamDestination();
         }
         return mcqAudioDest;
     } catch(e) {
+        console.warn("getMCQAudioDestination error:", e);
         return null;
     }
 }
 
 function stopCurrentMCQAudio() {
+    mcqState.speechId = (mcqState.speechId || 0) + 1;
+
     if (currentBufferSource) {
-        try { currentBufferSource.stop(); } catch(e){}
+        try {
+            currentBufferSource.onended = null;
+            currentBufferSource.stop();
+        } catch(e){}
         currentBufferSource = null;
     }
     if (currentAudioEl) {
         try {
+            currentAudioEl.onended = null;
             if (typeof currentAudioEl.stop === 'function') {
                 currentAudioEl.stop();
             } else if (typeof currentAudioEl.pause === 'function') {
@@ -5523,6 +5552,16 @@ function stopCurrentMCQAudio() {
             }
         } catch(e){}
         currentAudioEl = null;
+    }
+    if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch(e){}
+    }
+    if (mcqState.typewriterInterval) {
+        if (typeof mcqState.typewriterInterval === 'number') {
+            cancelAnimationFrame(mcqState.typewriterInterval);
+            clearInterval(mcqState.typewriterInterval);
+        }
+        mcqState.typewriterInterval = null;
     }
 }
 
@@ -5553,6 +5592,9 @@ async function fetchAudioBuffer(text, lang) {
     try {
         getMCQAudioDestination();
         if (!mcqAudioCtx) return null;
+        if (mcqAudioCtx.state === 'suspended') {
+            mcqAudioCtx.resume().catch(() => {});
+        }
 
         const res = await fetch(`${API_URL}/generate-tts`, {
             method: 'POST',
@@ -5579,7 +5621,16 @@ async function fetchAudioBuffer(text, lang) {
             return null;
         }
 
-        const decodedBuffer = await mcqAudioCtx.decodeAudioData(arrayBuf);
+        const decodedBuffer = await new Promise((resolve, reject) => {
+            try {
+                const res = mcqAudioCtx.decodeAudioData(arrayBuf, buf => resolve(buf), err => reject(err));
+                if (res && typeof res.then === 'function') {
+                    res.then(resolve).catch(reject);
+                }
+            } catch(err) {
+                reject(err);
+            }
+        });
         mcqState.audioCache[text] = decodedBuffer;
         return decodedBuffer;
     } catch(e) {
@@ -5619,9 +5670,234 @@ function getMCQExplanationText(qData) {
     return `सही उत्तर: ${correctStr}। ${exp}`;
 }
 
+function formatMMSS(seconds) {
+    const s = Math.max(0, Math.floor(seconds || 0));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
+}
+
+function buildMCQTimelineMap() {
+    const map = [];
+    let currentTime = 0;
+
+    if (!mcqState.questions || mcqState.questions.length === 0) return { map: [], totalTime: 0 };
+
+    mcqState.questions.forEach((q, idx) => {
+        // Question phase
+        const qText = q.question || '';
+        const qBuf = mcqState.audioCache[qText];
+        const qDur = qBuf ? qBuf.duration : Math.max(3, qText.length * 0.08);
+        map.push({
+            qIndex: idx,
+            phase: 'QUESTION',
+            label: `Q${idx + 1} Question`,
+            pillLabel: `Q${idx + 1}`,
+            startTime: currentTime,
+            duration: qDur
+        });
+        currentTime += qDur;
+
+        // Options phase
+        let optDurSum = 0;
+        if (q.options) {
+            q.options.forEach(opt => {
+                const optBuf = mcqState.audioCache[opt];
+                optDurSum += (optBuf ? optBuf.duration : Math.max(1.5, opt.length * 0.08)) + 0.25;
+            });
+        }
+        map.push({
+            qIndex: idx,
+            phase: 'OPTIONS',
+            label: `Q${idx + 1} Options`,
+            pillLabel: `Q${idx + 1} Opts`,
+            startTime: currentTime,
+            duration: optDurSum
+        });
+        currentTime += optDurSum;
+
+        // Countdown phase
+        map.push({
+            qIndex: idx,
+            phase: 'COUNTDOWN',
+            label: `Q${idx + 1} Timer`,
+            pillLabel: `Q${idx + 1} Timer`,
+            startTime: currentTime,
+            duration: 3.0
+        });
+        currentTime += 3.0;
+
+        // Explanation phase
+        const expText = getMCQExplanationText(q);
+        const expBuf = mcqState.audioCache[expText];
+        const expDur = (expBuf ? expBuf.duration : Math.max(5, expText.length * 0.08)) + 1.5;
+        map.push({
+            qIndex: idx,
+            phase: 'EXPLANATION',
+            label: `Q${idx + 1} Explanation`,
+            pillLabel: `Q${idx + 1} Exp`,
+            startTime: currentTime,
+            duration: expDur
+        });
+        currentTime += expDur;
+    });
+
+    // Outro phase
+    const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
+    const outroBuf = mcqState.audioCache[outroText];
+    const outroDur = outroBuf ? outroBuf.duration : 8.0;
+    map.push({
+        qIndex: mcqState.questions.length - 1,
+        phase: 'OUTRO',
+        label: `Outro`,
+        pillLabel: `Outro`,
+        startTime: currentTime,
+        duration: outroDur
+    });
+    currentTime += outroDur;
+
+    return { map, totalTime: currentTime };
+}
+
+function updateMCQSectionPills() {
+    const container = document.getElementById('mcq-section-pills');
+    if (!container) return;
+
+    const { map } = buildMCQTimelineMap();
+    container.innerHTML = '';
+
+    map.forEach(seg => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isActive = (seg.qIndex === mcqState.currentIndex && seg.phase === mcqState.phase) || (seg.phase === 'OUTRO' && mcqState.phase === 'OUTRO');
+
+        btn.style.cssText = `
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid ${isActive ? '#38bdf8' : 'rgba(255,255,255,0.15)'};
+            background: ${isActive ? 'linear-gradient(135deg, #0284c7, #6366f1)' : 'rgba(255,255,255,0.06)'};
+            color: ${isActive ? '#ffffff' : 'rgba(255,255,255,0.7)'};
+            transition: all 0.15s ease;
+        `;
+        btn.innerText = seg.pillLabel;
+
+        btn.onclick = () => {
+            jumpMCQToSection(seg.qIndex, seg.phase);
+        };
+        container.appendChild(btn);
+    });
+}
+
+function jumpMCQToSection(qIndex, phase) {
+    stopMCQSequence(true);
+
+    mcqState.currentIndex = qIndex;
+    mcqState.phase = phase;
+
+    const qData = mcqState.questions[qIndex] || mcqState.questions[0];
+    const lang = document.getElementById('mcq-language')?.value || 'Nepali';
+
+    if (phase === 'QUESTION') {
+        mcqState.qCharCount = qData.question ? qData.question.length : 0;
+        mcqState.optCharCounts = [0, 0, 0, 0];
+        mcqState.expCharCount = 0;
+    } else if (phase === 'OPTIONS') {
+        mcqState.qCharCount = qData.question ? qData.question.length : 0;
+        mcqState.optCharCounts = qData.options ? qData.options.map(o => o ? o.length : 0) : [0, 0, 0, 0];
+        mcqState.expCharCount = 0;
+    } else if (phase === 'COUNTDOWN') {
+        mcqState.qCharCount = qData.question ? qData.question.length : 0;
+        mcqState.optCharCounts = qData.options ? qData.options.map(o => o ? o.length : 0) : [0, 0, 0, 0];
+        mcqState.countdownSec = 3;
+        mcqState.countdownArc = 1.0;
+        mcqState.expCharCount = 0;
+    } else if (phase === 'EXPLANATION') {
+        mcqState.expCharCount = qData.explanation ? qData.explanation.length : 0;
+    } else if (phase === 'OUTRO') {
+        mcqState.outroCharCount = 80;
+    }
+
+    updateMCQEditorFields();
+    updateMCQSectionPills();
+    drawMCQCanvas();
+
+    mcqState.isPlaying = true;
+    if (phase === 'QUESTION') {
+        startMCQSequence();
+    } else if (phase === 'OPTIONS') {
+        startMCQSequence();
+    } else if (phase === 'COUNTDOWN') {
+        startMCQCountdown(lang, qData);
+    } else if (phase === 'EXPLANATION') {
+        revealMCQAnswer(lang, qData);
+    } else if (phase === 'OUTRO') {
+        startMCQOutro(lang);
+    }
+}
+
+function seekMCQToTime(targetSec) {
+    const { map } = buildMCQTimelineMap();
+    if (map.length === 0) return;
+
+    let foundSeg = map[0];
+    for (let i = 0; i < map.length; i++) {
+        const seg = map[i];
+        if (targetSec >= seg.startTime && targetSec <= seg.startTime + seg.duration) {
+            foundSeg = seg;
+            break;
+        }
+    }
+
+    jumpMCQToSection(foundSeg.qIndex, foundSeg.phase);
+}
+
+function updateMCQTimelineProgress() {
+    const { map, totalTime } = buildMCQTimelineMap();
+    if (totalTime <= 0) return;
+
+    let elapsedSec = 0;
+    for (let i = 0; i < map.length; i++) {
+        const seg = map[i];
+        if (seg.qIndex === mcqState.currentIndex && seg.phase === mcqState.phase) {
+            elapsedSec = seg.startTime;
+            break;
+        } else if (seg.phase === 'OUTRO' && mcqState.phase === 'OUTRO') {
+            elapsedSec = seg.startTime;
+            break;
+        }
+    }
+
+    const pct = Math.min(100, Math.max(0, (elapsedSec / totalTime) * 100));
+    const sliderEl = document.getElementById('mcq-timeline-slider');
+    const timeLabel = document.getElementById('mcq-time-label');
+
+    if (sliderEl && !sliderEl.matches(':active')) {
+        sliderEl.value = pct;
+    }
+    if (timeLabel) {
+        timeLabel.innerText = `${formatMMSS(elapsedSec)} / ${formatMMSS(totalTime)}`;
+    }
+
+    if (mcqState.isExporting) {
+        const exportBtn = document.getElementById('mcq-export-btn');
+        if (exportBtn) {
+            exportBtn.innerHTML = `<i data-feather="loader" class="spin" style="width:16px;height:16px;"></i> Exporting HD Video... (${Math.round(pct)}%)`;
+        }
+    }
+
+    updateMCQSectionPills();
+}
+
 async function preloadMCQAudioDeck(lang) {
+    mcqState.isPreloadingAudio = true;
     const texts = [];
-    if (!mcqState.questions || mcqState.questions.length === 0) return;
+    if (!mcqState.questions || mcqState.questions.length === 0) {
+        mcqState.isPreloadingAudio = false;
+        return;
+    }
 
     mcqState.questions.forEach(q => {
         if (q.question) texts.push(q.question);
@@ -5645,7 +5921,10 @@ async function preloadMCQAudioDeck(lang) {
         }));
     }
 
+    mcqState.isPreloadingAudio = false;
     updateMCQAudioProgress(total, total, `✅ Voice Narration Ready! (100%) Instant Playback & Export Enabled.`);
+    updateMCQSectionPills();
+    updateMCQTimelineProgress();
 }
 
 async function speakMCQText(text, lang, onEnd, onTypewriterProgress, prefixLen = 0) {
@@ -5722,10 +6001,13 @@ async function speakMCQText(text, lang, onEnd, onTypewriterProgress, prefixLen =
         const audioBuffer = await fetchAudioBuffer(text, lang);
         if (audioBuffer && mcqAudioCtx) {
             const source = mcqAudioCtx.createBufferSource();
+            currentBufferSource = source;
             source.buffer = audioBuffer;
             const dest = getMCQAudioDestination();
-            source.connect(dest);
-            source.connect(mcqAudioCtx.destination);
+            if (dest) source.connect(dest);
+            if (!mcqState.isExporting) {
+                source.connect(mcqAudioCtx.destination);
+            }
             currentAudioEl = source;
 
             const durMs = audioBuffer.duration * 1000;
@@ -5996,22 +6278,22 @@ function drawMCQCanvas() {
     ctx.fillStyle = radGlow;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Top Header — Brand Asset Banner or Brand Pill
+    // 2. Top Header — Brand Asset Banner or Brand Pill (Positioned in 9:16 Reel Safe Zone: Y=260)
     const hasHeaderAsset = mcqBrandLogoImg && mcqBrandLogoImg.complete && brandHeaderAssetUrl;
     const hasLogo = mcqBrandLogoImg && mcqBrandLogoImg.complete && !brandHeaderAssetUrl;
 
     if (hasHeaderAsset) {
-        // Render wide header asset banner across the top
+        // Render wide header asset banner across the top safe zone
         ctx.save();
         const imgW = mcqBrandLogoImg.naturalWidth || mcqBrandLogoImg.width;
         const imgH = mcqBrandLogoImg.naturalHeight || mcqBrandLogoImg.height;
-        const bannerMaxW = 960;
-        const bannerMaxH = 130;
+        const bannerMaxW = 900;
+        const bannerMaxH = 110;
         const scale = Math.min(bannerMaxW / imgW, bannerMaxH / imgH);
         const drawW = imgW * scale;
         const drawH = imgH * scale;
         const bannerX = (width - drawW) / 2;
-        const bannerY = 40;
+        const bannerY = 260;
 
         // Subtle shadow behind banner
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -6020,55 +6302,55 @@ function drawMCQCanvas() {
         ctx.shadowBlur = 0;
 
         // Question counter below banner
-        ctx.font = 'bold 30px "Inter", sans-serif';
+        ctx.font = 'bold 28px "Inter", sans-serif';
         ctx.fillStyle = t.pillText || '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, width / 2, bannerY + drawH + 28);
+        ctx.fillText(`Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, width / 2, bannerY + drawH + 22);
         ctx.restore();
     } else {
-        // Fallback: Brand Pill with optional small logo
+        // Fallback: Brand Pill with optional small logo in safe zone
         ctx.save();
         ctx.fillStyle = t.pillBg;
         ctx.strokeStyle = t.pillBorder;
         ctx.lineWidth = 2;
-        const headerW = 820; const headerH = 90; const headerX = (width - headerW) / 2; const headerY = 80;
+        const headerW = 800; const headerH = 80; const headerX = (width - headerW) / 2; const headerY = 260;
         ctx.beginPath();
-        ctx.roundRect(headerX, headerY, headerW, headerH, 45);
+        ctx.roundRect(headerX, headerY, headerW, headerH, 40);
         ctx.fill();
         ctx.stroke();
 
         if (hasLogo) {
             ctx.save();
             ctx.beginPath();
-            ctx.arc(headerX + 48, headerY + headerH / 2, 28, 0, Math.PI * 2);
+            ctx.arc(headerX + 44, headerY + headerH / 2, 24, 0, Math.PI * 2);
             ctx.clip();
-            ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 56) / 2, 56, 56);
+            ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 48) / 2, 48, 48);
             ctx.restore();
         }
 
-        ctx.font = 'bold 34px "Inter", sans-serif';
+        ctx.font = 'bold 32px "Inter", sans-serif';
         ctx.fillStyle = t.pillText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const logoOffset = hasLogo ? 25 : 0;
+        const logoOffset = hasLogo ? 22 : 0;
         ctx.fillText(`${brandName.toUpperCase()} • Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, (width / 2) + logoOffset, headerY + headerH / 2);
         ctx.restore();
     }
 
-    const qBoxW = 980; const qBoxX = (width - qBoxW) / 2;
+    const qBoxW = 900; const qBoxX = (width - qBoxW) / 2;
 
     // --- PHASE BRANCHING FOR CANVAS RENDERING ---
     if (mcqState.phase === 'EXPLANATION' || mcqState.phase === 'ANSWER') {
         // ============================================================
-        // DEDICATED SCREEN 1: DETAILED EXPLANATION SCREEN
+        // DEDICATED SCREEN 1: DETAILED EXPLANATION SCREEN (Safe Zone Y: 410 - 1470)
         // ============================================================
 
-        // 1. Correct Answer Banner Card (Height 190px, Y=200)
-        const ansCardY = 200; const ansCardH = 190;
+        // 1. Correct Answer Banner Card (Height 140px, Y=410)
+        const ansCardY = 410; const ansCardH = 140;
         ctx.save();
         ctx.beginPath();
-        ctx.roundRect(qBoxX, ansCardY, qBoxW, ansCardH, 24);
+        ctx.roundRect(qBoxX, ansCardY, qBoxW, ansCardH, 20);
         const greenGrad = ctx.createLinearGradient(qBoxX, ansCardY, qBoxX + qBoxW, ansCardY + ansCardH);
         greenGrad.addColorStop(0, '#15803d');
         greenGrad.addColorStop(1, '#22c55e');
@@ -6081,19 +6363,19 @@ function drawMCQCanvas() {
         ctx.stroke();
 
         // Label
-        ctx.font = 'bold 30px "Inter", sans-serif';
+        ctx.font = 'bold 26px "Inter", sans-serif';
         ctx.fillStyle = '#dcfce7';
         ctx.textAlign = 'left';
-        ctx.fillText('✓ सही उत्तर / CORRECT ANSWER:', qBoxX + 45, ansCardY + 52);
+        ctx.fillText('✓ सही उत्तर / CORRECT ANSWER:', qBoxX + 40, ansCardY + 40);
 
-        // Correct Option Text (Large 44px)
-        ctx.font = 'bold 44px "Mukta", "Inter", sans-serif';
+        // Correct Option Text (Large 40px)
+        ctx.font = 'bold 40px "Mukta", "Inter", sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(qData ? qData.correct_option : '', qBoxX + 45, ansCardY + 124);
+        ctx.fillText(qData ? qData.correct_option : '', qBoxX + 40, ansCardY + 96);
         ctx.restore();
 
-        // 2. Detailed Explanation Main Container (Height 1420px, Y=420)
-        const expBoxY = 420; const expBoxH = 1420;
+        // 2. Detailed Explanation Main Container (Height 900px, Y=560 to Y=1460)
+        const expBoxY = 560; const expBoxH = 900;
         ctx.save();
         ctx.fillStyle = t.qTextColor ? 'rgba(255, 255, 255, 0.97)' : 'rgba(15, 23, 42, 0.96)';
         ctx.strokeStyle = '#22c55e';
@@ -6101,47 +6383,47 @@ function drawMCQCanvas() {
         ctx.shadowColor = 'rgba(34, 197, 94, 0.3)';
         ctx.shadowBlur = 25;
         ctx.beginPath();
-        ctx.roundRect(qBoxX, expBoxY, qBoxW, expBoxH, 28);
+        ctx.roundRect(qBoxX, expBoxY, qBoxW, expBoxH, 24);
         ctx.fill();
         ctx.stroke();
 
         // Top green accent line
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.roundRect(qBoxX, expBoxY, qBoxW, 14, [28, 28, 0, 0]);
+        ctx.roundRect(qBoxX, expBoxY, qBoxW, 12, [24, 24, 0, 0]);
         ctx.fill();
 
         // Header Label
-        ctx.font = 'bold 36px "Inter", sans-serif';
+        ctx.font = 'bold 32px "Inter", sans-serif';
         ctx.fillStyle = '#16a34a';
         ctx.textAlign = 'left';
-        ctx.fillText('💡 विस्तृत उत्तर व्याख्या / DETAILED EXPLANATION:', qBoxX + 45, expBoxY + 70);
+        ctx.fillText('💡 विस्तृत उत्तर व्याख्या / DETAILED EXPLANATION:', qBoxX + 40, expBoxY + 58);
 
         // Horizontal divider line
         ctx.strokeStyle = t.qTextColor ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(qBoxX + 40, expBoxY + 105);
-        ctx.lineTo(qBoxX + qBoxW - 40, expBoxY + 105);
+        ctx.moveTo(qBoxX + 35, expBoxY + 90);
+        ctx.lineTo(qBoxX + qBoxW - 35, expBoxY + 90);
         ctx.stroke();
 
-        // Typewriter Explanation Text (Generous 44px bold font, 66px line height)
+        // Typewriter Explanation Text
         const visibleExpText = qData && qData.explanation ? qData.explanation.substring(0, mcqState.expCharCount) : '';
-        ctx.font = '600 44px "Mukta", "Inter", sans-serif';
+        ctx.font = '600 40px "Mukta", "Inter", sans-serif';
         ctx.fillStyle = t.qTextColor ? '#1e293b' : '#f8fafc';
-        const expLines = wrapCanvasText(ctx, visibleExpText, qBoxW - 90);
-        let expLineY = expBoxY + 175;
+        const expLines = wrapCanvasText(ctx, visibleExpText, qBoxW - 80);
+        let expLineY = expBoxY + 155;
         expLines.forEach(line => {
-            ctx.fillText(line, qBoxX + 45, expLineY);
-            expLineY += 66;
+            ctx.fillText(line, qBoxX + 40, expLineY);
+            expLineY += 58;
         });
         ctx.restore();
 
     } else if (mcqState.phase === 'OUTRO') {
         // ============================================================
-        // DEDICATED SCREEN 2: OUTRO CALL-TO-ACTION CLIP SCREEN
+        // DEDICATED SCREEN 2: OUTRO CALL-TO-ACTION CLIP SCREEN (Safe Zone Y: 410 - 1470)
         // ============================================================
-        const outroY = 300; const outroH = 1500;
+        const outroY = 410; const outroH = 1060;
         ctx.save();
         ctx.fillStyle = t.qTextColor ? 'rgba(255, 255, 255, 0.97)' : 'rgba(15, 23, 42, 0.96)';
         ctx.strokeStyle = '#c62828';
@@ -6149,77 +6431,77 @@ function drawMCQCanvas() {
         ctx.shadowColor = '#0d47a1';
         ctx.shadowBlur = 35;
         ctx.beginPath();
-        ctx.roundRect(qBoxX, outroY, qBoxW, outroH, 32);
+        ctx.roundRect(qBoxX, outroY, qBoxW, outroH, 28);
         ctx.fill();
         ctx.stroke();
 
         // Top Accent bar in Nepal PSC Crimson Red
         ctx.fillStyle = '#c62828';
         ctx.beginPath();
-        ctx.roundRect(qBoxX, outroY, qBoxW, 16, [32, 32, 0, 0]);
+        ctx.roundRect(qBoxX, outroY, qBoxW, 14, [28, 28, 0, 0]);
         ctx.fill();
 
         // Glowing Brand Badge Pill
-        const pillW = 460; const pillH = 75; const pillX = (width - pillW) / 2; const pillY = outroY + 50;
+        const pillW = 440; const pillH = 65; const pillX = (width - pillW) / 2; const pillY = outroY + 40;
         ctx.fillStyle = '#0d47a1';
         ctx.beginPath();
-        ctx.roundRect(pillX, pillY, pillW, pillH, 38);
+        ctx.roundRect(pillX, pillY, pillW, pillH, 32);
         ctx.fill();
 
-        ctx.font = 'bold 36px "Inter", sans-serif';
+        ctx.font = 'bold 32px "Inter", sans-serif';
         ctx.fillStyle = '#ffc107';
         ctx.textAlign = 'center';
         const brandHandle = (currentBranding && currentBranding.name) ? currentBranding.name.toUpperCase() : 'GEARUP LOKSEWA';
         ctx.fillText(`✨ ${brandHandle} ✨`, width / 2, pillY + pillH / 2);
 
         // Outro Title
-        ctx.font = 'bold 50px "Mukta", "Inter", sans-serif';
+        ctx.font = 'bold 44px "Mukta", "Inter", sans-serif';
         ctx.fillStyle = t.qTextColor ? '#0d47a1' : '#60a5fa';
         ctx.textAlign = 'center';
-        ctx.fillText('हाम्रो पानालाई फलो गर्नुहोला!', width / 2, outroY + 200);
+        ctx.fillText('हाम्रो पानालाई फलो गर्नुहोला!', width / 2, outroY + 160);
 
         // Divider
         ctx.strokeStyle = 'rgba(198, 40, 40, 0.3)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(qBoxX + 60, outroY + 245);
-        ctx.lineTo(qBoxX + qBoxW - 60, outroY + 245);
+        ctx.moveTo(qBoxX + 50, outroY + 195);
+        ctx.lineTo(qBoxX + qBoxW - 50, outroY + 195);
         ctx.stroke();
 
-        // Typewriter Outro Body Text (48px bold font, 74px line height)
+        // Typewriter Outro Body Text
         const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
         const visibleOutroText = outroText.substring(0, mcqState.outroCharCount || 0);
-        ctx.font = '700 48px "Mukta", "Inter", sans-serif';
+        ctx.font = '700 42px "Mukta", "Inter", sans-serif';
         ctx.fillStyle = t.qTextColor ? '#1e293b' : '#f8fafc';
         ctx.textAlign = 'left';
-        const outroLines = wrapCanvasText(ctx, visibleOutroText, qBoxW - 100);
-        let outroLineY = outroY + 340;
+        const outroLines = wrapCanvasText(ctx, visibleOutroText, qBoxW - 80);
+        let outroLineY = outroY + 270;
         outroLines.forEach(line => {
-            ctx.fillText(line, qBoxX + 50, outroLineY);
-            outroLineY += 76;
+            ctx.fillText(line, qBoxX + 40, outroLineY);
+            outroLineY += 66;
         });
 
         // Social CTA Footer Container
-        const ctaY = outroY + outroH - 320;
+        const ctaY = outroY + outroH - 260;
         ctx.fillStyle = 'rgba(13, 71, 161, 0.08)';
         ctx.strokeStyle = 'rgba(13, 71, 161, 0.3)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.roundRect(qBoxX + 40, ctaY, qBoxW - 80, 240, 24);
+        ctx.roundRect(qBoxX + 30, ctaY, qBoxW - 60, 210, 20);
         ctx.fill();
         ctx.stroke();
 
         // Handle
-        ctx.font = 'bold 42px "Inter", sans-serif';
+        ctx.font = 'bold 36px "Inter", sans-serif';
         ctx.fillStyle = '#c62828';
         ctx.textAlign = 'center';
-        ctx.fillText(brandHandle, width / 2, ctaY + 70);
+        ctx.fillText(brandHandle, width / 2, ctaY + 55);
 
         // Interactive Badges (Like, Share, Follow)
-        const badgeW = 240; const badgeH = 70; const badgeGap = 30;
+        const badgeW = 210; const badgeH = 60; const badgeGap = 20;
         const totalBadgesW = badgeW * 3 + badgeGap * 2;
         let startBadgeX = (width - totalBadgesW) / 2;
-        const badgeY = ctaY + 130;
+        const badgeY = ctaY + 110;
 
         const ctaBadges = [
             { text: '👍 LIKE', bg: '#0d47a1', color: '#ffffff' },
@@ -6230,10 +6512,10 @@ function drawMCQCanvas() {
         ctaBadges.forEach(b => {
             ctx.fillStyle = b.bg;
             ctx.beginPath();
-            ctx.roundRect(startBadgeX, badgeY, badgeW, badgeH, 20);
+            ctx.roundRect(startBadgeX, badgeY, badgeW, badgeH, 18);
             ctx.fill();
 
-            ctx.font = 'bold 32px "Inter", sans-serif';
+            ctx.font = 'bold 28px "Inter", sans-serif';
             ctx.fillStyle = b.color;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -6246,50 +6528,50 @@ function drawMCQCanvas() {
 
     } else {
         // ============================================================
-        // STANDARD SCREEN: QUESTION & OPTIONS
+        // STANDARD SCREEN: QUESTION & OPTIONS (Safe Zone Y: 410 - 1470)
         // ============================================================
 
-        // 3. Question Card Container (Height 440px)
+        // 3. Question Card Container (Height 320px, Y=410)
         ctx.save();
-        const qBoxH = 440; const qBoxY = 200;
+        const qBoxH = 320; const qBoxY = 410;
         ctx.fillStyle = t.qBoxBg;
         ctx.strokeStyle = t.qBoxBorder;
         ctx.lineWidth = 4;
         ctx.shadowColor = t.qAccent;
         ctx.shadowBlur = 24;
         ctx.beginPath();
-        ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 28);
+        ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 24);
         ctx.fill();
         ctx.stroke();
 
         // Top theme accent line
         ctx.fillStyle = t.qAccent;
         ctx.beginPath();
-        ctx.roundRect(qBoxX, qBoxY, qBoxW, 12, [28, 28, 0, 0]);
+        ctx.roundRect(qBoxX, qBoxY, qBoxW, 12, [24, 24, 0, 0]);
         ctx.fill();
 
         // Question Label
-        ctx.font = 'bold 32px "Inter", sans-serif';
+        ctx.font = 'bold 28px "Inter", sans-serif';
         ctx.fillStyle = t.qLabel;
         ctx.textAlign = 'left';
-        ctx.fillText('QUESTION / प्रश्न:', qBoxX + 40, qBoxY + 55);
+        ctx.fillText('QUESTION / प्रश्न:', qBoxX + 35, qBoxY + 48);
 
-        // Typewriter Question Text (Large 54px bold font)
+        // Typewriter Question Text (Large 46px bold font)
         const visibleQText = qData ? qData.question.substring(0, mcqState.qCharCount) : '';
-        ctx.font = '700 54px "Mukta", "Inter", sans-serif';
+        ctx.font = '700 46px "Mukta", "Inter", sans-serif';
         ctx.fillStyle = t.qTextColor || '#ffffff';
-        const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 80);
-        let qLineY = qBoxY + 130;
+        const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 70);
+        let qLineY = qBoxY + 110;
         qLines.forEach(line => {
-            ctx.fillText(line, qBoxX + 40, qLineY);
-            qLineY += 72;
+            ctx.fillText(line, qBoxX + 35, qLineY);
+            qLineY += 60;
         });
         ctx.restore();
 
-        // 4. Options List (4 Cards, Height 160px each)
-        const optYStart = 670;
-        const optCardH = 160;
-        const optGap = 24;
+        // 4. Options List (4 Cards, Height 130px each, starting at Y=750)
+        const optYStart = 750;
+        const optCardH = 130;
+        const optGap = 15;
 
         if (qData && qData.options) {
             qData.options.forEach((optText, idx) => {
@@ -6299,7 +6581,7 @@ function drawMCQCanvas() {
 
                 ctx.save();
                 ctx.beginPath();
-                ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 24);
+                ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 20);
 
                 if (isAnswerPhase && isCorrect) {
                     // Highlight Correct Option in glowing green gradient
@@ -6325,46 +6607,46 @@ function drawMCQCanvas() {
                 ctx.fill();
                 ctx.stroke();
 
-                // Option Letter Badge Circle (A, B, C, D) - Diameter 74px
-                const badgeX = qBoxX + 56;
+                // Option Letter Badge Circle (A, B, C, D) - Diameter 60px
+                const badgeX = qBoxX + 46;
                 const badgeY = optY + optCardH / 2;
-                const badgeR = 37;
+                const badgeR = 30;
                 ctx.beginPath();
                 ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
                 ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(200,200,210,0.4)' : 'rgba(255,255,255,0.1)') : t.badgeBg);
                 ctx.fill();
 
-                ctx.font = 'bold 42px "Inter", sans-serif';
+                ctx.font = 'bold 34px "Inter", sans-serif';
                 ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : t.badgeText;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 const letter = String.fromCharCode(65 + idx);
                 ctx.fillText(letter, badgeX, badgeY + 2);
 
-                // Typewriter Option Text (Large 42px bold font)
+                // Typewriter Option Text (Large 38px bold font)
                 const charCount = mcqState.optCharCounts[idx] || 0;
                 const visibleOptText = optText.substring(0, charCount);
-                ctx.font = '600 42px "Mukta", "Inter", sans-serif';
+                ctx.font = '600 38px "Mukta", "Inter", sans-serif';
                 ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(100,100,120,0.5)' : 'rgba(255,255,255,0.4)') : (t.optTextColor || '#f8fafc'));
                 ctx.textAlign = 'left';
-                ctx.fillText(visibleOptText, qBoxX + 120, badgeY);
+                ctx.fillText(visibleOptText, qBoxX + 100, badgeY);
 
                 // If correct in answer phase, draw Checkmark icon ✓
                 if (isAnswerPhase && isCorrect) {
-                    ctx.font = 'bold 52px "Inter", sans-serif';
+                    ctx.font = 'bold 44px "Inter", sans-serif';
                     ctx.fillStyle = '#ffffff';
                     ctx.textAlign = 'right';
-                    ctx.fillText('✓', qBoxX + qBoxW - 44, badgeY);
+                    ctx.fillText('✓', qBoxX + qBoxW - 35, badgeY);
                 }
                 ctx.restore();
             });
         }
 
-        // 5. Phase 3: 3-Second Countdown Visual Arc Widget
+        // 5. Phase 3: 3-Second Countdown Visual Arc Widget (Safe Zone Y=1420)
         if (mcqState.phase === 'COUNTDOWN') {
             const cdX = width / 2;
-            const cdY = 1480;
-            const cdR = 95;
+            const cdY = 1420;
+            const cdR = 75;
 
             ctx.save();
             // Background Circle
@@ -6372,7 +6654,7 @@ function drawMCQCanvas() {
             ctx.arc(cdX, cdY, cdR, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.lineWidth = 10;
+            ctx.lineWidth = 8;
             ctx.fill();
             ctx.stroke();
 
@@ -6382,7 +6664,7 @@ function drawMCQCanvas() {
             ctx.beginPath();
             ctx.arc(cdX, cdY, cdR, startAngle, endAngle);
             ctx.strokeStyle = t.cdStroke;
-            ctx.lineWidth = 14;
+            ctx.lineWidth = 12;
             ctx.lineCap = 'round';
             ctx.stroke();
 
@@ -6430,8 +6712,14 @@ function updateMCQEditorFields() {
     if (expInput) expInput.value = qData.explanation || '';
 }
 
-function startMCQSequence() {
+async function startMCQSequence() {
     stopMCQSequence(true);
+    const lang = document.getElementById('mcq-language')?.value || 'Nepali';
+
+    if (mcqState.isPreloadingAudio) {
+        await preloadMCQAudioDeck(lang);
+    }
+
     mcqState.isPlaying = true;
     mcqState.phase = 'QUESTION';
     mcqState.qCharCount = 0;
@@ -6442,7 +6730,6 @@ function startMCQSequence() {
     mcqState.outroCharCount = 0;
 
     const qData = mcqState.questions[mcqState.currentIndex] || mcqState.questions[0];
-    const lang = document.getElementById('mcq-language')?.value || 'Nepali';
 
     const phaseLabel = document.getElementById('mcq-phase-label');
     if (phaseLabel) phaseLabel.innerText = `Phase 1: Question ${mcqState.currentIndex + 1}/${mcqState.questions.length} Typewriter & Voiceover`;
@@ -6451,6 +6738,7 @@ function startMCQSequence() {
     function renderLoop() {
         if (mcqState.isPlaying || mcqState.isExporting) {
             drawMCQCanvas();
+            updateMCQTimelineProgress();
             mcqState.animFrameId = requestAnimationFrame(renderLoop);
         }
     }
@@ -6625,6 +6913,12 @@ async function exportMCQVideo() {
     const canvas = document.getElementById('mcq-canvas');
     if (!canvas) return;
 
+    const exportBtn = document.getElementById('mcq-export-btn');
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Exporting Video...`;
+    }
+
     const phaseLabel = document.getElementById('mcq-phase-label');
     if (phaseLabel) phaseLabel.innerText = "🎙️ Pre-loading HD Voice narration & preparing Reel...";
 
@@ -6636,6 +6930,7 @@ async function exportMCQVideo() {
     mcqState.isExporting = true;
     mcqState.isPlaying = true;
     mcqState.recordedChunks = [];
+    mcqState.currentIndex = 0;
 
     const canvasStream = canvas.captureStream(30);
     const destNode = getMCQAudioDestination();
@@ -6691,6 +6986,13 @@ async function exportMCQVideo() {
             mcqState.isExporting = false;
             mcqState.isPlaying = false;
             if (phaseLabel) phaseLabel.innerText = `✅ HD Reel Exported (${fileExt.toUpperCase()} with Voiceover)! Ready for Facebook Reels.`;
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = `<i data-feather="check"></i> Video Downloaded!`;
+                setTimeout(() => {
+                    exportBtn.innerHTML = `<i data-feather="download"></i> Export Video (.mp4)`;
+                }, 4000);
+            }
         };
 
         recorder.start(100);
@@ -6701,13 +7003,29 @@ async function exportMCQVideo() {
         alert("Failed to record video stream: " + err.message);
         mcqState.isExporting = false;
         mcqState.isPlaying = false;
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<i data-feather="download"></i> Export Video (.mp4)`;
+        }
     }
 }
 
 function initMCQVideoStudio() {
+    window.mcqState = mcqState;
+    window.preloadMCQAudioDeck = preloadMCQAudioDeck;
+    window.exportMCQVideo = exportMCQVideo;
+    window.startMCQSequence = startMCQSequence;
+    window.stopMCQSequence = stopMCQSequence;
+    window.jumpMCQToSection = jumpMCQToSection;
+    window.seekMCQToTime = seekMCQToTime;
+    window.buildMCQTimelineMap = buildMCQTimelineMap;
+    window.updateMCQEditorFields = updateMCQEditorFields;
+    window.drawMCQCanvas = drawMCQCanvas;
+
     populateBrandSelectors();
     updateMCQEditorFields();
     drawMCQCanvas();
+    updateMCQSectionPills();
 
     if (mcqStudioInitialized) return;
     mcqStudioInitialized = true;
@@ -6740,7 +7058,6 @@ function initMCQVideoStudio() {
                 })
             });
 
-            // Guard against non-JSON responses (e.g. HTML error pages from Render)
             const contentType = response.headers.get('content-type') || '';
             if (!contentType.includes('application/json')) {
                 const rawText = await response.text();
@@ -6758,7 +7075,7 @@ function initMCQVideoStudio() {
                 stopMCQSequence();
                 drawMCQCanvas();
                 if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.mcq_data.questions.length} questions! Pre-loading voice narration...`; }
-                preloadMCQAudioDeck(language);
+                await preloadMCQAudioDeck(language);
             } else {
                 throw new Error('Invalid MCQ schema returned');
             }
@@ -6781,6 +7098,14 @@ function initMCQVideoStudio() {
 
     document.getElementById('mcq-export-btn')?.addEventListener('click', () => {
         exportMCQVideo();
+    });
+
+    // Timeline Scrubber Input Listener
+    document.getElementById('mcq-timeline-slider')?.addEventListener('input', (e) => {
+        const pct = parseFloat(e.target.value) || 0;
+        const { totalTime } = buildMCQTimelineMap();
+        const targetSec = (pct / 100) * totalTime;
+        seekMCQToTime(targetSec);
     });
 
     // Question Selector Dropdown Change
@@ -6835,4 +7160,13 @@ function initMCQVideoStudio() {
         drawMCQCanvas();
     });
 }
+
+window.mcqState = mcqState;
+window.preloadMCQAudioDeck = preloadMCQAudioDeck;
+window.exportMCQVideo = exportMCQVideo;
+window.startMCQSequence = startMCQSequence;
+window.stopMCQSequence = stopMCQSequence;
+window.jumpMCQToSection = jumpMCQToSection;
+window.seekMCQToTime = seekMCQToTime;
+window.buildMCQTimelineMap = buildMCQTimelineMap;
 

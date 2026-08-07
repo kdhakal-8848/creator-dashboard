@@ -1083,18 +1083,24 @@
                             </button>
 
                             <button id="mcq-export-btn" class="btn-primary" style="padding: 10px 20px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; cursor: pointer;">
-                                <i data-feather="download" style="width: 16px; height: 16px;"></i> Export Video (.webm)
+                                <i data-feather="download" style="width: 16px; height: 16px;"></i> Export Video (.mp4)
                             </button>
                         </div>
 
-                        <!-- Progress Bar & Status -->
-                        <div style="margin-top: 14px; width: 100%; max-width: 480px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--color-fg-muted); margin-bottom: 4px;">
-                                <span id="mcq-phase-label">Ready to Play</span>
-                                <span id="mcq-time-label">00:00 / 00:00</span>
+                        <!-- Interactive Timeline Scrubber & Section Jump Controls -->
+                        <div style="margin-top: 14px; width: 100%; max-width: 480px; background: rgba(15, 23, 42, 0.75); padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(10px); box-sizing: border-box;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--color-fg-muted); margin-bottom: 8px;">
+                                <span id="mcq-phase-label" style="font-weight: 600; color: #38bdf8;">Ready to Play</span>
+                                <span id="mcq-time-label" style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.5); padding: 3px 8px; border-radius: 6px; color: #f8fafc;">00:00 / 00:00</span>
                             </div>
-                            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                                <div id="mcq-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #38bdf8, #a855f7); transition: width 0.1s linear;"></div>
+                            
+                            <!-- Interactive Timeline Scrubber Slider -->
+                            <div style="position: relative; display: flex; align-items: center; margin-bottom: 10px;">
+                                <input type="range" id="mcq-timeline-slider" min="0" max="100" value="0" step="0.1" style="width: 100%; accent-color: #a855f7; cursor: pointer; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none;">
+                            </div>
+
+                            <!-- Fast Section Jump Buttons -->
+                            <div id="mcq-section-pills" style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center;">
                             </div>
                         </div>
                     </div>
