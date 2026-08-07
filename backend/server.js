@@ -120,7 +120,7 @@ function getGeminiApiKeys() {
     if (process.env.GEMINI_API_KEY_5) keys.push(process.env.GEMINI_API_KEY_5.trim());
     // Filter out placeholder/template keys
     const validKeys = [...new Set(keys)].filter(k =>
-        k && k.length > 20 && !k.includes('YOUR_') && !k.includes('PLACEHOLDER') && !k.startsWith('AQ.')
+        k && k.length > 20 && !k.includes('YOUR_') && !k.includes('PLACEHOLDER')
     );
     console.log(`[API Keys] Found ${validKeys.length} valid API key(s)`);
     return validKeys;
