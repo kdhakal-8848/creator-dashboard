@@ -5587,21 +5587,15 @@ function updateMCQAudioProgress(current, total, statusText = '') {
     const bar = document.getElementById('mcq-progress-bar-inner');
     const label = document.getElementById('mcq-progress-text');
     const container = document.getElementById('mcq-progress-container');
-    const playBtn = document.getElementById('mcq-play-btn');
-    const exportBtn = document.getElementById('mcq-export-btn');
 
     const pct = Math.min(100, Math.round((current / Math.max(1, total)) * 100));
 
     if (container) {
         if (pct < 100) {
             container.style.display = 'flex';
-            if (playBtn) playBtn.disabled = true;
-            if (exportBtn) exportBtn.disabled = true;
         } else {
             setTimeout(() => {
                 container.style.display = 'none';
-                if (playBtn) playBtn.disabled = false;
-                if (exportBtn) exportBtn.disabled = false;
             }, 1000);
         }
     }
@@ -6377,7 +6371,7 @@ function updateMCQEditorFields() {
 }
 
 function startMCQSequence() {
-    stopMCQSequence();
+    stopMCQSequence(true);
     mcqState.isPlaying = true;
     mcqState.phase = 'QUESTION';
     mcqState.qCharCount = 0;
@@ -6535,7 +6529,7 @@ function startMCQOutro(lang) {
     });
 }
 
-function stopMCQSequence() {
+function stopMCQSequence(keepRecorder = false) {
     mcqState.isPlaying = false;
     if (mcqState.typewriterInterval) {
         clearInterval(mcqState.typewriterInterval);
@@ -6548,13 +6542,13 @@ function stopMCQSequence() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (mcqState.animFrameId) cancelAnimationFrame(mcqState.animFrameId);
 
-    if (mcqState.mediaRecorder && mcqState.mediaRecorder.state !== 'inactive') {
+    if (!keepRecorder && mcqState.mediaRecorder && mcqState.mediaRecorder.state !== 'inactive') {
         try { mcqState.mediaRecorder.stop(); } catch(e){}
     }
-    mcqState.isExporting = false;
+    if (!keepRecorder) mcqState.isExporting = false;
 
     const phaseLabel = document.getElementById('mcq-phase-label');
-    if (phaseLabel) phaseLabel.innerText = "Stopped";
+    if (phaseLabel && !mcqState.isExporting) phaseLabel.innerText = "Stopped";
     drawMCQCanvas();
 }
 
@@ -6568,13 +6562,13 @@ async function exportMCQVideo() {
     stopMCQSequence();
     const lang = document.getElementById('mcq-language')?.value || 'Nepali';
 
-    // Pre-fetch all TTS audio buffers into memory before starting recording!
     await preloadMCQAudioDeck(lang);
 
     mcqState.isExporting = true;
+    mcqState.isPlaying = true;
     mcqState.recordedChunks = [];
 
-    const canvasStream = canvas.captureStream(30); // 30 FPS
+    const canvasStream = canvas.captureStream(30);
     const destNode = getMCQAudioDestination();
 
     const tracks = [...canvasStream.getVideoTracks()];
@@ -6584,18 +6578,19 @@ async function exportMCQVideo() {
 
     const combinedStream = new MediaStream(tracks);
 
-    // MimeType fallback selection
-    let mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
-    let fileExt = 'mp4';
+    let mimeType = 'video/webm;codecs=vp9,opus';
+    let fileExt = 'webm';
 
-    if (!MediaRecorder.isTypeSupported(mimeType)) {
+    if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
+        mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
+        fileExt = 'mp4';
+    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
         mimeType = 'video/mp4';
-    }
-    if (!MediaRecorder.isTypeSupported(mimeType)) {
+        fileExt = 'mp4';
+    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
         mimeType = 'video/webm;codecs=vp9,opus';
         fileExt = 'webm';
-    }
-    if (!MediaRecorder.isTypeSupported(mimeType)) {
+    } else if (MediaRecorder.isTypeSupported('video/webm')) {
         mimeType = 'video/webm';
         fileExt = 'webm';
     }
@@ -6603,7 +6598,7 @@ async function exportMCQVideo() {
     try {
         const recorder = new MediaRecorder(combinedStream, {
             mimeType,
-            videoBitsPerSecond: 4500000 // 4.5 Mbps HD vertical video for Reels
+            videoBitsPerSecond: 4500000
         });
         mcqState.mediaRecorder = recorder;
 
@@ -6622,19 +6617,21 @@ async function exportMCQVideo() {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
 
             mcqState.isExporting = false;
+            mcqState.isPlaying = false;
             if (phaseLabel) phaseLabel.innerText = `✅ HD Reel Exported (${fileExt.toUpperCase()} with Voiceover)! Ready for Facebook Reels.`;
         };
 
-        recorder.start(100); // 100ms timeslice to ensure continuous data chunks
+        recorder.start(100);
         startMCQSequence();
 
     } catch (err) {
         console.error("Video export error:", err);
         alert("Failed to record video stream: " + err.message);
         mcqState.isExporting = false;
+        mcqState.isPlaying = false;
     }
 }
 
