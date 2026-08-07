@@ -5578,7 +5578,13 @@ function speakMCQText(text, lang, onEnd) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, language: lang })
-    }).then(res => res.json()).then(data => {
+    }).then(res => {
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            throw new Error('TTS returned non-JSON');
+        }
+        return res.json();
+    }).then(data => {
         if (data && data.audio_url) {
             const audio = new Audio(data.audio_url);
             currentAudioEl = audio;
@@ -5663,10 +5669,13 @@ function drawMCQCanvas() {
     const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
     const brandName = activeBrand?.name || 'GROWUP LOKSEWA';
     const brandHandle = activeBrand?.handle || '@growuploksewa';
-    const brandLogoUrl = activeBrand?.logoUrl || activeBrand?.logo_url || activeBrand?.logo || activeBrand?.avatar || activeBrand?.headerAssetUrl || activeBrand?.header_asset_url;
+    const brandLogoUrl = activeBrand?.logoUrl || activeBrand?.logo_url || activeBrand?.logo || activeBrand?.avatar;
+    const brandHeaderAssetUrl = activeBrand?.headerAssetUrl || activeBrand?.header_asset_url;
+    // Prioritize the wide header asset banner; fall back to logo
+    const brandDisplayUrl = brandHeaderAssetUrl || brandLogoUrl;
 
-    if (brandLogoUrl) {
-        preloadMCQBrandLogo(brandLogoUrl);
+    if (brandDisplayUrl) {
+        preloadMCQBrandLogo(brandDisplayUrl);
     }
 
     const themeKey = document.getElementById('mcq-theme')?.value || 'loksewa_official';
@@ -5793,34 +5802,65 @@ function drawMCQCanvas() {
     ctx.fillStyle = radGlow;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Top Header Brand Pill
-    ctx.save();
-    ctx.fillStyle = t.pillBg;
-    ctx.strokeStyle = t.pillBorder;
-    ctx.lineWidth = 2;
-    const headerW = 820; const headerH = 90; const headerX = (width - headerW) / 2; const headerY = 80;
-    ctx.beginPath();
-    ctx.roundRect(headerX, headerY, headerW, headerH, 45);
-    ctx.fill();
-    ctx.stroke();
+    // 2. Top Header — Brand Asset Banner or Brand Pill
+    const hasHeaderAsset = mcqBrandLogoImg && mcqBrandLogoImg.complete && brandHeaderAssetUrl;
+    const hasLogo = mcqBrandLogoImg && mcqBrandLogoImg.complete && !brandHeaderAssetUrl;
 
-    // Render Brand Logo Image if available
-    if (mcqBrandLogoImg && mcqBrandLogoImg.complete) {
+    if (hasHeaderAsset) {
+        // Render wide header asset banner across the top
         ctx.save();
+        const imgW = mcqBrandLogoImg.naturalWidth || mcqBrandLogoImg.width;
+        const imgH = mcqBrandLogoImg.naturalHeight || mcqBrandLogoImg.height;
+        const bannerMaxW = 960;
+        const bannerMaxH = 130;
+        const scale = Math.min(bannerMaxW / imgW, bannerMaxH / imgH);
+        const drawW = imgW * scale;
+        const drawH = imgH * scale;
+        const bannerX = (width - drawW) / 2;
+        const bannerY = 40;
+
+        // Subtle shadow behind banner
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 16;
+        ctx.drawImage(mcqBrandLogoImg, bannerX, bannerY, drawW, drawH);
+        ctx.shadowBlur = 0;
+
+        // Question counter below banner
+        ctx.font = 'bold 30px "Inter", sans-serif';
+        ctx.fillStyle = t.pillText || '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, width / 2, bannerY + drawH + 28);
+        ctx.restore();
+    } else {
+        // Fallback: Brand Pill with optional small logo
+        ctx.save();
+        ctx.fillStyle = t.pillBg;
+        ctx.strokeStyle = t.pillBorder;
+        ctx.lineWidth = 2;
+        const headerW = 820; const headerH = 90; const headerX = (width - headerW) / 2; const headerY = 80;
         ctx.beginPath();
-        ctx.arc(headerX + 48, headerY + headerH / 2, 28, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 56) / 2, 56, 56);
+        ctx.roundRect(headerX, headerY, headerW, headerH, 45);
+        ctx.fill();
+        ctx.stroke();
+
+        if (hasLogo) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(headerX + 48, headerY + headerH / 2, 28, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 56) / 2, 56, 56);
+            ctx.restore();
+        }
+
+        ctx.font = 'bold 34px "Inter", sans-serif';
+        ctx.fillStyle = t.pillText;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const logoOffset = hasLogo ? 25 : 0;
+        ctx.fillText(`${brandName.toUpperCase()} • Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, (width / 2) + logoOffset, headerY + headerH / 2);
         ctx.restore();
     }
-
-    ctx.font = 'bold 34px "Inter", sans-serif';
-    ctx.fillStyle = t.pillText;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const logoOffset = (mcqBrandLogoImg && mcqBrandLogoImg.complete) ? 25 : 0;
-    ctx.fillText(`${brandName.toUpperCase()} • Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, (width / 2) + logoOffset, headerY + headerH / 2);
-    ctx.restore();
 
     // 3. Question Card Container (Height expanded to 440px)
     ctx.save();
@@ -6179,11 +6219,85 @@ function revealMCQAnswer(lang, qData) {
     const speakText = `सही उत्तर: ${qData.correct_option}। ${qData.explanation}`;
     speakMCQText(speakText, lang, () => {
         mcqState.expCharCount = qData.explanation.length;
-        if (phaseLabel) phaseLabel.innerText = "Playback Complete";
-        if (mcqState.isExporting && mcqState.mediaRecorder) {
+
+        // Check if there are more questions to advance to
+        const nextIdx = mcqState.currentIndex + 1;
+        const totalQuestions = mcqState.questions.length;
+
+        if (nextIdx < totalQuestions) {
+            // Auto-advance to next question after a brief pause
+            if (phaseLabel) phaseLabel.innerText = `Moving to Q${nextIdx + 1}/${totalQuestions}...`;
             setTimeout(() => {
-                try { mcqState.mediaRecorder.stop(); } catch(e){}
-            }, 1000);
+                if (!mcqState.isPlaying) return;
+                mcqState.currentIndex = nextIdx;
+                mcqState.phase = 'QUESTION';
+                mcqState.qCharCount = 0;
+                mcqState.optCharCounts = [0, 0, 0, 0];
+                mcqState.countdownSec = 3;
+                mcqState.countdownArc = 1.0;
+                mcqState.expCharCount = 0;
+                updateMCQEditorFields();
+                drawMCQCanvas();
+
+                // Play transition beep
+                playMCQBeep(600, 150);
+
+                // Start the next question sequence
+                const nextQData = mcqState.questions[mcqState.currentIndex];
+                const nextLang = document.getElementById('mcq-language')?.value || 'Nepali';
+
+                if (phaseLabel) phaseLabel.innerText = `Phase 1: Question ${nextIdx + 1}/${totalQuestions} Typewriter & Voiceover`;
+
+                // Typewriter animation for next question
+                const qInterval = setInterval(() => {
+                    if (mcqState.qCharCount < nextQData.question.length) {
+                        mcqState.qCharCount++;
+                        drawMCQCanvas();
+                    } else {
+                        clearInterval(qInterval);
+                    }
+                }, 45);
+
+                speakMCQText(nextQData.question, nextLang, () => {
+                    if (!mcqState.isPlaying) return;
+                    mcqState.phase = 'OPTIONS';
+                    mcqState.qCharCount = nextQData.question.length;
+                    if (phaseLabel) phaseLabel.innerText = `Phase 2: Q${nextIdx + 1} Options Display`;
+
+                    let optIdx = 0;
+                    function animateNextOption() {
+                        if (!mcqState.isPlaying) return;
+                        if (optIdx < 4) {
+                            const text = nextQData.options[optIdx] || '';
+                            const oInt = setInterval(() => {
+                                if (mcqState.optCharCounts[optIdx] < text.length) {
+                                    mcqState.optCharCounts[optIdx]++;
+                                    drawMCQCanvas();
+                                } else {
+                                    clearInterval(oInt);
+                                }
+                            }, 30);
+
+                            speakMCQText(text, nextLang, () => {
+                                mcqState.optCharCounts[optIdx] = text.length;
+                                optIdx++;
+                                setTimeout(animateNextOption, 300);
+                            });
+                        } else {
+                            startMCQCountdown(nextLang, nextQData);
+                        }
+                    }
+                    animateNextOption();
+                });
+            }, 2000);
+        } else {
+            // All questions completed
+            if (phaseLabel) phaseLabel.innerText = `✅ All ${totalQuestions} Questions Complete!`;
+            if (mcqState.isExporting && mcqState.mediaRecorder) {
+                setTimeout(() => {
+                    try { mcqState.mediaRecorder.stop(); } catch(e){}
+                }, 1000);
+            }
         }
     });
 }
@@ -6281,6 +6395,14 @@ function initMCQVideoStudio() {
                     brand_context: getBrandContext(activeBrand)
                 })
             });
+
+            // Guard against non-JSON responses (e.g. HTML error pages from Render)
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const rawText = await response.text();
+                console.error("MCQ endpoint returned non-JSON:", rawText.substring(0, 200));
+                throw new Error('Server returned non-JSON response. The backend may still be deploying — please try again in 1-2 minutes.');
+            }
 
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to generate MCQ');

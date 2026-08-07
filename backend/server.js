@@ -1224,36 +1224,45 @@ app.post('/generate-tts', async (req, res) => {
 
         const lang = language || 'Nepali';
         const langCodeMap = {
-            'Nepali': 'ne',
-            'English': 'en',
-            'Hindi': 'hi'
+            'Nepali': 'ne-NP',
+            'English': 'en-US',
+            'Hindi': 'hi-IN'
         };
-        const targetLangCode = langCodeMap[lang] || 'ne';
+        const targetLangCode = langCodeMap[lang] || 'ne-NP';
+        const shortLangCode = targetLangCode.split('-')[0]; // ne, en, hi
 
-        // Use existing Gemini API Key!
-        const geminiApiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY || process.env.GOOGLE_TTS_API_KEY;
+        // Use existing Gemini API Key
+        const geminiApiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY;
 
         if (geminiApiKey) {
             try {
                 const ttsModel = 'gemini-2.5-flash-preview-tts';
-                const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${geminiApiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: `Read this text aloud naturally with clear pronunciation and warm intonation: ${text.substring(0, 500)}` }]
-                        }],
-                        generationConfig: {
-                            responseModalities: ['AUDIO'],
-                            speechConfig: {
-                                voiceConfig: {
-                                    prebuiltVoiceConfig: {
-                                        voiceName: 'Kore'
-                                    }
+                // Use Aoede for warm, natural South Asian language delivery
+                const voiceName = 'Aoede';
+                const trimmedText = text.substring(0, 500);
+
+                const requestBody = {
+                    contents: [{
+                        parts: [{ text: `Say the following ${lang} text exactly as written, naturally and clearly, as a native ${lang} speaker would: "${trimmedText}"` }]
+                    }],
+                    generationConfig: {
+                        responseModalities: ['AUDIO'],
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: {
+                                    voiceName: voiceName
                                 }
                             }
                         }
-                    })
+                    }
+                };
+
+                console.log(`[/generate-tts] Requesting Gemini TTS: voice=${voiceName}, lang=${lang}, text="${trimmedText.substring(0, 60)}..."`);
+
+                const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${geminiApiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
                 });
 
                 const gData = await gRes.json();
@@ -1263,27 +1272,29 @@ app.post('/generate-tts', async (req, res) => {
                         const pcmBuf = Buffer.from(audioPart.inlineData.data, 'base64');
                         const wavBuf = pcmToWav(pcmBuf, 24000);
                         const wavBase64 = wavBuf.toString('base64');
-                        console.log(`[/generate-tts] Successfully synthesized Gemini AI voice (${lang}, ${wavBuf.length} bytes)`);
+                        console.log(`[/generate-tts] ✅ Gemini AI voice synthesized (${lang}, voice=${voiceName}, ${wavBuf.length} bytes)`);
                         return res.json({
                             success: true,
                             audio_url: `data:audio/wav;base64,${wavBase64}`,
                             provider: 'gemini_ai_tts'
                         });
                     }
-                } else {
-                    console.warn("Gemini API TTS response warning:", JSON.stringify(gData).substring(0, 180));
                 }
+                // Log the error detail
+                const errDetail = JSON.stringify(gData).substring(0, 300);
+                console.warn(`[/generate-tts] Gemini TTS returned no audio. Status: ${gRes.status}, Detail: ${errDetail}`);
             } catch (ge) {
-                console.warn("Gemini Native TTS failed, falling back:", ge.message);
+                console.warn("[/generate-tts] Gemini Native TTS failed, falling back:", ge.message);
             }
         }
 
-        // Fallback: Natural Voice Engine Stream URL
-        const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.substring(0, 300))}&tl=${targetLangCode}&client=tw-ob`;
+        // Fallback: Google Translate TTS stream (supports Nepali well)
+        const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.substring(0, 300))}&tl=${shortLangCode}&client=tw-ob`;
+        console.log(`[/generate-tts] Using Google Translate TTS fallback for ${lang}`);
         res.json({
             success: true,
             audio_url: fallbackUrl,
-            provider: 'google_voice_stream'
+            provider: 'google_translate_tts'
         });
 
     } catch (err) {
