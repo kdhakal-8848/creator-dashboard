@@ -5648,49 +5648,72 @@ async function preloadMCQAudioDeck(lang) {
     updateMCQAudioProgress(total, total, `✅ Voice Narration Ready! (100%) Instant Playback & Export Enabled.`);
 }
 
-async function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
+async function speakMCQText(text, lang, onEnd, onTypewriterProgress, prefixLen = 0) {
     if (!text) {
-        if (onTypewriterProgress) onTypewriterProgress(0);
+        if (onTypewriterProgress) onTypewriterProgress(0, 1.0);
         if (onEnd) onEnd();
         return;
     }
 
     stopCurrentMCQAudio();
     if (mcqState.typewriterInterval) {
-        clearInterval(mcqState.typewriterInterval);
+        if (typeof mcqState.typewriterInterval === 'number') {
+            cancelAnimationFrame(mcqState.typewriterInterval);
+            clearInterval(mcqState.typewriterInterval);
+        }
         mcqState.typewriterInterval = null;
     }
 
-    if (onTypewriterProgress) onTypewriterProgress(0);
+    if (onTypewriterProgress) onTypewriterProgress(0, 0);
 
     let handled = false;
 
-    const startTypewriter = (estDurationMs) => {
+    const startTypewriterLoop = (durMs) => {
         if (!onTypewriterProgress) return;
-        let charIdx = 0;
+        
+        const startTime = mcqAudioCtx ? mcqAudioCtx.currentTime : (performance.now() / 1000);
         const totalLen = text.length;
-        const stepMs = Math.max(15, Math.floor(estDurationMs / Math.max(1, totalLen)));
 
-        if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
-        mcqState.typewriterInterval = setInterval(() => {
-            if (charIdx < totalLen) {
-                charIdx++;
-                onTypewriterProgress(charIdx);
+        function step() {
+            if (handled) return;
+            const now = mcqAudioCtx ? mcqAudioCtx.currentTime : (performance.now() / 1000);
+            const elapsedMs = Math.max(0, (now - startTime) * 1000);
+            const ratio = Math.min(1.0, elapsedMs / Math.max(1, durMs));
+
+            let charCount = 0;
+            if (prefixLen > 0 && totalLen > prefixLen) {
+                const prefixRatio = prefixLen / totalLen;
+                if (ratio < prefixRatio) {
+                    charCount = 0;
+                } else {
+                    const expRatio = (ratio - prefixRatio) / (1 - prefixRatio);
+                    const mainLen = totalLen - prefixLen;
+                    charCount = Math.min(mainLen, Math.floor(expRatio * mainLen));
+                }
             } else {
-                clearInterval(mcqState.typewriterInterval);
-                mcqState.typewriterInterval = null;
+                charCount = Math.min(totalLen, Math.floor(ratio * totalLen));
             }
-        }, stepMs);
+
+            onTypewriterProgress(charCount, ratio);
+
+            if (ratio < 1.0) {
+                mcqState.typewriterInterval = requestAnimationFrame(step);
+            }
+        }
+
+        mcqState.typewriterInterval = requestAnimationFrame(step);
     };
 
     const finish = () => {
         if (!handled) {
             handled = true;
             if (mcqState.typewriterInterval) {
+                cancelAnimationFrame(mcqState.typewriterInterval);
                 clearInterval(mcqState.typewriterInterval);
                 mcqState.typewriterInterval = null;
             }
-            if (onTypewriterProgress) onTypewriterProgress(text.length);
+            const targetLen = (prefixLen > 0 && text.length > prefixLen) ? (text.length - prefixLen) : text.length;
+            if (onTypewriterProgress) onTypewriterProgress(targetLen, 1.0);
             if (onEnd) onEnd();
         }
     };
@@ -5706,21 +5729,22 @@ async function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
             currentAudioEl = source;
 
             const durMs = audioBuffer.duration * 1000;
-            startTypewriter(durMs);
+            startTypewriterLoop(durMs);
 
             source.onended = () => finish();
             source.start(0);
         } else {
-            fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
+            fallbackWebSpeech(text, lang, finish, onTypewriterProgress, prefixLen);
         }
     } catch (e) {
-        fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
+        fallbackWebSpeech(text, lang, finish, onTypewriterProgress, prefixLen);
     }
 }
 
-function fallbackWebSpeech(text, lang, onEnd, onTypewriterProgress) {
+function fallbackWebSpeech(text, lang, onEnd, onTypewriterProgress, prefixLen = 0) {
     if (!window.speechSynthesis) {
-        if (onTypewriterProgress) onTypewriterProgress(text.length);
+        const targetLen = (prefixLen > 0 && text.length > prefixLen) ? (text.length - prefixLen) : text.length;
+        if (onTypewriterProgress) onTypewriterProgress(targetLen, 1.0);
         if (onEnd) onEnd();
         return;
     }
@@ -5734,36 +5758,58 @@ function fallbackWebSpeech(text, lang, onEnd, onTypewriterProgress) {
     const v = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi') || v.lang.includes('en'));
     if (v) utter.voice = v;
 
-    let charIdx = 0;
+    let handled = false;
     const totalLen = text.length;
     const estDurationMs = Math.max(2500, totalLen * 130);
-    const stepMs = Math.max(20, Math.floor(estDurationMs / Math.max(1, totalLen)));
 
-    utter.onstart = () => {
-        if (onTypewriterProgress) {
-            if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
-            mcqState.typewriterInterval = setInterval(() => {
-                if (charIdx < totalLen) {
-                    charIdx++;
-                    onTypewriterProgress(charIdx);
-                } else {
-                    clearInterval(mcqState.typewriterInterval);
-                    mcqState.typewriterInterval = null;
-                }
-            }, stepMs);
+    const finish = () => {
+        if (!handled) {
+            handled = true;
+            if (mcqState.typewriterInterval) {
+                cancelAnimationFrame(mcqState.typewriterInterval);
+                clearInterval(mcqState.typewriterInterval);
+                mcqState.typewriterInterval = null;
+            }
+            const targetLen = (prefixLen > 0 && text.length > prefixLen) ? (text.length - prefixLen) : text.length;
+            if (onTypewriterProgress) onTypewriterProgress(targetLen, 1.0);
+            if (onEnd) onEnd();
         }
     };
 
-    utter.onend = () => {
-        if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
-        if (onTypewriterProgress) onTypewriterProgress(totalLen);
-        if (onEnd) onEnd();
+    utter.onstart = () => {
+        if (!onTypewriterProgress) return;
+        const startTime = performance.now();
+
+        function step() {
+            if (handled) return;
+            const elapsedMs = Math.max(0, performance.now() - startTime);
+            const ratio = Math.min(1.0, elapsedMs / estDurationMs);
+
+            let charCount = 0;
+            if (prefixLen > 0 && totalLen > prefixLen) {
+                const prefixRatio = prefixLen / totalLen;
+                if (ratio < prefixRatio) {
+                    charCount = 0;
+                } else {
+                    const expRatio = (ratio - prefixRatio) / (1 - prefixRatio);
+                    const mainLen = totalLen - prefixLen;
+                    charCount = Math.min(mainLen, Math.floor(expRatio * mainLen));
+                }
+            } else {
+                charCount = Math.min(totalLen, Math.floor(ratio * totalLen));
+            }
+
+            onTypewriterProgress(charCount, ratio);
+
+            if (ratio < 1.0) {
+                mcqState.typewriterInterval = requestAnimationFrame(step);
+            }
+        }
+        mcqState.typewriterInterval = requestAnimationFrame(step);
     };
-    utter.onerror = () => {
-        if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
-        if (onTypewriterProgress) onTypewriterProgress(totalLen);
-        if (onEnd) onEnd();
-    };
+
+    utter.onend = () => finish();
+    utter.onerror = () => finish();
 
     window.speechSynthesis.speak(utter);
 }
@@ -6488,31 +6534,40 @@ function revealMCQAnswer(lang, qData) {
     // Play Victory Chime Sound
     playMCQBeep(1200, 400);
 
-    const speakText = `सही उत्तर: ${qData.correct_option}। ${qData.explanation}`;
+    const speakText = getMCQExplanationText(qData);
+    let correctStr = qData.correct_option || '';
+    if ((!correctStr || correctStr.length <= 3) && qData.options && qData.correct_index !== undefined && qData.options[qData.correct_index]) {
+        correctStr = qData.options[qData.correct_index];
+    }
+    const prefix = `सही उत्तर: ${correctStr}। `;
+    const prefixLen = prefix.length;
+
     speakMCQText(speakText, lang, () => {
-        mcqState.expCharCount = qData.explanation.length;
+        mcqState.expCharCount = qData.explanation ? qData.explanation.length : 0;
 
         // Check if there are more questions to advance to
         const nextIdx = mcqState.currentIndex + 1;
         const totalQuestions = mcqState.questions.length;
 
-        if (nextIdx < totalQuestions) {
-            if (phaseLabel) phaseLabel.innerText = `Moving to Question ${nextIdx + 1}/${totalQuestions}...`;
-            setTimeout(() => {
-                if (!mcqState.isPlaying) return;
+        // 1.5 seconds reading pause so user can comfortably read full explanation after audio completes
+        setTimeout(() => {
+            if (!mcqState.isPlaying) return;
+
+            if (nextIdx < totalQuestions) {
+                if (phaseLabel) phaseLabel.innerText = `Moving to Question ${nextIdx + 1}/${totalQuestions}...`;
                 mcqState.currentIndex = nextIdx;
                 updateMCQEditorFields();
                 playMCQBeep(600, 150);
                 startMCQSequence();
-            }, 2000);
-        } else {
-            // All questions finished -> Proceed to Outro Clip!
-            startMCQOutro(lang);
-        }
+            } else {
+                // All questions finished -> Proceed to Outro Clip!
+                startMCQOutro(lang);
+            }
+        }, 1500);
     }, (charCount) => {
         mcqState.expCharCount = charCount;
         drawMCQCanvas();
-    });
+    }, prefixLen);
 }
 
 function startMCQOutro(lang) {
