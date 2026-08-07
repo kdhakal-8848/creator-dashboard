@@ -5640,23 +5640,28 @@ async function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
         }
     };
 
-            audio.onended = () => finish();
-            audio.onerror = () => fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
-            audio.onplay = () => {
-                const durMs = (audio.duration && !isNaN(audio.duration) && audio.duration > 0)
-                    ? audio.duration * 1000
-                    : text.length * 120;
-                startTypewriter(durMs);
-            };
-            audio.play().catch(() => fallbackWebSpeech(text, lang, finish, onTypewriterProgress));
-            // Safety timeout
-            setTimeout(() => finish(), Math.max(4000, text.length * 180));
+    try {
+        const audioBuffer = await fetchAudioBuffer(text, lang);
+        if (audioBuffer && mcqAudioCtx) {
+            const source = mcqAudioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            const dest = getMCQAudioDestination();
+            source.connect(dest);
+            source.connect(mcqAudioCtx.destination);
+            currentAudioEl = source;
+
+            const durMs = audioBuffer.duration * 1000;
+            startTypewriter(durMs);
+
+            source.onended = () => finish();
+            source.start(0);
+            setTimeout(() => finish(), Math.max(2000, durMs + 500));
         } else {
             fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
         }
-    }).catch(() => {
+    } catch (e) {
         fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
-    });
+    }
 }
 
 function fallbackWebSpeech(text, lang, onEnd, onTypewriterProgress) {
