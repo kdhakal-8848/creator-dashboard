@@ -5663,7 +5663,7 @@ function drawMCQCanvas() {
     const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
     const brandName = activeBrand?.name || 'GROWUP LOKSEWA';
     const brandHandle = activeBrand?.handle || '@growuploksewa';
-    const brandLogoUrl = activeBrand?.logo_url || activeBrand?.logo || activeBrand?.avatar;
+    const brandLogoUrl = activeBrand?.logoUrl || activeBrand?.logo_url || activeBrand?.logo || activeBrand?.avatar || activeBrand?.headerAssetUrl || activeBrand?.header_asset_url;
 
     if (brandLogoUrl) {
         preloadMCQBrandLogo(brandLogoUrl);
@@ -5672,21 +5672,23 @@ function drawMCQCanvas() {
     const themeKey = document.getElementById('mcq-theme')?.value || 'loksewa_official';
     const themes = {
         loksewa_official: {
-            bgGrad: ['#0a1128', '#1b2a4a', '#070d1e'],
-            glow: 'rgba(220, 20, 60, 0.4)',
-            pillBg: 'rgba(220, 20, 60, 0.18)',
-            pillBorder: 'rgba(220, 20, 60, 0.6)',
-            pillText: '#fbbf24',
-            qBoxBg: 'rgba(10, 25, 47, 0.92)',
-            qBoxBorder: 'rgba(220, 20, 60, 0.6)',
-            qAccent: '#dc143c',
-            qLabel: '#fbbf24',
-            optCardBg: 'rgba(15, 32, 67, 0.85)',
-            optCardBorder: 'rgba(220, 20, 60, 0.35)',
-            badgeBg: '#dc143c',
+            bgGrad: ['#0d1b3e', '#0d47a1', '#071230'],
+            glow: 'rgba(198, 40, 40, 0.35)',
+            pillBg: 'rgba(255, 255, 255, 0.95)',
+            pillBorder: 'rgba(13, 71, 161, 0.8)',
+            pillText: '#0d47a1',
+            qBoxBg: 'rgba(255, 255, 255, 0.95)',
+            qBoxBorder: 'rgba(198, 40, 40, 0.7)',
+            qAccent: '#c62828',
+            qLabel: '#0d47a1',
+            qTextColor: '#1a1a2e',
+            optCardBg: 'rgba(255, 255, 255, 0.92)',
+            optCardBorder: 'rgba(13, 71, 161, 0.4)',
+            optTextColor: '#1a1a2e',
+            badgeBg: '#c62828',
             badgeText: '#ffffff',
-            cdStroke: '#fbbf24',
-            cdText: '#fbbf24'
+            cdStroke: '#ffc107',
+            cdText: '#ffc107'
         },
         midnight: {
             bgGrad: ['#0b0f19', '#1e1b4b', '#090d16'],
@@ -5848,7 +5850,7 @@ function drawMCQCanvas() {
     // Typewriter Question Text (Large 54px bold font)
     const visibleQText = qData ? qData.question.substring(0, mcqState.qCharCount) : '';
     ctx.font = '700 54px "Mukta", "Inter", sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = t.qTextColor || '#ffffff';
     const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 80);
     let qLineY = qBoxY + 130;
     qLines.forEach(line => {
@@ -5884,8 +5886,8 @@ function drawMCQCanvas() {
                 ctx.shadowBlur = 35;
             } else if (isAnswerPhase && !isCorrect) {
                 // Dim non-correct options
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.fillStyle = t.optTextColor ? 'rgba(230, 230, 235, 0.7)' : 'rgba(15, 23, 42, 0.4)';
+                ctx.strokeStyle = t.optTextColor ? 'rgba(200, 200, 210, 0.3)' : 'rgba(255, 255, 255, 0.05)';
                 ctx.lineWidth = 2;
             } else {
                 // Standard option card state
@@ -5902,7 +5904,7 @@ function drawMCQCanvas() {
             const badgeR = 37;
             ctx.beginPath();
             ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.1)' : t.badgeBg);
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(200,200,210,0.4)' : 'rgba(255,255,255,0.1)') : t.badgeBg);
             ctx.fill();
 
             ctx.font = 'bold 42px "Inter", sans-serif';
@@ -5916,7 +5918,7 @@ function drawMCQCanvas() {
             const charCount = mcqState.optCharCounts[idx] || 0;
             const visibleOptText = optText.substring(0, charCount);
             ctx.font = '600 42px "Mukta", "Inter", sans-serif';
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.4)' : '#f8fafc');
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(100,100,120,0.5)' : 'rgba(255,255,255,0.4)') : (t.optTextColor || '#f8fafc'));
             ctx.textAlign = 'left';
             ctx.fillText(visibleOptText, qBoxX + 120, badgeY);
 

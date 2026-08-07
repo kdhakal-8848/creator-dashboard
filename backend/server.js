@@ -1111,6 +1111,10 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
         const aiRes = await generateAIContent(prompt, { jsonMode: true });
         let rawText = aiRes.response.text();
         rawText = cleanJsonString(rawText);
+        // Additional sanitization for control characters and unicode issues
+        rawText = rawText.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+        // Remove any BOM or zero-width chars
+        rawText = rawText.replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
 
         let parsed;
         try {
@@ -1237,10 +1241,17 @@ app.post('/generate-tts', async (req, res) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{
-                            parts: [{ text: `Synthesize audio for the following text transcript: ${text.substring(0, 500)}` }]
+                            parts: [{ text: `Read this text aloud naturally with clear pronunciation and warm intonation: ${text.substring(0, 500)}` }]
                         }],
                         generationConfig: {
-                            responseModalities: ['AUDIO']
+                            responseModalities: ['AUDIO'],
+                            speechConfig: {
+                                voiceConfig: {
+                                    prebuiltVoiceConfig: {
+                                        voiceName: 'Kore'
+                                    }
+                                }
+                            }
                         }
                     })
                 });
