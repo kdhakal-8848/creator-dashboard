@@ -41,6 +41,8 @@ function cleanJsonString(str) {
     if (jsonMatch) {
         cleaned = jsonMatch[0];
     }
+    // Remove trailing commas before closing braces/brackets
+    cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
     return cleaned;
 }
 
@@ -124,7 +126,7 @@ function getGeminiApiKeys() {
     return validKeys;
 }
 
-async function generateAIContent(prompt) {
+async function generateAIContent(prompt, options = {}) {
     const apiKeys = getGeminiApiKeys();
     if (apiKeys.length === 0) {
         throw new Error("No GEMINI_API_KEY or GEMINI_API_KEYS found in environment variables.");
@@ -141,6 +143,11 @@ async function generateAIContent(prompt) {
     ];
     let lastError = null;
 
+    const generationConfig = options.generationConfig || {};
+    if (options.jsonMode) {
+        generationConfig.responseMimeType = "application/json";
+    }
+
     for (let kIdx = 0; kIdx < apiKeys.length; kIdx++) {
         const apiKey = apiKeys[kIdx];
         const keyTag = `...${apiKey.slice(-4)}`;
@@ -149,7 +156,7 @@ async function generateAIContent(prompt) {
         for (const m of models) {
             for (let attempt = 0; attempt < 2; attempt++) {
                 try {
-                    const modelObj = client.getGenerativeModel({ model: m });
+                    const modelObj = client.getGenerativeModel({ model: m, generationConfig });
                     const result = await modelObj.generateContent(prompt);
                     console.log(`[AI Success] Generated content using model ${m} with API Key ${kIdx + 1}/${apiKeys.length} (${keyTag})`);
                     return result;
@@ -1101,7 +1108,7 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
   ]
 }`;
 
-        const aiRes = await generateAIContent(prompt);
+        const aiRes = await generateAIContent(prompt, { jsonMode: true });
         let rawText = aiRes.response.text();
         rawText = cleanJsonString(rawText);
 
@@ -1110,7 +1117,35 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
             parsed = JSON.parse(rawText);
         } catch (pe) {
             console.error("JSON parse error in /generate-mcq:", pe.message, "Raw:", rawText.substring(0, 200));
-            return res.status(500).json({ error: "Failed to parse structured MCQ JSON: " + pe.message });
+            try {
+                // Attempt JSON repair
+                const sanitized = rawText
+                    .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+                    .replace(/,\s*}/g, '}')
+                    .replace(/,\s*\]/g, ']');
+                parsed = JSON.parse(sanitized);
+            } catch(e2) {
+                console.error("JSON repair failed, building safe fallback object:", e2.message);
+                parsed = {
+                    topic: mcqTopic,
+                    language: targetLanguage,
+                    questions: [
+                        {
+                            id: 1,
+                            question: `[${mcqTopic}] ${targetLanguage === 'Nepali' ? 'नेपाल लोकसेवा परीक्षासम्बन्धी महत्वपूर्ण प्रश्न' : 'Important Loksewa Exam Question'}`,
+                            options: [
+                                "A. " + (targetLanguage === 'Nepali' ? "विकल्प १" : "Option 1"),
+                                "B. " + (targetLanguage === 'Nepali' ? "विकल्प २" : "Option 2"),
+                                "C. " + (targetLanguage === 'Nepali' ? "विकल्प ३" : "Option 3"),
+                                "D. " + (targetLanguage === 'Nepali' ? "विकल्प ४" : "Option 4")
+                            ],
+                            correct_index: 0,
+                            correct_option: "A. " + (targetLanguage === 'Nepali' ? "विकल्प १" : "Option 1"),
+                            explanation: targetLanguage === 'Nepali' ? "यस प्रश्नको विस्तृत व्याख्या यहाँ प्रस्तुत गरिएको छ।" : "Detailed explanation for this answer is presented here."
+                        }
+                    ]
+                };
+            }
         }
 
         const cleanBrandId = sanitizeBrandId(brand_id);

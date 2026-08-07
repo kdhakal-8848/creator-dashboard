@@ -5669,8 +5669,25 @@ function drawMCQCanvas() {
         preloadMCQBrandLogo(brandLogoUrl);
     }
 
-    const themeKey = document.getElementById('mcq-theme')?.value || 'midnight';
+    const themeKey = document.getElementById('mcq-theme')?.value || 'loksewa_official';
     const themes = {
+        loksewa_official: {
+            bgGrad: ['#0a1128', '#1b2a4a', '#070d1e'],
+            glow: 'rgba(220, 20, 60, 0.4)',
+            pillBg: 'rgba(220, 20, 60, 0.18)',
+            pillBorder: 'rgba(220, 20, 60, 0.6)',
+            pillText: '#fbbf24',
+            qBoxBg: 'rgba(10, 25, 47, 0.92)',
+            qBoxBorder: 'rgba(220, 20, 60, 0.6)',
+            qAccent: '#dc143c',
+            qLabel: '#fbbf24',
+            optCardBg: 'rgba(15, 32, 67, 0.85)',
+            optCardBorder: 'rgba(220, 20, 60, 0.35)',
+            badgeBg: '#dc143c',
+            badgeText: '#ffffff',
+            cdStroke: '#fbbf24',
+            cdText: '#fbbf24'
+        },
         midnight: {
             bgGrad: ['#0b0f19', '#1e1b4b', '#090d16'],
             glow: 'rgba(147, 51, 234, 0.3)',
