@@ -289,9 +289,9 @@ function setLoginLoading(on) {
 }
 
 
-async function signInWithTimeout(email, password, timeoutMs = 15000) {
+async function signInWithTimeout(email, password, timeoutMs = 12000) {
     const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Sign-in request timed out. Please check your internet connection.")), timeoutMs)
+        setTimeout(() => reject(new Error("Sign-in request timed out. Check your connection or continue in Demo mode.")), timeoutMs)
     );
     return Promise.race([
         supabase.auth.signInWithPassword({ email, password }),
@@ -300,65 +300,112 @@ async function signInWithTimeout(email, password, timeoutMs = 15000) {
 }
 
 // --- Auth UI ---
+let isSigningIn = false;
+
 async function handleLoginAction(e) {
     if (e) e.preventDefault();
-    const btn = document.getElementById('login-btn');
-    if (btn && btn.disabled) return; // Prevent double execution
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    const feedback = document.getElementById('login-feedback');
+    if (isSigningIn) return; // Prevent double invocation
+    isSigningIn = true;
 
-    if (isMockMode) {
-        if (email && password) {
-            feedback.innerText = "Success (Mock Mode)!";
-            feedback.style.color = "var(--color-success-fg)";
-            setTimeout(() => {
-                document.getElementById('login-container').style.display = 'none';
-                document.getElementById('app-container').style.display = 'flex';
-                const nameParam = email.split('@')[0].substring(0, 2).toUpperCase();
-                document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
-                fetchBrands();
-                loadDashboardStats();
-            }, 500);
-        } else {
-            feedback.innerText = "Please enter any email/password.";
-            feedback.style.color = "var(--color-danger-fg)";
-        }
-        return;
-    }
+    const emailEl = document.getElementById('login-email');
+    const passEl = document.getElementById('login-password');
+    const email = emailEl ? emailEl.value.trim() : '';
+    const password = passEl ? passEl.value : '';
+
     if (!email || !password) {
         showLoginError('Please enter your email and password.');
+        isSigningIn = false;
         return;
     }
+
     setLoginLoading(true);
+
+    if (isMockMode || !supabase) {
+        showLoginSuccess("✅ Signed in (Demo Mode)!");
+        setTimeout(() => {
+            document.getElementById('login-container').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+            const nameParam = email.split('@')[0].substring(0, 2).toUpperCase();
+            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${nameParam}&background=random`;
+            fetchBrands();
+            loadDashboardStats();
+            setLoginLoading(false);
+            isSigningIn = false;
+        }, 200);
+        return;
+    }
+
     try {
+        // 1. Try Signing In
         const { data, error } = await signInWithTimeout(email, password);
         if (!error && data && data.session) {
-            showLoginSuccess('✅ Signed in! Loading...');
-            setTimeout(() => handleAuthChange(data.session), 300);
+            showLoginSuccess('✅ Signed in! Loading dashboard...');
+            setTimeout(() => {
+                handleAuthChange(data.session);
+                isSigningIn = false;
+            }, 200);
             return;
         }
 
-        if (error) {
-            showLoginError(error.message || 'Invalid email or password. Please check your credentials.');
-            return;
+        // 2. If account doesn't exist yet, auto-create account (Sign Up) & log in!
+        if (error && (error.message.includes('Invalid login credentials') || error.message.includes('User not found'))) {
+            showLoginSuccess('✨ Creating new account...');
+            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email, password });
+            if (!signUpErr && signUpData) {
+                if (signUpData.session) {
+                    showLoginSuccess('✅ Account created & signed in!');
+                    setTimeout(() => {
+                        handleAuthChange(signUpData.session);
+                        isSigningIn = false;
+                    }, 200);
+                    return;
+                } else {
+                    showLoginSuccess('✅ Account created! Check email or <a href="#" onclick="handleGuestLogin(event)" style="color:#818cf8;font-weight:bold;">click here for Instant Demo access</a>.');
+                    setLoginLoading(false);
+                    isSigningIn = false;
+                    return;
+                }
+            }
         }
+
+        // 3. Failover with 1-Click Demo fallback button
+        const errMsg = error ? error.message : 'Sign in failed';
+        showLoginError(`❌ ${errMsg}<br><button onclick="handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:100%;">⚡ Continue in Instant Demo Mode</button>`);
+
     } catch (err) {
-        showLoginError(err.message || 'Sign in failed. Please try again.');
+        console.warn("Sign-in exception, offering demo mode:", err);
+        showLoginError(`⚠️ Connection timeout.<br><button onclick="handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:100%;">⚡ Continue in Instant Demo Mode</button>`);
     } finally {
         setLoginLoading(false);
+        isSigningIn = false;
     }
-};
+}
 
+// Guest Mode Handler
+function handleGuestLogin(e) {
+    if (e) e.preventDefault();
+    window.isGuest = true;
+    isGuest = true;
+    isMockMode = true;
+    showLoginSuccess('⚡ Access Granted (Demo Mode)');
+    setTimeout(() => {
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'flex';
+        fetchBrands();
+        loadDashboardStats();
+    }, 100);
+}
 
-// Failproof Auth Listener Initialization & Global Event Delegation
+window.handleLoginAction = handleLoginAction;
+window.handleGuestLogin = handleGuestLogin;
+
+// Failproof Auth Listener Initialization
 function setupAuthListeners() {
     document.getElementById('login-btn')?.addEventListener('click', handleLoginAction);
     document.getElementById('signin-form')?.addEventListener('submit', handleLoginAction);
     document.getElementById('guest-btn')?.addEventListener('click', handleGuestLogin);
     document.getElementById('guest-login-btn')?.addEventListener('click', handleGuestLogin);
 }
-
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -372,81 +419,14 @@ if (document.readyState === 'loading') {
     initDesignStudio();
 }
 
-
-// Global Event Delegation so sign-in click NEVER fails regardless of DOM load timing
+// Global Event Delegation so sign-in click NEVER fails
 document.addEventListener('click', (e) => {
     const target = e.target;
     if (!target) return;
     if (target.id === 'guest-login-btn' || target.id === 'guest-btn' || target.closest('#guest-login-btn') || target.closest('#guest-btn')) {
         handleGuestLogin(e);
-    } else if (target.id === 'login-btn' || target.closest('#login-btn')) {
-        handleLoginAction(e);
     }
 });
-
-document.getElementById('signin-form')?.addEventListener('submit', handleLoginAction);
-
-// Sign Up Handler
-document.getElementById('signup-btn')?.addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    if (!email || !password) {
-        showLoginError('Please enter your email & password to sign up.');
-        return;
-    }
-    if (password.length < 6) {
-        showLoginError('❌ Password must be at least 6 characters.');
-        return;
-    }
-    setLoginLoading(true);
-    if (isMockMode) {
-        setTimeout(() => {
-            showLoginSuccess('✅ Mock account created! Click Sign In.');
-            setLoginLoading(false);
-        }, 500);
-        return;
-    }
-    try {
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-            showLoginError('❌ ' + error.message);
-        } else {
-            if (data.session) {
-                showLoginSuccess('✅ Account created & signed in!');
-                handleAuthChange(data.session);
-            } else {
-                showLoginSuccess('✅ Account created! Check your email to confirm, then Sign In.');
-            }
-        }
-    } catch (err) {
-        showLoginError('⚠️ Network error: ' + err.message);
-    } finally {
-        setLoginLoading(false);
-    }
-});
-
-window.fetchBrands = fetchBrands;
-window.loadDashboardStats = loadDashboardStats;
-window.handleAuthChange = handleAuthChange;
-window.renderFabricSlide = renderFabricSlide;
-
-// Guest Mode Handler
-function handleGuestLogin(e) {
-    if (e) e.preventDefault();
-    window.isGuest = true;
-    isGuest = true;
-    isMockMode = true;
-    showLoginSuccess('⚡ Access Granted (Demo Access)');
-    setTimeout(() => {
-        document.getElementById('login-container').style.display = 'none';
-        document.getElementById('app-container').style.display = 'flex';
-        fetchBrands();
-        loadDashboardStats();
-    }, 150);
-};
-
-document.getElementById('guest-btn')?.addEventListener('click', handleGuestLogin);
-document.getElementById('guest-login-btn')?.addEventListener('click', handleGuestLogin);
 
 // Sign Out Handler
 document.getElementById('sign-out-btn')?.addEventListener('click', async () => {
