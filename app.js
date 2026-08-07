@@ -5515,7 +5515,13 @@ function stopCurrentMCQAudio() {
         currentBufferSource = null;
     }
     if (currentAudioEl) {
-        try { currentAudioEl.pause(); } catch(e){}
+        try {
+            if (typeof currentAudioEl.stop === 'function') {
+                currentAudioEl.stop();
+            } else if (typeof currentAudioEl.pause === 'function') {
+                currentAudioEl.pause();
+            }
+        } catch(e){}
         currentAudioEl = null;
     }
 }
@@ -5570,8 +5576,7 @@ async function fetchAudioBuffer(text, lang) {
             }
             arrayBuf = bytes.buffer;
         } else {
-            const audioRes = await fetch(data.audio_url);
-            arrayBuf = await audioRes.arrayBuffer();
+            return null;
         }
 
         const decodedBuffer = await mcqAudioCtx.decodeAudioData(arrayBuf);
@@ -5604,6 +5609,16 @@ function updateMCQAudioProgress(current, total, statusText = '') {
     if (label) label.innerText = statusText || `🎙️ Generating HD Voice Narration... ${current} / ${total} (${pct}%)`;
 }
 
+function getMCQExplanationText(qData) {
+    if (!qData) return '';
+    let correctStr = qData.correct_option || '';
+    if ((!correctStr || correctStr.length <= 3) && qData.options && qData.correct_index !== undefined && qData.options[qData.correct_index]) {
+        correctStr = qData.options[qData.correct_index];
+    }
+    const exp = qData.explanation || '';
+    return `सही उत्तर: ${correctStr}। ${exp}`;
+}
+
 async function preloadMCQAudioDeck(lang) {
     const texts = [];
     if (!mcqState.questions || mcqState.questions.length === 0) return;
@@ -5611,7 +5626,7 @@ async function preloadMCQAudioDeck(lang) {
     mcqState.questions.forEach(q => {
         if (q.question) texts.push(q.question);
         if (q.options) q.options.forEach(o => { if (o) texts.push(o); });
-        if (q.explanation) texts.push(`सही उत्तर: ${q.correct_option}। ${q.explanation}`);
+        if (q.explanation) texts.push(getMCQExplanationText(q));
     });
     texts.push("लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!");
 
@@ -5695,7 +5710,6 @@ async function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
 
             source.onended = () => finish();
             source.start(0);
-            setTimeout(() => finish(), Math.max(2000, durMs + 500));
         } else {
             fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
         }

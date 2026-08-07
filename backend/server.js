@@ -132,14 +132,10 @@ async function generateAIContent(prompt, options = {}) {
         throw new Error("No GEMINI_API_KEY or GEMINI_API_KEYS found in environment variables.");
     }
 
-    // Valid Gemini API models in order of fallback priority
     const models = [
         "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-pro"
+        "gemini-1.5-flash"
     ];
     let lastError = null;
 
@@ -1231,13 +1227,10 @@ app.post('/generate-tts', async (req, res) => {
         const targetLangCode = langCodeMap[lang] || 'ne-NP';
         const shortLangCode = targetLangCode.split('-')[0]; // ne, en, hi
 
-        // Use existing Gemini API Key
-        const geminiApiKey = process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY;
-
-        if (geminiApiKey) {
+        const apiKeys = getGeminiApiKeys();
+        for (const geminiApiKey of apiKeys) {
             try {
                 const ttsModel = 'gemini-2.5-flash-preview-tts';
-                // Use Aoede for warm, natural South Asian language delivery
                 const voiceName = 'Aoede';
                 const trimmedText = text.substring(0, 500);
 
@@ -1280,26 +1273,28 @@ app.post('/generate-tts', async (req, res) => {
                         });
                     }
                 }
-                // Log the error detail
                 const errDetail = JSON.stringify(gData).substring(0, 300);
-                console.warn(`[/generate-tts] Gemini TTS returned no audio. Status: ${gRes.status}, Detail: ${errDetail}`);
+                console.warn(`[/generate-tts] Key attempt returned status ${gRes.status}: ${errDetail}`);
             } catch (ge) {
-                console.warn("[/generate-tts] Gemini Native TTS failed, falling back:", ge.message);
+                console.warn("[/generate-tts] Key attempt failed:", ge.message);
             }
         }
 
-        // Fallback: Fetch Google Translate TTS server-side to avoid CORS blocks in browser
-        const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.substring(0, 300))}&tl=${shortLangCode}&client=tw-ob`;
-        console.log(`[/generate-tts] Fetching Google Translate TTS server-side for ${lang}...`);
+        // Fallback: Fetch Google Translate TTS server-side with browser headers
+        const cleanText = text.replace(/[*_#`~]/g, '').substring(0, 280);
+        const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=${shortLangCode}&client=tw-ob`;
+        console.log(`[/generate-tts] Fetching Google Translate TTS server-side (${shortLangCode})...`);
         try {
             const fbRes = await fetch(fallbackUrl, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Referer': 'https://translate.google.com/'
                 }
             });
             if (fbRes.ok) {
                 const buf = await fbRes.arrayBuffer();
                 const base64Data = Buffer.from(buf).toString('base64');
+                console.log(`[/generate-tts] ✅ Google Translate TTS synthesized (${buf.byteLength} bytes)`);
                 return res.json({
                     success: true,
                     audio_url: `data:audio/mp3;base64,${base64Data}`,
@@ -1307,14 +1302,11 @@ app.post('/generate-tts', async (req, res) => {
                 });
             }
         } catch (fbe) {
-            console.warn("[/generate-tts] Server-side fallback fetch error:", fbe.message);
+            console.warn("[/generate-tts] Fallback fetch error:", fbe.message);
         }
 
-        res.json({
-            success: true,
-            audio_url: fallbackUrl,
-            provider: 'google_translate_tts'
-        });
+        console.error("[/generate-tts] Could not generate TTS audio via Gemini or fallback.");
+        return res.status(500).json({ error: "TTS generation failed" });
 
     } catch (err) {
         console.error("TTS endpoint error:", err);
