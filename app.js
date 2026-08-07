@@ -5531,14 +5531,19 @@ let mcqState = {
     countdownSec: 3,
     countdownArc: 1.0,
     expCharCount: 0,
+    outroCharCount: 0,
     isPlaying: false,
     isExporting: false,
     animFrameId: null,
-    stepTimer: null
+    stepTimer: null,
+    typewriterInterval: null,
+    audioCache: {}
 };
 
 let mcqAudioCtx = null;
 let mcqAudioDest = null;
+let currentBufferSource = null;
+let currentAudioEl = null;
 
 function getMCQAudioDestination() {
     try {
@@ -5556,6 +5561,17 @@ function getMCQAudioDestination() {
         return mcqAudioDest;
     } catch(e) {
         return null;
+    }
+}
+
+function stopCurrentMCQAudio() {
+    if (currentBufferSource) {
+        try { currentBufferSource.stop(); } catch(e){}
+        currentBufferSource = null;
+    }
+    if (currentAudioEl) {
+        try { currentAudioEl.pause(); } catch(e){}
+        currentAudioEl = null;
     }
 }
 
@@ -5579,19 +5595,69 @@ function playMCQBeep(freq, durationMs) {
     } catch (e) {}
 }
 
-let currentAudioEl = null;
+async function fetchAudioBuffer(text, lang) {
+    if (!text) return null;
+    if (mcqState.audioCache[text]) return mcqState.audioCache[text];
 
-function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
+    try {
+        getMCQAudioDestination();
+        if (!mcqAudioCtx) return null;
+
+        const res = await fetch(`${API_URL}/generate-tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, language: lang })
+        });
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) return null;
+
+        const data = await res.json();
+        if (!data || !data.audio_url) return null;
+
+        let arrayBuf;
+        if (data.audio_url.startsWith('data:')) {
+            const base64Str = data.audio_url.split(',')[1];
+            const binaryStr = window.atob(base64Str);
+            const len = binaryStr.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            arrayBuf = bytes.buffer;
+        } else {
+            const audioRes = await fetch(data.audio_url);
+            arrayBuf = await audioRes.arrayBuffer();
+        }
+
+        const decodedBuffer = await mcqAudioCtx.decodeAudioData(arrayBuf);
+        mcqState.audioCache[text] = decodedBuffer;
+        return decodedBuffer;
+    } catch(e) {
+        console.warn("fetchAudioBuffer warning:", e);
+        return null;
+    }
+}
+
+async function preloadMCQAudioDeck(lang) {
+    const texts = [];
+    mcqState.questions.forEach(q => {
+        if (q.question) texts.push(q.question);
+        if (q.options) q.options.forEach(o => { if (o) texts.push(o); });
+        if (q.explanation) texts.push(`सही उत्तर: ${q.correct_option}। ${q.explanation}`);
+    });
+    texts.push("लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!");
+
+    await Promise.all(texts.map(t => fetchAudioBuffer(t, lang)));
+}
+
+async function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
     if (!text) {
         if (onTypewriterProgress) onTypewriterProgress(0);
         if (onEnd) onEnd();
         return;
     }
 
-    if (currentAudioEl) {
-        try { currentAudioEl.pause(); } catch(e){}
-        currentAudioEl = null;
-    }
+    stopCurrentMCQAudio();
     if (mcqState.typewriterInterval) {
         clearInterval(mcqState.typewriterInterval);
         mcqState.typewriterInterval = null;
@@ -5600,11 +5666,9 @@ function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
     if (onTypewriterProgress) onTypewriterProgress(0);
 
     let handled = false;
-    let startedTyping = false;
 
     const startTypewriter = (estDurationMs) => {
-        if (startedTyping || !onTypewriterProgress) return;
-        startedTyping = true;
+        if (!onTypewriterProgress) return;
         let charIdx = 0;
         const totalLen = text.length;
         const stepMs = Math.max(15, Math.floor(estDurationMs / Math.max(1, totalLen)));
@@ -5632,32 +5696,6 @@ function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
             if (onEnd) onEnd();
         }
     };
-
-    fetch(`${API_URL}/generate-tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, language: lang })
-    }).then(res => {
-        const ct = res.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) {
-            throw new Error('TTS returned non-JSON');
-        }
-        return res.json();
-    }).then(data => {
-        if (data && data.audio_url) {
-            const audio = new Audio(data.audio_url);
-            audio.crossOrigin = 'anonymous';
-            currentAudioEl = audio;
-
-            // Route audio element through Web Audio destination so MediaRecorder captures audio!
-            try {
-                const destNode = getMCQAudioDestination();
-                if (destNode && mcqAudioCtx) {
-                    const source = mcqAudioCtx.createMediaElementSource(audio);
-                    source.connect(mcqAudioCtx.destination);
-                    source.connect(destNode);
-                }
-            } catch(ae) {}
 
             audio.onended = () => finish();
             audio.onerror = () => fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
@@ -6530,6 +6568,15 @@ async function exportMCQVideo() {
     const canvas = document.getElementById('mcq-canvas');
     if (!canvas) return;
 
+    const phaseLabel = document.getElementById('mcq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "🎙️ Pre-loading HD Voice narration & preparing Reel...";
+
+    stopMCQSequence();
+    const lang = document.getElementById('mcq-language')?.value || 'Nepali';
+
+    // Pre-fetch all TTS audio buffers into memory before starting recording!
+    await preloadMCQAudioDeck(lang);
+
     mcqState.isExporting = true;
     mcqState.recordedChunks = [];
 
@@ -6584,11 +6631,10 @@ async function exportMCQVideo() {
             URL.revokeObjectURL(url);
 
             mcqState.isExporting = false;
-            const phaseLabel = document.getElementById('mcq-phase-label');
-            if (phaseLabel) phaseLabel.innerText = `✅ Reel Exported (${fileExt.toUpperCase()} with Voiceover)!`;
+            if (phaseLabel) phaseLabel.innerText = `✅ HD Reel Exported (${fileExt.toUpperCase()} with Voiceover)! Ready for Facebook Reels.`;
         };
 
-        recorder.start();
+        recorder.start(100); // 100ms timeslice to ensure continuous data chunks
         startMCQSequence();
 
     } catch (err) {
@@ -6651,7 +6697,8 @@ function initMCQVideoStudio() {
                 updateMCQEditorFields();
                 stopMCQSequence();
                 drawMCQCanvas();
-                if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.mcq_data.questions.length} questions!`; }
+                if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.mcq_data.questions.length} questions! Pre-loading voice narration...`; }
+                preloadMCQAudioDeck(language);
             } else {
                 throw new Error('Invalid MCQ schema returned');
             }
