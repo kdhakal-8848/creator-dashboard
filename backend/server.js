@@ -36,7 +36,11 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 function cleanJsonString(str) {
     if (!str) return '';
     let cleaned = String(str).trim();
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)\s*```/gi, '$1').trim();
+    const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
+        cleaned = jsonMatch[0];
+    }
     return cleaned;
 }
 
@@ -1070,9 +1074,9 @@ Language: ${targetLanguage}
 CRITICAL RULES:
 - Generate EXACTLY ${count} questions.
 - Each question MUST have EXACTLY 4 options (labeled A., B., C., D.).
-- The question must be crisp and highly engaging for video formats (10-25 words).
+- The question must be crisp, highly engaging, and clear for video formats (10-30 words).
 - Specify the 0-based index of the correct option (0 for A, 1 for B, 2 for C, 3 for D).
-- Provide a clear, educational, and fascinating explanation for the correct answer (20-45 words).
+- Provide a rich, highly detailed, fascinating, and educational explanation for the correct answer (40-80 words) including key historical context or background facts.
 - All text MUST be written in ${targetLanguage}.
 
 OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
@@ -1092,7 +1096,7 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
       ],
       "correct_index": 1,
       "correct_option": "B. Option 2",
-      "explanation": "Clear explanation of why this answer is correct."
+      "explanation": "Rich detailed explanation of why this answer is correct, with background facts and key learning takeaway."
     }
   ]
 }`;
@@ -1145,6 +1149,71 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
     } catch (err) {
         console.error("MCQ Lab error:", err);
         res.status(500).json({ error: "Internal server error: " + err.message });
+    }
+});
+
+// ============================================================
+// POST /generate-tts — Human Voice Audio Narration Endpoint
+// ============================================================
+app.post('/generate-tts', async (req, res) => {
+    try {
+        const { text, language } = req.body;
+        if (!text) return res.status(400).json({ error: "Text is required for TTS synthesis" });
+
+        const lang = language || 'Nepali';
+        const langCodeMap = {
+            'Nepali': 'ne',
+            'English': 'en',
+            'Hindi': 'hi'
+        };
+        const targetLangCode = langCodeMap[lang] || 'ne';
+
+        // Check if Google TTS API key is configured
+        const googleApiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY;
+
+        if (googleApiKey && process.env.ENABLE_GOOGLE_CLOUD_TTS === 'true') {
+            try {
+                const voiceMap = {
+                    'ne': { languageCode: 'ne-NP', name: 'ne-NP-Standard-A' },
+                    'en': { languageCode: 'en-US', name: 'en-US-Neural2-F' },
+                    'hi': { languageCode: 'hi-IN', name: 'hi-IN-Neural2-A' }
+                };
+                const voiceConfig = voiceMap[targetLangCode] || voiceMap['ne'];
+
+                const gRes = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleApiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        input: { text: text.substring(0, 500) },
+                        voice: voiceConfig,
+                        audioConfig: { audioEncoding: 'MP3', speakingRate: 1.0, pitch: 0 }
+                    })
+                });
+
+                const gData = await gRes.json();
+                if (gRes.ok && gData.audioContent) {
+                    return res.json({
+                        success: true,
+                        audio_url: `data:audio/mp3;base64,${gData.audioContent}`,
+                        provider: 'google_cloud_tts'
+                    });
+                }
+            } catch (ge) {
+                console.warn("Google Cloud TTS API failed, falling back to Voice Engine:", ge.message);
+            }
+        }
+
+        // Fallback: Natural Google Voice Engine Stream URL
+        const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.substring(0, 300))}&tl=${targetLangCode}&client=tw-ob`;
+        res.json({
+            success: true,
+            audio_url: fallbackUrl,
+            provider: 'google_voice_stream'
+        });
+
+    } catch (err) {
+        console.error("TTS endpoint error:", err);
+        res.status(500).json({ error: "TTS generation failed: " + err.message });
     }
 });
 

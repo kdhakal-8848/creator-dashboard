@@ -5555,32 +5555,61 @@ function playMCQBeep(freq, durationMs) {
     } catch (e) {}
 }
 
+let currentAudioEl = null;
+
 function speakMCQText(text, lang, onEnd) {
-    if (!window.speechSynthesis) {
-        if (onEnd) setTimeout(onEnd, 1500);
-        return;
+    if (!text) { if (onEnd) onEnd(); return; }
+
+    if (currentAudioEl) {
+        try { currentAudioEl.pause(); } catch(e){}
+        currentAudioEl = null;
     }
+
+    // Call backend /generate-tts for HD human voice narration
+    let handled = false;
+    const finish = () => {
+        if (!handled) {
+            handled = true;
+            if (onEnd) onEnd();
+        }
+    };
+
+    fetch(`${API_URL}/generate-tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, language: lang })
+    }).then(res => res.json()).then(data => {
+        if (data && data.audio_url) {
+            const audio = new Audio(data.audio_url);
+            currentAudioEl = audio;
+            audio.onended = () => finish();
+            audio.onerror = () => fallbackWebSpeech(text, lang, finish);
+            audio.play().catch(() => fallbackWebSpeech(text, lang, finish));
+            // Safety timeout
+            setTimeout(() => finish(), Math.max(3000, text.length * 150));
+        } else {
+            fallbackWebSpeech(text, lang, finish);
+        }
+    }).catch(() => {
+        fallbackWebSpeech(text, lang, finish);
+    });
+}
+
+function fallbackWebSpeech(text, lang, onEnd) {
+    if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1.0;
+    utter.rate = 0.95;
     utter.pitch = 1.0;
+    utter.lang = (lang === 'Nepali' || lang === 'ne') ? 'ne-NP' : 'en-US';
 
     const voices = window.speechSynthesis.getVoices() || [];
-    let selectedVoice = null;
-    if (lang === 'Nepali') {
-        selectedVoice = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi'));
-    }
-    if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
-    }
-    if (selectedVoice) utter.voice = selectedVoice;
+    const v = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi') || v.lang.includes('en'));
+    if (v) utter.voice = v;
 
-    let ended = false;
-    utter.onend = () => { if (!ended) { ended = true; if (onEnd) onEnd(); } };
-    utter.onerror = () => { if (!ended) { ended = true; if (onEnd) onEnd(); } };
-    
-    // Safety fallback timer in case speech synthesis hangs
-    setTimeout(() => { if (!ended) { ended = true; if (onEnd) onEnd(); } }, Math.max(2500, text.length * 120));
+    utter.onend = () => { if (onEnd) onEnd(); };
+    utter.onerror = () => { if (onEnd) onEnd(); };
+    setTimeout(() => { if (onEnd) onEnd(); }, Math.max(2500, text.length * 130));
 
     window.speechSynthesis.speak(utter);
 }
@@ -5605,6 +5634,23 @@ function wrapCanvasText(ctx, text, maxWidth) {
     return lines;
 }
 
+let mcqBrandLogoImg = null;
+let mcqCurrentLogoUrl = '';
+
+function preloadMCQBrandLogo(url) {
+    if (!url) { mcqBrandLogoImg = null; mcqCurrentLogoUrl = ''; return; }
+    if (url === mcqCurrentLogoUrl) return;
+    mcqCurrentLogoUrl = url;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+    img.onload = () => {
+        mcqBrandLogoImg = img;
+        drawMCQCanvas();
+    };
+    img.onerror = () => { mcqBrandLogoImg = null; };
+}
+
 function drawMCQCanvas() {
     const canvas = document.getElementById('mcq-canvas');
     if (!canvas) return;
@@ -5617,80 +5663,186 @@ function drawMCQCanvas() {
     const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
     const brandName = activeBrand?.name || 'GROWUP LOKSEWA';
     const brandHandle = activeBrand?.handle || '@growuploksewa';
+    const brandLogoUrl = activeBrand?.logo_url || activeBrand?.logo || activeBrand?.avatar;
+
+    if (brandLogoUrl) {
+        preloadMCQBrandLogo(brandLogoUrl);
+    }
+
+    const themeKey = document.getElementById('mcq-theme')?.value || 'midnight';
+    const themes = {
+        midnight: {
+            bgGrad: ['#0b0f19', '#1e1b4b', '#090d16'],
+            glow: 'rgba(147, 51, 234, 0.3)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(255, 255, 255, 0.18)',
+            pillText: '#a855f7',
+            qBoxBg: 'rgba(30, 41, 59, 0.88)',
+            qBoxBorder: 'rgba(168, 85, 247, 0.5)',
+            qAccent: '#a855f7',
+            qLabel: '#c084fc',
+            optCardBg: 'rgba(30, 41, 59, 0.75)',
+            optCardBorder: 'rgba(255, 255, 255, 0.18)',
+            badgeBg: '#6366f1',
+            badgeText: '#ffffff',
+            cdStroke: '#f59e0b',
+            cdText: '#fbbf24'
+        },
+        emerald: {
+            bgGrad: ['#022c22', '#065f46', '#022c22'],
+            glow: 'rgba(16, 185, 129, 0.3)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(250, 204, 21, 0.3)',
+            pillText: '#fbbf24',
+            qBoxBg: 'rgba(6, 78, 59, 0.85)',
+            qBoxBorder: 'rgba(250, 204, 21, 0.5)',
+            qAccent: '#fbbf24',
+            qLabel: '#fef08a',
+            optCardBg: 'rgba(6, 78, 59, 0.7)',
+            optCardBorder: 'rgba(255, 255, 255, 0.18)',
+            badgeBg: '#f59e0b',
+            badgeText: '#0f172a',
+            cdStroke: '#fbbf24',
+            cdText: '#fef08a'
+        },
+        cyber: {
+            bgGrad: ['#0f172a', '#1e293b', '#090d16'],
+            glow: 'rgba(6, 182, 212, 0.35)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(6, 182, 212, 0.3)',
+            pillText: '#38bdf8',
+            qBoxBg: 'rgba(15, 23, 42, 0.9)',
+            qBoxBorder: 'rgba(6, 182, 212, 0.6)',
+            qAccent: '#06b6d4',
+            qLabel: '#38bdf8',
+            optCardBg: 'rgba(30, 41, 59, 0.8)',
+            optCardBorder: 'rgba(6, 182, 212, 0.3)',
+            badgeBg: '#0891b2',
+            badgeText: '#ffffff',
+            cdStroke: '#38bdf8',
+            cdText: '#7dd3fc'
+        },
+        sunset: {
+            bgGrad: ['#27005d', '#711db0', '#1c0042'],
+            glow: 'rgba(255, 107, 107, 0.35)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(255, 107, 107, 0.3)',
+            pillText: '#ff6b6b',
+            qBoxBg: 'rgba(40, 10, 60, 0.88)',
+            qBoxBorder: 'rgba(255, 107, 107, 0.5)',
+            qAccent: '#ff6b6b',
+            qLabel: '#ffa502',
+            optCardBg: 'rgba(40, 10, 60, 0.75)',
+            optCardBorder: 'rgba(255, 255, 255, 0.18)',
+            badgeBg: '#e84118',
+            badgeText: '#ffffff',
+            cdStroke: '#ffa502',
+            cdText: '#fed330'
+        },
+        minimal: {
+            bgGrad: ['#18181b', '#27272a', '#09090b'],
+            glow: 'rgba(255, 255, 255, 0.15)',
+            pillBg: 'rgba(255, 255, 255, 0.1)',
+            pillBorder: 'rgba(255, 255, 255, 0.25)',
+            pillText: '#ffffff',
+            qBoxBg: 'rgba(39, 39, 42, 0.9)',
+            qBoxBorder: 'rgba(228, 228, 231, 0.5)',
+            qAccent: '#ffffff',
+            qLabel: '#e4e4e7',
+            optCardBg: 'rgba(39, 39, 42, 0.75)',
+            optCardBorder: 'rgba(255, 255, 255, 0.2)',
+            badgeBg: '#52525b',
+            badgeText: '#ffffff',
+            cdStroke: '#e4e4e7',
+            cdText: '#ffffff'
+        }
+    };
+    const t = themes[themeKey] || themes.midnight;
 
     // 1. Background Gradient
     const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, '#0b0f19');
-    bgGrad.addColorStop(0.5, '#1e1b4b');
-    bgGrad.addColorStop(1, '#090d16');
+    bgGrad.addColorStop(0, t.bgGrad[0]);
+    bgGrad.addColorStop(0.5, t.bgGrad[1]);
+    bgGrad.addColorStop(1, t.bgGrad[2]);
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Subtle Radial Glow behind Question
+    // Radial Glow behind Question
     const radGlow = ctx.createRadialGradient(width / 2, 400, 50, width / 2, 400, 600);
-    radGlow.addColorStop(0, 'rgba(147, 51, 234, 0.25)');
+    radGlow.addColorStop(0, t.glow);
     radGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = radGlow;
     ctx.fillRect(0, 0, width, height);
 
     // 2. Top Header Brand Pill
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillStyle = t.pillBg;
+    ctx.strokeStyle = t.pillBorder;
     ctx.lineWidth = 2;
-    const headerW = 720; const headerH = 76; const headerX = (width - headerW) / 2; const headerY = 90;
+    const headerW = 820; const headerH = 90; const headerX = (width - headerW) / 2; const headerY = 80;
     ctx.beginPath();
-    ctx.roundRect(headerX, headerY, headerW, headerH, 38);
+    ctx.roundRect(headerX, headerY, headerW, headerH, 45);
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = 'bold 30px "Inter", sans-serif';
-    ctx.fillStyle = '#a855f7';
+    // Render Brand Logo Image if available
+    if (mcqBrandLogoImg && mcqBrandLogoImg.complete) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(headerX + 48, headerY + headerH / 2, 28, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 56) / 2, 56, 56);
+        ctx.restore();
+    }
+
+    ctx.font = 'bold 34px "Inter", sans-serif';
+    ctx.fillStyle = t.pillText;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${brandName.toUpperCase()} • Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, width / 2, headerY + headerH / 2);
+    const logoOffset = (mcqBrandLogoImg && mcqBrandLogoImg.complete) ? 25 : 0;
+    ctx.fillText(`${brandName.toUpperCase()} • Q${mcqState.currentIndex + 1}/${mcqState.questions.length}`, (width / 2) + logoOffset, headerY + headerH / 2);
     ctx.restore();
 
-    // 3. Question Card Container
+    // 3. Question Card Container (Height expanded to 440px)
     ctx.save();
-    const qBoxW = 960; const qBoxH = 340; const qBoxX = (width - qBoxW) / 2; const qBoxY = 210;
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
-    ctx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = 'rgba(168, 85, 247, 0.3)';
-    ctx.shadowBlur = 20;
+    const qBoxW = 980; const qBoxH = 440; const qBoxX = (width - qBoxW) / 2; const qBoxY = 200;
+    ctx.fillStyle = t.qBoxBg;
+    ctx.strokeStyle = t.qBoxBorder;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = t.qAccent;
+    ctx.shadowBlur = 24;
     ctx.beginPath();
-    ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 24);
+    ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 28);
     ctx.fill();
     ctx.stroke();
 
-    // Top purple accent line
-    ctx.fillStyle = '#a855f7';
+    // Top theme accent line
+    ctx.fillStyle = t.qAccent;
     ctx.beginPath();
-    ctx.roundRect(qBoxX, qBoxY, qBoxW, 10, [24, 24, 0, 0]);
+    ctx.roundRect(qBoxX, qBoxY, qBoxW, 12, [28, 28, 0, 0]);
     ctx.fill();
 
     // Question Label
-    ctx.font = 'bold 26px "Inter", sans-serif';
-    ctx.fillStyle = '#c084fc';
+    ctx.font = 'bold 32px "Inter", sans-serif';
+    ctx.fillStyle = t.qLabel;
     ctx.textAlign = 'left';
-    ctx.fillText('QUESTION / प्रश्न:', qBoxX + 40, qBoxY + 50);
+    ctx.fillText('QUESTION / प्रश्न:', qBoxX + 40, qBoxY + 55);
 
-    // Typewriter Question Text
+    // Typewriter Question Text (Large 54px bold font)
     const visibleQText = qData ? qData.question.substring(0, mcqState.qCharCount) : '';
-    ctx.font = '700 40px "Mukta", "Inter", sans-serif';
+    ctx.font = '700 54px "Mukta", "Inter", sans-serif';
     ctx.fillStyle = '#ffffff';
     const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 80);
-    let qLineY = qBoxY + 110;
+    let qLineY = qBoxY + 130;
     qLines.forEach(line => {
         ctx.fillText(line, qBoxX + 40, qLineY);
-        qLineY += 56;
+        qLineY += 72;
     });
     ctx.restore();
 
-    // 4. Options List (4 Cards)
-    const optYStart = 600;
-    const optCardH = 140;
+    // 4. Options List (4 Cards, Height 160px each)
+    const optYStart = 670;
+    const optCardH = 160;
     const optGap = 24;
 
     if (qData && qData.options) {
@@ -5701,7 +5853,7 @@ function drawMCQCanvas() {
 
             ctx.save();
             ctx.beginPath();
-            ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 20);
+            ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 24);
 
             if (isAnswerPhase && isCorrect) {
                 // Highlight Correct Option in glowing green gradient
@@ -5710,9 +5862,9 @@ function drawMCQCanvas() {
                 greenGrad.addColorStop(1, '#22c55e');
                 ctx.fillStyle = greenGrad;
                 ctx.strokeStyle = '#4ade80';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 5;
                 ctx.shadowColor = '#22c55e';
-                ctx.shadowBlur = 30;
+                ctx.shadowBlur = 35;
             } else if (isAnswerPhase && !isCorrect) {
                 // Dim non-correct options
                 ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
@@ -5720,43 +5872,43 @@ function drawMCQCanvas() {
                 ctx.lineWidth = 2;
             } else {
                 // Standard option card state
-                ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-                ctx.lineWidth = 2;
+                ctx.fillStyle = t.optCardBg;
+                ctx.strokeStyle = t.optCardBorder;
+                ctx.lineWidth = 3;
             }
             ctx.fill();
             ctx.stroke();
 
-            // Option Letter Badge Circle (A, B, C, D)
-            const badgeX = qBoxX + 50;
+            // Option Letter Badge Circle (A, B, C, D) - Diameter 74px
+            const badgeX = qBoxX + 56;
             const badgeY = optY + optCardH / 2;
-            const badgeR = 34;
+            const badgeR = 37;
             ctx.beginPath();
             ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.1)' : '#6366f1');
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.1)' : t.badgeBg);
             ctx.fill();
 
-            ctx.font = 'bold 30px "Inter", sans-serif';
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : '#ffffff';
+            ctx.font = 'bold 42px "Inter", sans-serif';
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : t.badgeText;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             const letter = String.fromCharCode(65 + idx);
             ctx.fillText(letter, badgeX, badgeY + 2);
 
-            // Typewriter Option Text
+            // Typewriter Option Text (Large 42px bold font)
             const charCount = mcqState.optCharCounts[idx] || 0;
             const visibleOptText = optText.substring(0, charCount);
-            ctx.font = '600 36px "Mukta", "Inter", sans-serif';
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.4)' : '#f1f5f9');
+            ctx.font = '600 42px "Mukta", "Inter", sans-serif';
+            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? 'rgba(255,255,255,0.4)' : '#f8fafc');
             ctx.textAlign = 'left';
-            ctx.fillText(visibleOptText, qBoxX + 110, badgeY);
+            ctx.fillText(visibleOptText, qBoxX + 120, badgeY);
 
             // If correct in answer phase, draw Checkmark icon ✓
             if (isAnswerPhase && isCorrect) {
-                ctx.font = 'bold 44px "Inter", sans-serif';
+                ctx.font = 'bold 52px "Inter", sans-serif';
                 ctx.fillStyle = '#ffffff';
                 ctx.textAlign = 'right';
-                ctx.fillText('✓', qBoxX + qBoxW - 40, badgeY);
+                ctx.fillText('✓', qBoxX + qBoxW - 44, badgeY);
             }
             ctx.restore();
         });
@@ -5765,16 +5917,16 @@ function drawMCQCanvas() {
     // 5. Phase 3: 3-Second Countdown Visual Arc Widget
     if (mcqState.phase === 'COUNTDOWN') {
         const cdX = width / 2;
-        const cdY = 1360;
-        const cdR = 90;
+        const cdY = 1480;
+        const cdR = 95;
 
         ctx.save();
         // Background Circle
         ctx.beginPath();
         ctx.arc(cdX, cdY, cdR, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 8;
+        ctx.lineWidth = 10;
         ctx.fill();
         ctx.stroke();
 
@@ -5783,65 +5935,65 @@ function drawMCQCanvas() {
         const endAngle = startAngle + (Math.PI * 2 * mcqState.countdownArc);
         ctx.beginPath();
         ctx.arc(cdX, cdY, cdR, startAngle, endAngle);
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 12;
+        ctx.strokeStyle = t.cdStroke;
+        ctx.lineWidth = 14;
         ctx.lineCap = 'round';
         ctx.stroke();
 
         // Big Countdown Digit (3, 2, 1)
-        ctx.font = 'bold 84px "Inter", sans-serif';
-        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 90px "Inter", sans-serif';
+        ctx.fillStyle = t.cdText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(mcqState.countdownSec.toString(), cdX, cdY);
         ctx.restore();
     }
 
-    // 6. Phase 4: Explanation Card Box
+    // 6. Phase 4: Explanation Card Box (Height 400px, 36px font)
     if (mcqState.phase === 'ANSWER') {
-        const expBoxW = 960; const expBoxH = 500; const expBoxX = (width - expBoxW) / 2; const expBoxY = 1280;
+        const expBoxW = 980; const expBoxH = 420; const expBoxX = (width - expBoxW) / 2; const expBoxY = 1420;
         ctx.save();
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-        ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = 'rgba(34, 197, 94, 0.3)';
-        ctx.shadowBlur = 20;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = 'rgba(34, 197, 94, 0.35)';
+        ctx.shadowBlur = 24;
         ctx.beginPath();
-        ctx.roundRect(expBoxX, expBoxY, expBoxW, expBoxH, 24);
+        ctx.roundRect(expBoxX, expBoxY, expBoxW, expBoxH, 28);
         ctx.fill();
         ctx.stroke();
 
         // Top green line
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.roundRect(expBoxX, expBoxY, expBoxW, 10, [24, 24, 0, 0]);
+        ctx.roundRect(expBoxX, expBoxY, expBoxW, 12, [28, 28, 0, 0]);
         ctx.fill();
 
         // Label
-        ctx.font = 'bold 26px "Inter", sans-serif';
+        ctx.font = 'bold 32px "Inter", sans-serif';
         ctx.fillStyle = '#4ade80';
         ctx.textAlign = 'left';
-        ctx.fillText('EXPLANATION / उत्तर व्याख्या:', expBoxX + 40, expBoxY + 50);
+        ctx.fillText('EXPLANATION / उत्तर व्याख्या:', expBoxX + 40, expBoxY + 55);
 
         // Correct Option Highlight Banner
-        ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.18)';
         ctx.beginPath();
-        ctx.roundRect(expBoxX + 35, expBoxY + 75, expBoxW - 70, 60, 10);
+        ctx.roundRect(expBoxX + 35, expBoxY + 80, expBoxW - 70, 64, 12);
         ctx.fill();
 
-        ctx.font = 'bold 30px "Mukta", "Inter", sans-serif';
+        ctx.font = 'bold 34px "Mukta", "Inter", sans-serif';
         ctx.fillStyle = '#86efac';
-        ctx.fillText(`सही उत्तर: ${qData.correct_option}`, expBoxX + 50, expBoxY + 115);
+        ctx.fillText(`सही उत्तर: ${qData.correct_option}`, expBoxX + 50, expBoxY + 122);
 
-        // Typewriter Explanation Body
+        // Typewriter Explanation Body (36px bold font)
         const visibleExpText = qData.explanation ? qData.explanation.substring(0, mcqState.expCharCount) : '';
-        ctx.font = '500 34px "Mukta", "Inter", sans-serif';
-        ctx.fillStyle = '#e2e8f0';
+        ctx.font = '600 36px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = '#f1f5f9';
         const expLines = wrapCanvasText(ctx, visibleExpText, expBoxW - 80);
-        let expLineY = expBoxY + 195;
+        let expLineY = expBoxY + 205;
         expLines.forEach(line => {
             ctx.fillText(line, expBoxX + 40, expLineY);
-            expLineY += 48;
+            expLineY += 52;
         });
         ctx.restore();
     }
@@ -6190,6 +6342,10 @@ function initMCQVideoStudio() {
     });
 
     document.getElementById('mcq-brand')?.addEventListener('change', () => {
+        drawMCQCanvas();
+    });
+
+    document.getElementById('mcq-theme')?.addEventListener('change', () => {
         drawMCQCanvas();
     });
 }

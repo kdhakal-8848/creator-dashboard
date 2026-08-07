@@ -959,7 +959,7 @@
                             </div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
                             <div>
                                 <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Questions Count</label>
                                 <select id="mcq-count" class="full-width" style="padding: 8px; border-radius: 8px;">
@@ -972,6 +972,17 @@
                                 <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Target Brand</label>
                                 <select id="mcq-brand" class="full-width" style="padding: 8px; border-radius: 8px;"></select>
                             </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Reel Visual Theme</label>
+                            <select id="mcq-theme" class="full-width" style="padding: 10px; border-radius: 8px; font-weight: 600; background: var(--color-bg-primary, #0d1117); color: var(--color-fg-default, #c9d1d9); border: 1px solid var(--color-border-default, rgba(255,255,255,0.15));">
+                                <option value="midnight">🔮 Midnight Neon (Purple & Cyan Glow)</option>
+                                <option value="emerald">👑 Loksewa Royal Emerald & Gold</option>
+                                <option value="cyber">⚡ Electric Cyber Cyan</option>
+                                <option value="sunset">🌅 Sunset Crimson & Coral</option>
+                                <option value="minimal">🏛️ Classic Dark Glass</option>
+                            </select>
                         </div>
 
                         <button id="trigger-mcq-generate" class="btn-primary full-width" style="padding: 12px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; cursor: pointer;">
