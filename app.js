@@ -5583,8 +5583,37 @@ async function fetchAudioBuffer(text, lang) {
     }
 }
 
+function updateMCQAudioProgress(current, total, statusText = '') {
+    const bar = document.getElementById('mcq-progress-bar-inner');
+    const label = document.getElementById('mcq-progress-text');
+    const container = document.getElementById('mcq-progress-container');
+    const playBtn = document.getElementById('mcq-play-btn');
+    const exportBtn = document.getElementById('mcq-export-btn');
+
+    const pct = Math.min(100, Math.round((current / Math.max(1, total)) * 100));
+
+    if (container) {
+        if (pct < 100) {
+            container.style.display = 'flex';
+            if (playBtn) playBtn.disabled = true;
+            if (exportBtn) exportBtn.disabled = true;
+        } else {
+            setTimeout(() => {
+                container.style.display = 'none';
+                if (playBtn) playBtn.disabled = false;
+                if (exportBtn) exportBtn.disabled = false;
+            }, 1000);
+        }
+    }
+
+    if (bar) bar.style.width = `${pct}%`;
+    if (label) label.innerText = statusText || `🎙️ Generating HD Voice Narration... ${current} / ${total} (${pct}%)`;
+}
+
 async function preloadMCQAudioDeck(lang) {
     const texts = [];
+    if (!mcqState.questions || mcqState.questions.length === 0) return;
+
     mcqState.questions.forEach(q => {
         if (q.question) texts.push(q.question);
         if (q.options) q.options.forEach(o => { if (o) texts.push(o); });
@@ -5592,7 +5621,22 @@ async function preloadMCQAudioDeck(lang) {
     });
     texts.push("लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!");
 
-    await Promise.all(texts.map(t => fetchAudioBuffer(t, lang)));
+    const total = texts.length;
+    let completed = 0;
+    updateMCQAudioProgress(0, total, `🎙️ Synthesizing HD Voice Narration (0%)...`);
+
+    // Batched parallel loading (3 at a time) for fast & reliable pre-fetching
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+        const batch = texts.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (t) => {
+            await fetchAudioBuffer(t, lang);
+            completed++;
+            updateMCQAudioProgress(completed, total);
+        }));
+    }
+
+    updateMCQAudioProgress(total, total, `✅ Voice Narration Ready! (100%) Instant Playback & Export Enabled.`);
 }
 
 async function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
@@ -6071,8 +6115,8 @@ function drawMCQCanvas() {
         ctx.font = 'bold 36px "Inter", sans-serif';
         ctx.fillStyle = '#ffc107';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('✨ GROWUP LOKSEWA ✨', width / 2, pillY + pillH / 2);
+        const brandHandle = (currentBranding && currentBranding.name) ? currentBranding.name.toUpperCase() : 'GEARUP LOKSEWA';
+        ctx.fillText(`✨ ${brandHandle} ✨`, width / 2, pillY + pillH / 2);
 
         // Outro Title
         ctx.font = 'bold 50px "Mukta", "Inter", sans-serif';
@@ -6351,7 +6395,7 @@ function startMCQSequence() {
 
     // Continuous Canvas Render Loop
     function renderLoop() {
-        if (mcqState.isPlaying) {
+        if (mcqState.isPlaying || mcqState.isExporting) {
             drawMCQCanvas();
             mcqState.animFrameId = requestAnimationFrame(renderLoop);
         }

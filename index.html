@@ -1058,6 +1058,18 @@
                         <!-- Canvas Stage Container -->
                         <div style="position: relative; width: 340px; height: 604px; background: #000; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.15);">
                             <canvas id="mcq-canvas" width="1080" height="1920" style="width: 100%; height: 100%; display: block; object-fit: contain;"></canvas>
+                            
+                            <!-- Voice Narration Progress Modal Overlay -->
+                            <div id="mcq-progress-container" style="display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px); z-index: 20; padding: 24px; box-sizing: border-box; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; box-shadow: 0 0 24px rgba(99, 102, 241, 0.5);">
+                                    <i data-feather="mic" style="width: 26px; height: 26px; color: #fff;"></i>
+                                </div>
+                                <div id="mcq-progress-text" style="color: #f8fafc; font-weight: 700; font-size: 13px; margin-bottom: 14px; line-height: 1.4;">🎙️ Generating HD Voice Narration... 0%</div>
+                                <div style="width: 100%; max-width: 260px; height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; margin: 0 auto;">
+                                    <div id="mcq-progress-bar-inner" style="width: 0%; height: 100%; background: linear-gradient(90deg, #38bdf8, #a855f7); transition: width 0.2s ease-out;"></div>
+                                </div>
+                                <div style="color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 12px;">Synthesis in progress. Reel playback will start instantly when complete.</div>
+                            </div>
                         </div>
 
                         <!-- Player Transport Controls -->

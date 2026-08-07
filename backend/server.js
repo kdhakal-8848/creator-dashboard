@@ -1288,9 +1288,28 @@ app.post('/generate-tts', async (req, res) => {
             }
         }
 
-        // Fallback: Google Translate TTS stream (supports Nepali well)
+        // Fallback: Fetch Google Translate TTS server-side to avoid CORS blocks in browser
         const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.substring(0, 300))}&tl=${shortLangCode}&client=tw-ob`;
-        console.log(`[/generate-tts] Using Google Translate TTS fallback for ${lang}`);
+        console.log(`[/generate-tts] Fetching Google Translate TTS server-side for ${lang}...`);
+        try {
+            const fbRes = await fetch(fallbackUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            if (fbRes.ok) {
+                const buf = await fbRes.arrayBuffer();
+                const base64Data = Buffer.from(buf).toString('base64');
+                return res.json({
+                    success: true,
+                    audio_url: `data:audio/mp3;base64,${base64Data}`,
+                    provider: 'google_translate_tts_base64'
+                });
+            }
+        } catch (fbe) {
+            console.warn("[/generate-tts] Server-side fallback fetch error:", fbe.message);
+        }
+
         res.json({
             success: true,
             audio_url: fallbackUrl,
