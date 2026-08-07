@@ -5557,19 +5557,54 @@ function playMCQBeep(freq, durationMs) {
 
 let currentAudioEl = null;
 
-function speakMCQText(text, lang, onEnd) {
-    if (!text) { if (onEnd) onEnd(); return; }
+function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
+    if (!text) {
+        if (onTypewriterProgress) onTypewriterProgress(0);
+        if (onEnd) onEnd();
+        return;
+    }
 
     if (currentAudioEl) {
         try { currentAudioEl.pause(); } catch(e){}
         currentAudioEl = null;
     }
+    if (mcqState.typewriterInterval) {
+        clearInterval(mcqState.typewriterInterval);
+        mcqState.typewriterInterval = null;
+    }
 
-    // Call backend /generate-tts for HD human voice narration
+    if (onTypewriterProgress) onTypewriterProgress(0);
+
     let handled = false;
+    let startedTyping = false;
+
+    const startTypewriter = (estDurationMs) => {
+        if (startedTyping || !onTypewriterProgress) return;
+        startedTyping = true;
+        let charIdx = 0;
+        const totalLen = text.length;
+        const stepMs = Math.max(15, Math.floor(estDurationMs / Math.max(1, totalLen)));
+
+        if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
+        mcqState.typewriterInterval = setInterval(() => {
+            if (charIdx < totalLen) {
+                charIdx++;
+                onTypewriterProgress(charIdx);
+            } else {
+                clearInterval(mcqState.typewriterInterval);
+                mcqState.typewriterInterval = null;
+            }
+        }, stepMs);
+    };
+
     const finish = () => {
         if (!handled) {
             handled = true;
+            if (mcqState.typewriterInterval) {
+                clearInterval(mcqState.typewriterInterval);
+                mcqState.typewriterInterval = null;
+            }
+            if (onTypewriterProgress) onTypewriterProgress(text.length);
             if (onEnd) onEnd();
         }
     };
@@ -5589,20 +5624,30 @@ function speakMCQText(text, lang, onEnd) {
             const audio = new Audio(data.audio_url);
             currentAudioEl = audio;
             audio.onended = () => finish();
-            audio.onerror = () => fallbackWebSpeech(text, lang, finish);
-            audio.play().catch(() => fallbackWebSpeech(text, lang, finish));
+            audio.onerror = () => fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
+            audio.onplay = () => {
+                const durMs = (audio.duration && !isNaN(audio.duration) && audio.duration > 0)
+                    ? audio.duration * 1000
+                    : text.length * 120;
+                startTypewriter(durMs);
+            };
+            audio.play().catch(() => fallbackWebSpeech(text, lang, finish, onTypewriterProgress));
             // Safety timeout
-            setTimeout(() => finish(), Math.max(3000, text.length * 150));
+            setTimeout(() => finish(), Math.max(4000, text.length * 180));
         } else {
-            fallbackWebSpeech(text, lang, finish);
+            fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
         }
     }).catch(() => {
-        fallbackWebSpeech(text, lang, finish);
+        fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
     });
 }
 
-function fallbackWebSpeech(text, lang, onEnd) {
-    if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
+function fallbackWebSpeech(text, lang, onEnd, onTypewriterProgress) {
+    if (!window.speechSynthesis) {
+        if (onTypewriterProgress) onTypewriterProgress(text.length);
+        if (onEnd) onEnd();
+        return;
+    }
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 0.95;
@@ -5613,9 +5658,36 @@ function fallbackWebSpeech(text, lang, onEnd) {
     const v = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi') || v.lang.includes('en'));
     if (v) utter.voice = v;
 
-    utter.onend = () => { if (onEnd) onEnd(); };
-    utter.onerror = () => { if (onEnd) onEnd(); };
-    setTimeout(() => { if (onEnd) onEnd(); }, Math.max(2500, text.length * 130));
+    let charIdx = 0;
+    const totalLen = text.length;
+    const estDurationMs = Math.max(2500, totalLen * 130);
+    const stepMs = Math.max(20, Math.floor(estDurationMs / Math.max(1, totalLen)));
+
+    utter.onstart = () => {
+        if (onTypewriterProgress) {
+            if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
+            mcqState.typewriterInterval = setInterval(() => {
+                if (charIdx < totalLen) {
+                    charIdx++;
+                    onTypewriterProgress(charIdx);
+                } else {
+                    clearInterval(mcqState.typewriterInterval);
+                    mcqState.typewriterInterval = null;
+                }
+            }, stepMs);
+        }
+    };
+
+    utter.onend = () => {
+        if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
+        if (onTypewriterProgress) onTypewriterProgress(totalLen);
+        if (onEnd) onEnd();
+    };
+    utter.onerror = () => {
+        if (mcqState.typewriterInterval) clearInterval(mcqState.typewriterInterval);
+        if (onTypewriterProgress) onTypewriterProgress(totalLen);
+        if (onEnd) onEnd();
+    };
 
     window.speechSynthesis.speak(utter);
 }
@@ -5862,199 +5934,344 @@ function drawMCQCanvas() {
         ctx.restore();
     }
 
-    // 3. Question Card Container (Height expanded to 440px)
-    ctx.save();
-    const qBoxW = 980; const qBoxH = 440; const qBoxX = (width - qBoxW) / 2; const qBoxY = 200;
-    ctx.fillStyle = t.qBoxBg;
-    ctx.strokeStyle = t.qBoxBorder;
-    ctx.lineWidth = 4;
-    ctx.shadowColor = t.qAccent;
-    ctx.shadowBlur = 24;
-    ctx.beginPath();
-    ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 28);
-    ctx.fill();
-    ctx.stroke();
+    const qBoxW = 980; const qBoxX = (width - qBoxW) / 2;
 
-    // Top theme accent line
-    ctx.fillStyle = t.qAccent;
-    ctx.beginPath();
-    ctx.roundRect(qBoxX, qBoxY, qBoxW, 12, [28, 28, 0, 0]);
-    ctx.fill();
+    // --- PHASE BRANCHING FOR CANVAS RENDERING ---
+    if (mcqState.phase === 'EXPLANATION' || mcqState.phase === 'ANSWER') {
+        // ============================================================
+        // DEDICATED SCREEN 1: DETAILED EXPLANATION SCREEN
+        // ============================================================
 
-    // Question Label
-    ctx.font = 'bold 32px "Inter", sans-serif';
-    ctx.fillStyle = t.qLabel;
-    ctx.textAlign = 'left';
-    ctx.fillText('QUESTION / प्रश्न:', qBoxX + 40, qBoxY + 55);
+        // 1. Correct Answer Banner Card (Height 190px, Y=200)
+        const ansCardY = 200; const ansCardH = 190;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, ansCardY, qBoxW, ansCardH, 24);
+        const greenGrad = ctx.createLinearGradient(qBoxX, ansCardY, qBoxX + qBoxW, ansCardY + ansCardH);
+        greenGrad.addColorStop(0, '#15803d');
+        greenGrad.addColorStop(1, '#22c55e');
+        ctx.fillStyle = greenGrad;
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 28;
+        ctx.fill();
+        ctx.stroke();
 
-    // Typewriter Question Text (Large 54px bold font)
-    const visibleQText = qData ? qData.question.substring(0, mcqState.qCharCount) : '';
-    ctx.font = '700 54px "Mukta", "Inter", sans-serif';
-    ctx.fillStyle = t.qTextColor || '#ffffff';
-    const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 80);
-    let qLineY = qBoxY + 130;
-    qLines.forEach(line => {
-        ctx.fillText(line, qBoxX + 40, qLineY);
-        qLineY += 72;
-    });
-    ctx.restore();
+        // Label
+        ctx.font = 'bold 30px "Inter", sans-serif';
+        ctx.fillStyle = '#dcfce7';
+        ctx.textAlign = 'left';
+        ctx.fillText('✓ सही उत्तर / CORRECT ANSWER:', qBoxX + 45, ansCardY + 52);
 
-    // 4. Options List (4 Cards, Height 160px each)
-    const optYStart = 670;
-    const optCardH = 160;
-    const optGap = 24;
+        // Correct Option Text (Large 44px)
+        ctx.font = 'bold 44px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(qData ? qData.correct_option : '', qBoxX + 45, ansCardY + 124);
+        ctx.restore();
 
-    if (qData && qData.options) {
-        qData.options.forEach((optText, idx) => {
-            const optY = optYStart + idx * (optCardH + optGap);
-            const isCorrect = idx === qData.correct_index;
-            const isAnswerPhase = mcqState.phase === 'ANSWER';
+        // 2. Detailed Explanation Main Container (Height 1420px, Y=420)
+        const expBoxY = 420; const expBoxH = 1420;
+        ctx.save();
+        ctx.fillStyle = t.qTextColor ? 'rgba(255, 255, 255, 0.97)' : 'rgba(15, 23, 42, 0.96)';
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = 'rgba(34, 197, 94, 0.3)';
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, expBoxY, qBoxW, expBoxH, 28);
+        ctx.fill();
+        ctx.stroke();
+
+        // Top green accent line
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, expBoxY, qBoxW, 14, [28, 28, 0, 0]);
+        ctx.fill();
+
+        // Header Label
+        ctx.font = 'bold 36px "Inter", sans-serif';
+        ctx.fillStyle = '#16a34a';
+        ctx.textAlign = 'left';
+        ctx.fillText('💡 विस्तृत उत्तर व्याख्या / DETAILED EXPLANATION:', qBoxX + 45, expBoxY + 70);
+
+        // Horizontal divider line
+        ctx.strokeStyle = t.qTextColor ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(qBoxX + 40, expBoxY + 105);
+        ctx.lineTo(qBoxX + qBoxW - 40, expBoxY + 105);
+        ctx.stroke();
+
+        // Typewriter Explanation Text (Generous 44px bold font, 66px line height)
+        const visibleExpText = qData && qData.explanation ? qData.explanation.substring(0, mcqState.expCharCount) : '';
+        ctx.font = '600 44px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor ? '#1e293b' : '#f8fafc';
+        const expLines = wrapCanvasText(ctx, visibleExpText, qBoxW - 90);
+        let expLineY = expBoxY + 175;
+        expLines.forEach(line => {
+            ctx.fillText(line, qBoxX + 45, expLineY);
+            expLineY += 66;
+        });
+        ctx.restore();
+
+    } else if (mcqState.phase === 'OUTRO') {
+        // ============================================================
+        // DEDICATED SCREEN 2: OUTRO CALL-TO-ACTION CLIP SCREEN
+        // ============================================================
+        const outroY = 300; const outroH = 1500;
+        ctx.save();
+        ctx.fillStyle = t.qTextColor ? 'rgba(255, 255, 255, 0.97)' : 'rgba(15, 23, 42, 0.96)';
+        ctx.strokeStyle = '#c62828';
+        ctx.lineWidth = 5;
+        ctx.shadowColor = '#0d47a1';
+        ctx.shadowBlur = 35;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, outroY, qBoxW, outroH, 32);
+        ctx.fill();
+        ctx.stroke();
+
+        // Top Accent bar in Nepal PSC Crimson Red
+        ctx.fillStyle = '#c62828';
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, outroY, qBoxW, 16, [32, 32, 0, 0]);
+        ctx.fill();
+
+        // Glowing Brand Badge Pill
+        const pillW = 460; const pillH = 75; const pillX = (width - pillW) / 2; const pillY = outroY + 50;
+        ctx.fillStyle = '#0d47a1';
+        ctx.beginPath();
+        ctx.roundRect(pillX, pillY, pillW, pillH, 38);
+        ctx.fill();
+
+        ctx.font = 'bold 36px "Inter", sans-serif';
+        ctx.fillStyle = '#ffc107';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✨ GROWUP LOKSEWA ✨', width / 2, pillY + pillH / 2);
+
+        // Outro Title
+        ctx.font = 'bold 50px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor ? '#0d47a1' : '#60a5fa';
+        ctx.textAlign = 'center';
+        ctx.fillText('हाम्रो पानालाई फलो गर्नुहोला!', width / 2, outroY + 200);
+
+        // Divider
+        ctx.strokeStyle = 'rgba(198, 40, 40, 0.3)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(qBoxX + 60, outroY + 245);
+        ctx.lineTo(qBoxX + qBoxW - 60, outroY + 245);
+        ctx.stroke();
+
+        // Typewriter Outro Body Text (48px bold font, 74px line height)
+        const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
+        const visibleOutroText = outroText.substring(0, mcqState.outroCharCount || 0);
+        ctx.font = '700 48px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor ? '#1e293b' : '#f8fafc';
+        ctx.textAlign = 'left';
+        const outroLines = wrapCanvasText(ctx, visibleOutroText, qBoxW - 100);
+        let outroLineY = outroY + 340;
+        outroLines.forEach(line => {
+            ctx.fillText(line, qBoxX + 50, outroLineY);
+            outroLineY += 76;
+        });
+
+        // Social CTA Footer Container
+        const ctaY = outroY + outroH - 320;
+        ctx.fillStyle = 'rgba(13, 71, 161, 0.08)';
+        ctx.strokeStyle = 'rgba(13, 71, 161, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX + 40, ctaY, qBoxW - 80, 240, 24);
+        ctx.fill();
+        ctx.stroke();
+
+        // Handle
+        ctx.font = 'bold 42px "Inter", sans-serif';
+        ctx.fillStyle = '#c62828';
+        ctx.textAlign = 'center';
+        ctx.fillText(brandHandle, width / 2, ctaY + 70);
+
+        // Interactive Badges (Like, Share, Follow)
+        const badgeW = 240; const badgeH = 70; const badgeGap = 30;
+        const totalBadgesW = badgeW * 3 + badgeGap * 2;
+        let startBadgeX = (width - totalBadgesW) / 2;
+        const badgeY = ctaY + 130;
+
+        const ctaBadges = [
+            { text: '👍 LIKE', bg: '#0d47a1', color: '#ffffff' },
+            { text: '🔄 SHARE', bg: '#c62828', color: '#ffffff' },
+            { text: '🔔 FOLLOW', bg: '#ffc107', color: '#0d47a1' }
+        ];
+
+        ctaBadges.forEach(b => {
+            ctx.fillStyle = b.bg;
+            ctx.beginPath();
+            ctx.roundRect(startBadgeX, badgeY, badgeW, badgeH, 20);
+            ctx.fill();
+
+            ctx.font = 'bold 32px "Inter", sans-serif';
+            ctx.fillStyle = b.color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(b.text, startBadgeX + badgeW / 2, badgeY + badgeH / 2);
+
+            startBadgeX += badgeW + badgeGap;
+        });
+
+        ctx.restore();
+
+    } else {
+        // ============================================================
+        // STANDARD SCREEN: QUESTION & OPTIONS
+        // ============================================================
+
+        // 3. Question Card Container (Height 440px)
+        ctx.save();
+        const qBoxH = 440; const qBoxY = 200;
+        ctx.fillStyle = t.qBoxBg;
+        ctx.strokeStyle = t.qBoxBorder;
+        ctx.lineWidth = 4;
+        ctx.shadowColor = t.qAccent;
+        ctx.shadowBlur = 24;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 28);
+        ctx.fill();
+        ctx.stroke();
+
+        // Top theme accent line
+        ctx.fillStyle = t.qAccent;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, qBoxY, qBoxW, 12, [28, 28, 0, 0]);
+        ctx.fill();
+
+        // Question Label
+        ctx.font = 'bold 32px "Inter", sans-serif';
+        ctx.fillStyle = t.qLabel;
+        ctx.textAlign = 'left';
+        ctx.fillText('QUESTION / प्रश्न:', qBoxX + 40, qBoxY + 55);
+
+        // Typewriter Question Text (Large 54px bold font)
+        const visibleQText = qData ? qData.question.substring(0, mcqState.qCharCount) : '';
+        ctx.font = '700 54px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor || '#ffffff';
+        const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 80);
+        let qLineY = qBoxY + 130;
+        qLines.forEach(line => {
+            ctx.fillText(line, qBoxX + 40, qLineY);
+            qLineY += 72;
+        });
+        ctx.restore();
+
+        // 4. Options List (4 Cards, Height 160px each)
+        const optYStart = 670;
+        const optCardH = 160;
+        const optGap = 24;
+
+        if (qData && qData.options) {
+            qData.options.forEach((optText, idx) => {
+                const optY = optYStart + idx * (optCardH + optGap);
+                const isCorrect = idx === qData.correct_index;
+                const isAnswerPhase = mcqState.phase === 'ANSWER';
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 24);
+
+                if (isAnswerPhase && isCorrect) {
+                    // Highlight Correct Option in glowing green gradient
+                    const greenGrad = ctx.createLinearGradient(qBoxX, optY, qBoxX + qBoxW, optY + optCardH);
+                    greenGrad.addColorStop(0, '#15803d');
+                    greenGrad.addColorStop(1, '#22c55e');
+                    ctx.fillStyle = greenGrad;
+                    ctx.strokeStyle = '#4ade80';
+                    ctx.lineWidth = 5;
+                    ctx.shadowColor = '#22c55e';
+                    ctx.shadowBlur = 35;
+                } else if (isAnswerPhase && !isCorrect) {
+                    // Dim non-correct options
+                    ctx.fillStyle = t.optTextColor ? 'rgba(230, 230, 235, 0.7)' : 'rgba(15, 23, 42, 0.4)';
+                    ctx.strokeStyle = t.optTextColor ? 'rgba(200, 200, 210, 0.3)' : 'rgba(255, 255, 255, 0.05)';
+                    ctx.lineWidth = 2;
+                } else {
+                    // Standard option card state
+                    ctx.fillStyle = t.optCardBg;
+                    ctx.strokeStyle = t.optCardBorder;
+                    ctx.lineWidth = 3;
+                }
+                ctx.fill();
+                ctx.stroke();
+
+                // Option Letter Badge Circle (A, B, C, D) - Diameter 74px
+                const badgeX = qBoxX + 56;
+                const badgeY = optY + optCardH / 2;
+                const badgeR = 37;
+                ctx.beginPath();
+                ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+                ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(200,200,210,0.4)' : 'rgba(255,255,255,0.1)') : t.badgeBg);
+                ctx.fill();
+
+                ctx.font = 'bold 42px "Inter", sans-serif';
+                ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : t.badgeText;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const letter = String.fromCharCode(65 + idx);
+                ctx.fillText(letter, badgeX, badgeY + 2);
+
+                // Typewriter Option Text (Large 42px bold font)
+                const charCount = mcqState.optCharCounts[idx] || 0;
+                const visibleOptText = optText.substring(0, charCount);
+                ctx.font = '600 42px "Mukta", "Inter", sans-serif';
+                ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(100,100,120,0.5)' : 'rgba(255,255,255,0.4)') : (t.optTextColor || '#f8fafc'));
+                ctx.textAlign = 'left';
+                ctx.fillText(visibleOptText, qBoxX + 120, badgeY);
+
+                // If correct in answer phase, draw Checkmark icon ✓
+                if (isAnswerPhase && isCorrect) {
+                    ctx.font = 'bold 52px "Inter", sans-serif';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('✓', qBoxX + qBoxW - 44, badgeY);
+                }
+                ctx.restore();
+            });
+        }
+
+        // 5. Phase 3: 3-Second Countdown Visual Arc Widget
+        if (mcqState.phase === 'COUNTDOWN') {
+            const cdX = width / 2;
+            const cdY = 1480;
+            const cdR = 95;
 
             ctx.save();
+            // Background Circle
             ctx.beginPath();
-            ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 24);
-
-            if (isAnswerPhase && isCorrect) {
-                // Highlight Correct Option in glowing green gradient
-                const greenGrad = ctx.createLinearGradient(qBoxX, optY, qBoxX + qBoxW, optY + optCardH);
-                greenGrad.addColorStop(0, '#15803d');
-                greenGrad.addColorStop(1, '#22c55e');
-                ctx.fillStyle = greenGrad;
-                ctx.strokeStyle = '#4ade80';
-                ctx.lineWidth = 5;
-                ctx.shadowColor = '#22c55e';
-                ctx.shadowBlur = 35;
-            } else if (isAnswerPhase && !isCorrect) {
-                // Dim non-correct options
-                ctx.fillStyle = t.optTextColor ? 'rgba(230, 230, 235, 0.7)' : 'rgba(15, 23, 42, 0.4)';
-                ctx.strokeStyle = t.optTextColor ? 'rgba(200, 200, 210, 0.3)' : 'rgba(255, 255, 255, 0.05)';
-                ctx.lineWidth = 2;
-            } else {
-                // Standard option card state
-                ctx.fillStyle = t.optCardBg;
-                ctx.strokeStyle = t.optCardBorder;
-                ctx.lineWidth = 3;
-            }
+            ctx.arc(cdX, cdY, cdR, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 10;
             ctx.fill();
             ctx.stroke();
 
-            // Option Letter Badge Circle (A, B, C, D) - Diameter 74px
-            const badgeX = qBoxX + 56;
-            const badgeY = optY + optCardH / 2;
-            const badgeR = 37;
+            // Progress Arc
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + (Math.PI * 2 * mcqState.countdownArc);
             ctx.beginPath();
-            ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(200,200,210,0.4)' : 'rgba(255,255,255,0.1)') : t.badgeBg);
-            ctx.fill();
+            ctx.arc(cdX, cdY, cdR, startAngle, endAngle);
+            ctx.strokeStyle = t.cdStroke;
+            ctx.lineWidth = 14;
+            ctx.lineCap = 'round';
+            ctx.stroke();
 
-            ctx.font = 'bold 42px "Inter", sans-serif';
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : t.badgeText;
+            // Big Countdown Digit (3, 2, 1)
+            ctx.font = 'bold 90px "Inter", sans-serif';
+            ctx.fillStyle = t.cdText;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            const letter = String.fromCharCode(65 + idx);
-            ctx.fillText(letter, badgeX, badgeY + 2);
-
-            // Typewriter Option Text (Large 42px bold font)
-            const charCount = mcqState.optCharCounts[idx] || 0;
-            const visibleOptText = optText.substring(0, charCount);
-            ctx.font = '600 42px "Mukta", "Inter", sans-serif';
-            ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(100,100,120,0.5)' : 'rgba(255,255,255,0.4)') : (t.optTextColor || '#f8fafc'));
-            ctx.textAlign = 'left';
-            ctx.fillText(visibleOptText, qBoxX + 120, badgeY);
-
-            // If correct in answer phase, draw Checkmark icon ✓
-            if (isAnswerPhase && isCorrect) {
-                ctx.font = 'bold 52px "Inter", sans-serif';
-                ctx.fillStyle = '#ffffff';
-                ctx.textAlign = 'right';
-                ctx.fillText('✓', qBoxX + qBoxW - 44, badgeY);
-            }
+            ctx.fillText(mcqState.countdownSec.toString(), cdX, cdY);
             ctx.restore();
-        });
-    }
-
-    // 5. Phase 3: 3-Second Countdown Visual Arc Widget
-    if (mcqState.phase === 'COUNTDOWN') {
-        const cdX = width / 2;
-        const cdY = 1480;
-        const cdR = 95;
-
-        ctx.save();
-        // Background Circle
-        ctx.beginPath();
-        ctx.arc(cdX, cdY, cdR, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 10;
-        ctx.fill();
-        ctx.stroke();
-
-        // Progress Arc
-        const startAngle = -Math.PI / 2;
-        const endAngle = startAngle + (Math.PI * 2 * mcqState.countdownArc);
-        ctx.beginPath();
-        ctx.arc(cdX, cdY, cdR, startAngle, endAngle);
-        ctx.strokeStyle = t.cdStroke;
-        ctx.lineWidth = 14;
-        ctx.lineCap = 'round';
-        ctx.stroke();
-
-        // Big Countdown Digit (3, 2, 1)
-        ctx.font = 'bold 90px "Inter", sans-serif';
-        ctx.fillStyle = t.cdText;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(mcqState.countdownSec.toString(), cdX, cdY);
-        ctx.restore();
-    }
-
-    // 6. Phase 4: Explanation Card Box (Height 400px, 36px font)
-    if (mcqState.phase === 'ANSWER') {
-        const expBoxW = 980; const expBoxH = 420; const expBoxX = (width - expBoxW) / 2; const expBoxY = 1420;
-        ctx.save();
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
-        ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-        ctx.lineWidth = 4;
-        ctx.shadowColor = 'rgba(34, 197, 94, 0.35)';
-        ctx.shadowBlur = 24;
-        ctx.beginPath();
-        ctx.roundRect(expBoxX, expBoxY, expBoxW, expBoxH, 28);
-        ctx.fill();
-        ctx.stroke();
-
-        // Top green line
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.roundRect(expBoxX, expBoxY, expBoxW, 12, [28, 28, 0, 0]);
-        ctx.fill();
-
-        // Label
-        ctx.font = 'bold 32px "Inter", sans-serif';
-        ctx.fillStyle = '#4ade80';
-        ctx.textAlign = 'left';
-        ctx.fillText('EXPLANATION / उत्तर व्याख्या:', expBoxX + 40, expBoxY + 55);
-
-        // Correct Option Highlight Banner
-        ctx.fillStyle = 'rgba(34, 197, 94, 0.18)';
-        ctx.beginPath();
-        ctx.roundRect(expBoxX + 35, expBoxY + 80, expBoxW - 70, 64, 12);
-        ctx.fill();
-
-        ctx.font = 'bold 34px "Mukta", "Inter", sans-serif';
-        ctx.fillStyle = '#86efac';
-        ctx.fillText(`सही उत्तर: ${qData.correct_option}`, expBoxX + 50, expBoxY + 122);
-
-        // Typewriter Explanation Body (36px bold font)
-        const visibleExpText = qData.explanation ? qData.explanation.substring(0, mcqState.expCharCount) : '';
-        ctx.font = '600 36px "Mukta", "Inter", sans-serif';
-        ctx.fillStyle = '#f1f5f9';
-        const expLines = wrapCanvasText(ctx, visibleExpText, expBoxW - 80);
-        let expLineY = expBoxY + 205;
-        expLines.forEach(line => {
-            ctx.fillText(line, expBoxX + 40, expLineY);
-            expLineY += 52;
-        });
-        ctx.restore();
+        }
     }
 }
 
@@ -6100,56 +6317,13 @@ function startMCQSequence() {
     mcqState.countdownSec = 3;
     mcqState.countdownArc = 1.0;
     mcqState.expCharCount = 0;
+    mcqState.outroCharCount = 0;
 
     const qData = mcqState.questions[mcqState.currentIndex] || mcqState.questions[0];
     const lang = document.getElementById('mcq-language')?.value || 'Nepali';
 
     const phaseLabel = document.getElementById('mcq-phase-label');
-    if (phaseLabel) phaseLabel.innerText = "Phase 1: Question Typewriter & Voiceover";
-
-    // 1. Typewriter Question loop
-    const qInterval = setInterval(() => {
-        if (mcqState.qCharCount < qData.question.length) {
-            mcqState.qCharCount++;
-            drawMCQCanvas();
-        } else {
-            clearInterval(qInterval);
-        }
-    }, 45);
-
-    // Speak Question, then proceed to Options Phase
-    speakMCQText(qData.question, lang, () => {
-        if (!mcqState.isPlaying) return;
-        mcqState.phase = 'OPTIONS';
-        mcqState.qCharCount = qData.question.length;
-        if (phaseLabel) phaseLabel.innerText = "Phase 2: Options Display";
-
-        let optIdx = 0;
-        function animateNextOption() {
-            if (!mcqState.isPlaying) return;
-            if (optIdx < 4) {
-                const text = qData.options[optIdx] || '';
-                const oInt = setInterval(() => {
-                    if (mcqState.optCharCounts[optIdx] < text.length) {
-                        mcqState.optCharCounts[optIdx]++;
-                        drawMCQCanvas();
-                    } else {
-                        clearInterval(oInt);
-                    }
-                }, 30);
-
-                speakMCQText(text, lang, () => {
-                    mcqState.optCharCounts[optIdx] = text.length;
-                    optIdx++;
-                    setTimeout(animateNextOption, 300);
-                });
-            } else {
-                // All options read! Start Phase 3: 3-Second Countdown
-                startMCQCountdown(lang, qData);
-            }
-        }
-        animateNextOption();
-    });
+    if (phaseLabel) phaseLabel.innerText = `Phase 1: Question ${mcqState.currentIndex + 1}/${mcqState.questions.length} Typewriter & Voiceover`;
 
     // Continuous Canvas Render Loop
     function renderLoop() {
@@ -6159,6 +6333,38 @@ function startMCQSequence() {
         }
     }
     mcqState.animFrameId = requestAnimationFrame(renderLoop);
+
+    // Speak Question with synced typewriter animation
+    speakMCQText(qData.question, lang, () => {
+        if (!mcqState.isPlaying) return;
+        mcqState.phase = 'OPTIONS';
+        mcqState.qCharCount = qData.question.length;
+        if (phaseLabel) phaseLabel.innerText = `Phase 2: Question ${mcqState.currentIndex + 1} Options Display`;
+
+        let optIdx = 0;
+        function animateNextOption() {
+            if (!mcqState.isPlaying) return;
+            if (optIdx < 4) {
+                const text = qData.options[optIdx] || '';
+                const currentOptIdx = optIdx;
+                speakMCQText(text, lang, () => {
+                    mcqState.optCharCounts[currentOptIdx] = text.length;
+                    optIdx++;
+                    setTimeout(animateNextOption, 250);
+                }, (charCount) => {
+                    mcqState.optCharCounts[currentOptIdx] = charCount;
+                    drawMCQCanvas();
+                });
+            } else {
+                // All options read! Start Phase 3: 3-Second Countdown
+                startMCQCountdown(lang, qData);
+            }
+        }
+        animateNextOption();
+    }, (charCount) => {
+        mcqState.qCharCount = charCount;
+        drawMCQCanvas();
+    });
 }
 
 function startMCQCountdown(lang, qData) {
@@ -6189,7 +6395,7 @@ function startMCQCountdown(lang, qData) {
 
         if (remaining <= 0) {
             clearInterval(cdInterval);
-            // Finish Countdown -> Proceed to Phase 4: Answer Reveal
+            // Finish Countdown -> Proceed to Phase 4: Dedicated Explanation Screen
             revealMCQAnswer(lang, qData);
         }
     }, 50);
@@ -6197,24 +6403,14 @@ function startMCQCountdown(lang, qData) {
 
 function revealMCQAnswer(lang, qData) {
     if (!mcqState.isPlaying) return;
-    mcqState.phase = 'ANSWER';
+    mcqState.phase = 'EXPLANATION'; // Dedicated Explanation Screen
     mcqState.expCharCount = 0;
 
     const phaseLabel = document.getElementById('mcq-phase-label');
-    if (phaseLabel) phaseLabel.innerText = "Phase 4: Correct Answer & Explanation";
+    if (phaseLabel) phaseLabel.innerText = `Phase 4: Q${mcqState.currentIndex + 1} Detailed Explanation Screen`;
 
     // Play Victory Chime Sound
     playMCQBeep(1200, 400);
-
-    // Typewriter Explanation text loop
-    const expInterval = setInterval(() => {
-        if (mcqState.expCharCount < qData.explanation.length) {
-            mcqState.expCharCount++;
-            drawMCQCanvas();
-        } else {
-            clearInterval(expInterval);
-        }
-    }, 40);
 
     const speakText = `सही उत्तर: ${qData.correct_option}। ${qData.explanation}`;
     speakMCQText(speakText, lang, () => {
@@ -6225,85 +6421,62 @@ function revealMCQAnswer(lang, qData) {
         const totalQuestions = mcqState.questions.length;
 
         if (nextIdx < totalQuestions) {
-            // Auto-advance to next question after a brief pause
-            if (phaseLabel) phaseLabel.innerText = `Moving to Q${nextIdx + 1}/${totalQuestions}...`;
+            if (phaseLabel) phaseLabel.innerText = `Moving to Question ${nextIdx + 1}/${totalQuestions}...`;
             setTimeout(() => {
                 if (!mcqState.isPlaying) return;
                 mcqState.currentIndex = nextIdx;
-                mcqState.phase = 'QUESTION';
-                mcqState.qCharCount = 0;
-                mcqState.optCharCounts = [0, 0, 0, 0];
-                mcqState.countdownSec = 3;
-                mcqState.countdownArc = 1.0;
-                mcqState.expCharCount = 0;
                 updateMCQEditorFields();
-                drawMCQCanvas();
-
-                // Play transition beep
                 playMCQBeep(600, 150);
-
-                // Start the next question sequence
-                const nextQData = mcqState.questions[mcqState.currentIndex];
-                const nextLang = document.getElementById('mcq-language')?.value || 'Nepali';
-
-                if (phaseLabel) phaseLabel.innerText = `Phase 1: Question ${nextIdx + 1}/${totalQuestions} Typewriter & Voiceover`;
-
-                // Typewriter animation for next question
-                const qInterval = setInterval(() => {
-                    if (mcqState.qCharCount < nextQData.question.length) {
-                        mcqState.qCharCount++;
-                        drawMCQCanvas();
-                    } else {
-                        clearInterval(qInterval);
-                    }
-                }, 45);
-
-                speakMCQText(nextQData.question, nextLang, () => {
-                    if (!mcqState.isPlaying) return;
-                    mcqState.phase = 'OPTIONS';
-                    mcqState.qCharCount = nextQData.question.length;
-                    if (phaseLabel) phaseLabel.innerText = `Phase 2: Q${nextIdx + 1} Options Display`;
-
-                    let optIdx = 0;
-                    function animateNextOption() {
-                        if (!mcqState.isPlaying) return;
-                        if (optIdx < 4) {
-                            const text = nextQData.options[optIdx] || '';
-                            const oInt = setInterval(() => {
-                                if (mcqState.optCharCounts[optIdx] < text.length) {
-                                    mcqState.optCharCounts[optIdx]++;
-                                    drawMCQCanvas();
-                                } else {
-                                    clearInterval(oInt);
-                                }
-                            }, 30);
-
-                            speakMCQText(text, nextLang, () => {
-                                mcqState.optCharCounts[optIdx] = text.length;
-                                optIdx++;
-                                setTimeout(animateNextOption, 300);
-                            });
-                        } else {
-                            startMCQCountdown(nextLang, nextQData);
-                        }
-                    }
-                    animateNextOption();
-                });
+                startMCQSequence();
             }, 2000);
         } else {
-            // All questions completed
-            if (phaseLabel) phaseLabel.innerText = `✅ All ${totalQuestions} Questions Complete!`;
-            if (mcqState.isExporting && mcqState.mediaRecorder) {
-                setTimeout(() => {
-                    try { mcqState.mediaRecorder.stop(); } catch(e){}
-                }, 1000);
-            }
+            // All questions finished -> Proceed to Outro Clip!
+            startMCQOutro(lang);
         }
+    }, (charCount) => {
+        mcqState.expCharCount = charCount;
+        drawMCQCanvas();
+    });
+}
+
+function startMCQOutro(lang) {
+    if (!mcqState.isPlaying) return;
+    mcqState.phase = 'OUTRO'; // Dedicated Outro Screen
+    mcqState.outroCharCount = 0;
+
+    const phaseLabel = document.getElementById('mcq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "Phase 5: Outro Call-To-Action Clip";
+
+    // Play cheerful chime
+    playMCQBeep(1000, 300);
+
+    const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
+
+    speakMCQText(outroText, lang, () => {
+        mcqState.outroCharCount = outroText.length;
+        if (phaseLabel) phaseLabel.innerText = "✅ Video Playback & Outro Complete!";
+
+        if (mcqState.isExporting && mcqState.mediaRecorder) {
+            setTimeout(() => {
+                try { mcqState.mediaRecorder.stop(); } catch(e){}
+            }, 1500);
+        }
+    }, (charCount) => {
+        mcqState.outroCharCount = charCount;
+        drawMCQCanvas();
     });
 }
 
 function stopMCQSequence() {
     mcqState.isPlaying = false;
+    if (mcqState.typewriterInterval) {
+        clearInterval(mcqState.typewriterInterval);
+        mcqState.typewriterInterval = null;
+    }
+    if (currentAudioEl) {
+        try { currentAudioEl.pause(); } catch(e){}
+        currentAudioEl = null;
+    }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (mcqState.animFrameId) cancelAnimationFrame(mcqState.animFrameId);
     const phaseLabel = document.getElementById('mcq-phase-label');
