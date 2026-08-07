@@ -169,14 +169,6 @@ const API_URL = (window.location.hostname === 'localhost' || window.location.hos
     ? 'http://localhost:5680'
     : (CONFIG.N8N_MANUAL_WEBHOOK_URL ? CONFIG.N8N_MANUAL_WEBHOOK_URL.replace(/\/generate$/, '') : 'https://loksewa-backend-ah2s.onrender.com');
 
-// Safe Supabase client retrieval
-const getCreateClient = () => {
-    if (window.supabase && window.supabase.createClient) {
-        return window.supabase.createClient;
-    }
-    return null;
-};
-
 const SUPABASE_URL = CONFIG.SUPABASE_URL;
 const SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY;
 
@@ -186,25 +178,27 @@ let isGuest = false;
 let currentUser = null;
 window.isGuest = false;
 
-try {
-    const createClientFn = getCreateClient();
+function getSupabaseClient() {
+    if (supabase) return supabase;
+    const createClientFn = window.supabase?.createClient || window.createClient;
     if (createClientFn && SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-        supabase = createClientFn(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } else {
-        console.warn("Supabase client not available or unconfigured, running in mock/demo mode");
-        isMockMode = true;
+        try {
+            supabase = createClientFn(SUPABASE_URL, SUPABASE_ANON_KEY);
+            return supabase;
+        } catch (e) {
+            console.error("Supabase client init error:", e);
+        }
     }
-} catch (err) {
-    console.warn("Supabase client init error, switching to mock mode:", err);
-    isMockMode = true;
+    return null;
 }
 
-if (supabase) {
+// Initial session check
+const initialClient = getSupabaseClient();
+if (initialClient) {
     try {
-        supabase.auth.getSession().then(({ data, error }) => {
+        initialClient.auth.getSession().then(({ data, error }) => {
             if (error && error.message && error.message.includes('Invalid API key')) {
-                console.warn("Invalid Supabase API key detected! Falling back to Mock/Demo Mode.");
-                isMockMode = true;
+                console.warn("Invalid Supabase API key detected!");
                 return;
             }
             if (data && data.session) {
@@ -214,7 +208,7 @@ if (supabase) {
             console.warn("getSession error:", e);
         });
 
-        supabase.auth.onAuthStateChange((_event, session) => {
+        initialClient.auth.onAuthStateChange((_event, session) => {
             if (session) {
                 handleAuthChange(session);
             }
@@ -312,12 +306,20 @@ async function handleLoginAction(e) {
 
     setLoginLoading(true);
 
+    const client = getSupabaseClient();
+    if (!client) {
+        showLoginError('Authentication service failed to initialize. Please refresh.');
+        setLoginLoading(false);
+        isSigningIn = false;
+        return;
+    }
+
     try {
         isMockMode = false;
         isGuest = false;
         window.isGuest = false;
 
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await client.auth.signInWithPassword({ email, password });
 
         if (error) {
             console.error("Supabase Auth Error:", error.message);
