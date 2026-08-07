@@ -5537,11 +5537,34 @@ let mcqState = {
     stepTimer: null
 };
 
-function playMCQBeep(freq, durationMs) {
+let mcqAudioCtx = null;
+let mcqAudioDest = null;
+
+function getMCQAudioDestination() {
     try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
+        if (!AudioCtx) return null;
+        if (!mcqAudioCtx) {
+            mcqAudioCtx = new AudioCtx();
+        }
+        if (mcqAudioCtx.state === 'suspended') {
+            mcqAudioCtx.resume();
+        }
+        if (!mcqAudioDest) {
+            mcqAudioDest = mcqAudioCtx.createMediaStreamDestination();
+        }
+        return mcqAudioDest;
+    } catch(e) {
+        return null;
+    }
+}
+
+function playMCQBeep(freq, durationMs) {
+    try {
+        const destNode = getMCQAudioDestination();
+        const ctx = mcqAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -5550,6 +5573,7 @@ function playMCQBeep(freq, durationMs) {
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (durationMs / 1000));
         osc.connect(gain);
         gain.connect(ctx.destination);
+        if (destNode) gain.connect(destNode);
         osc.start();
         osc.stop(ctx.currentTime + (durationMs / 1000));
     } catch (e) {}
@@ -5622,7 +5646,19 @@ function speakMCQText(text, lang, onEnd, onTypewriterProgress) {
     }).then(data => {
         if (data && data.audio_url) {
             const audio = new Audio(data.audio_url);
+            audio.crossOrigin = 'anonymous';
             currentAudioEl = audio;
+
+            // Route audio element through Web Audio destination so MediaRecorder captures audio!
+            try {
+                const destNode = getMCQAudioDestination();
+                if (destNode && mcqAudioCtx) {
+                    const source = mcqAudioCtx.createMediaElementSource(audio);
+                    source.connect(mcqAudioCtx.destination);
+                    source.connect(destNode);
+                }
+            } catch(ae) {}
+
             audio.onended = () => finish();
             audio.onerror = () => fallbackWebSpeech(text, lang, finish, onTypewriterProgress);
             audio.onplay = () => {
@@ -6479,6 +6515,12 @@ function stopMCQSequence() {
     }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (mcqState.animFrameId) cancelAnimationFrame(mcqState.animFrameId);
+
+    if (mcqState.mediaRecorder && mcqState.mediaRecorder.state !== 'inactive') {
+        try { mcqState.mediaRecorder.stop(); } catch(e){}
+    }
+    mcqState.isExporting = false;
+
     const phaseLabel = document.getElementById('mcq-phase-label');
     if (phaseLabel) phaseLabel.innerText = "Stopped";
     drawMCQCanvas();
@@ -6491,14 +6533,37 @@ async function exportMCQVideo() {
     mcqState.isExporting = true;
     mcqState.recordedChunks = [];
 
-    const stream = canvas.captureStream(30); // 30 FPS
-    let mimeType = 'video/webm;codecs=vp9';
+    const canvasStream = canvas.captureStream(30); // 30 FPS
+    const destNode = getMCQAudioDestination();
+
+    const tracks = [...canvasStream.getVideoTracks()];
+    if (destNode && destNode.stream.getAudioTracks().length > 0) {
+        tracks.push(...destNode.stream.getAudioTracks());
+    }
+
+    const combinedStream = new MediaStream(tracks);
+
+    // MimeType fallback selection
+    let mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
+    let fileExt = 'mp4';
+
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/mp4';
+    }
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp9,opus';
+        fileExt = 'webm';
+    }
     if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'video/webm';
+        fileExt = 'webm';
     }
 
     try {
-        const recorder = new MediaRecorder(stream, { mimeType });
+        const recorder = new MediaRecorder(combinedStream, {
+            mimeType,
+            videoBitsPerSecond: 4500000 // 4.5 Mbps HD vertical video for Reels
+        });
         mcqState.mediaRecorder = recorder;
 
         recorder.ondataavailable = (e) => {
@@ -6512,7 +6577,7 @@ async function exportMCQVideo() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `mcq_loksewa_reel_${Date.now()}.webm`;
+            a.download = `mcq_loksewa_reel_${Date.now()}.${fileExt}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -6520,7 +6585,7 @@ async function exportMCQVideo() {
 
             mcqState.isExporting = false;
             const phaseLabel = document.getElementById('mcq-phase-label');
-            if (phaseLabel) phaseLabel.innerText = "Video Exported Successfully!";
+            if (phaseLabel) phaseLabel.innerText = `✅ Reel Exported (${fileExt.toUpperCase()} with Voiceover)!`;
         };
 
         recorder.start();
