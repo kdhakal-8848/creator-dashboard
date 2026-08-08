@@ -1046,9 +1046,77 @@ const DEFAULT_PRESETS = [
     { id: 'template-facts-single', defaultName: 'Facts (Single Statement)' }
 ];
 
+function saveCanvasLayoutOverrides(canvas, templateName) {
+    if (!canvas) return;
+    const overridesStr = localStorage.getItem('loksewa_template_overrides');
+    const overrides = overridesStr ? JSON.parse(overridesStr) : {};
+
+    const activePreset = templateName || document.getElementById('template-selector')?.value || document.getElementById('canvas-base-template')?.value || 'template-classic';
+    const tmplOverrides = overrides[activePreset] || { extraObjects: [] };
+    tmplOverrides.extraObjects = [];
+
+    canvas.getObjects().forEach(obj => {
+        const cType = obj.customType || (obj.isPlaceholder ? obj.isPlaceholder : null);
+        if (cType && !obj.isExtraOverride) {
+            tmplOverrides[cType] = {
+                left: obj.left,
+                top: obj.top,
+                scaleX: obj.scaleX !== undefined ? obj.scaleX : 1,
+                scaleY: obj.scaleY !== undefined ? obj.scaleY : 1,
+                width: obj.width,
+                height: obj.height,
+                fill: obj.fill,
+                fontSize: obj.fontSize,
+                opacity: obj.opacity !== undefined ? obj.opacity : 1,
+                angle: obj.angle || 0,
+                rx: obj.rx,
+                ry: obj.ry
+            };
+
+            if (cType === 'header-asset') {
+                const hStyle = {
+                    left: obj.left, top: obj.top,
+                    scaleX: obj.scaleX !== undefined ? obj.scaleX : 1,
+                    scaleY: obj.scaleY !== undefined ? obj.scaleY : 1,
+                    width: obj.width, height: obj.height,
+                    opacity: obj.opacity !== undefined ? obj.opacity : 1,
+                    angle: obj.angle || 0
+                };
+                currentBranding.headerAssetStyle = hStyle;
+                try { localStorage.setItem('loksewa_brand_identity', JSON.stringify(currentBranding)); } catch(e){}
+                
+                if (Array.isArray(allBrands)) {
+                    const brandIdx = allBrands.findIndex(b => b.id === currentBranding.id);
+                    if (brandIdx > -1) {
+                        allBrands[brandIdx].headerAssetStyle = hStyle;
+                        try { localStorage.setItem('loksewa_custom_brands', JSON.stringify(allBrands)); } catch(e){}
+                    }
+                }
+            }
+        } else if (obj.isExtraOverride || (!obj.isPlaceholder && !obj.customType)) {
+            try {
+                tmplOverrides.extraObjects.push(obj.toObject(['isExtraOverride', 'customType']));
+            } catch(e){}
+        }
+    });
+
+    overrides[activePreset] = tmplOverrides;
+    if (activePreset !== 'template-custom') {
+        overrides['template-custom'] = tmplOverrides;
+    }
+    try { localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides)); } catch(e){}
+}
+
 function syncTemplateDropdowns() {
     const customTemplates = JSON.parse(localStorage.getItem('loksewa_custom_templates') || '[]');
+    const cdTemplates = JSON.parse(localStorage.getItem('cd_templates') || '[]');
     const customNames = JSON.parse(localStorage.getItem('loksewa_template_names') || '{}');
+
+    cdTemplates.forEach(cdt => {
+        if (cdt.name && !customTemplates.some(ct => ct.id === cdt.name || ct.name === cdt.name)) {
+            customTemplates.push({ id: cdt.name, name: cdt.name });
+        }
+    });
 
     const selectors = [
         document.getElementById('canvas-base-template'),
@@ -1146,30 +1214,9 @@ function initDesignStudio() {
         });
 
         document.getElementById('canvas-save-overrides')?.addEventListener('click', () => {
-            const baseTemplate = document.getElementById('canvas-base-template')?.value;
-            if (!baseTemplate) {
-                alert("Please select a Base Template from the dropdown first to save overrides for it.");
-                return;
-            }
-            
-            const overridesStr = localStorage.getItem('loksewa_template_overrides');
-            const overrides = overridesStr ? JSON.parse(overridesStr) : {};
-            const tmplOverrides = { extraObjects: [] };
-            
-            freeformCanvas.getObjects().forEach(obj => {
-                if (obj.customType && !obj.isExtraOverride) {
-                    tmplOverrides[obj.customType] = {
-                        left: obj.left, top: obj.top, scaleX: obj.scaleX, scaleY: obj.scaleY,
-                        width: obj.width, height: obj.height, fill: obj.fill, fontSize: obj.fontSize,
-                        opacity: obj.opacity, angle: obj.angle
-                    };
-                } else if (obj.isExtraOverride) {
-                    tmplOverrides.extraObjects.push(obj.toObject(['isExtraOverride', 'customType']));
-                }
-            });
-            
-            overrides[baseTemplate] = tmplOverrides;
-            localStorage.setItem('loksewa_template_overrides', JSON.stringify(overrides));
+            const baseTemplate = document.getElementById('canvas-base-template')?.value || document.getElementById('template-selector')?.value || 'template-classic';
+            const activeC = freeformCanvas || studioCanvas || fabricCanvas;
+            saveCanvasLayoutOverrides(activeC, baseTemplate);
             showToast('Layout overrides saved for ' + baseTemplate);
         });
         window.__designStudioEventsAttached = true;
@@ -1646,33 +1693,42 @@ async function renderFabricSlide(slideData, slideIndex, imageUrl, brand, targetC
                         selectable: true, evented: true,
                         customType: 'header-asset'
                     });
-                    // Check template overrides for header-asset
+                    // Check template overrides and brand headerAssetStyle for header-asset
                     const overridesStr = localStorage.getItem('loksewa_template_overrides');
-                    let appliedOverride = false;
+                    let haStyle = null;
                     if (overridesStr) {
                         try {
                             const overrides = JSON.parse(overridesStr);
                             if (overrides[selectedPreset] && overrides[selectedPreset]['header-asset']) {
-                                const haStyle = overrides[selectedPreset]['header-asset'];
-                                img.set({
-                                    left: haStyle.left !== undefined ? haStyle.left : 80,
-                                    top: haStyle.top !== undefined ? haStyle.top : 67.5,
-                                    scaleX: haStyle.scaleX !== undefined ? haStyle.scaleX : defaultScale,
-                                    scaleY: haStyle.scaleY !== undefined ? haStyle.scaleY : defaultScale,
-                                    opacity: haStyle.opacity !== undefined ? haStyle.opacity : 1,
-                                    angle: haStyle.angle || 0
-                                });
-                                appliedOverride = true;
+                                haStyle = overrides[selectedPreset]['header-asset'];
+                            } else if (overrides['template-custom'] && overrides['template-custom']['header-asset']) {
+                                haStyle = overrides['template-custom']['header-asset'];
                             }
                         } catch(e) {}
                     }
+                    if (!haStyle && brand?.headerAssetStyle) haStyle = brand.headerAssetStyle;
+                    if (!haStyle && slideData.headerAssetStyle) haStyle = slideData.headerAssetStyle;
 
-                    if (!appliedOverride && slideData.headerAssetStyle) {
-                        const customStyle = { ...slideData.headerAssetStyle };
-                        delete customStyle.width; delete customStyle.height;
-                        customStyle.originX = 'left'; customStyle.originY = 'center';
-                        img.set(customStyle);
-                    }
+                    const finalLeft = (haStyle && haStyle.left !== undefined) ? haStyle.left : 80;
+                    const finalTop = (haStyle && haStyle.top !== undefined) ? haStyle.top : 67.5;
+                    const finalScaleX = (haStyle && haStyle.scaleX !== undefined) ? haStyle.scaleX : defaultScale;
+                    const finalScaleY = (haStyle && haStyle.scaleY !== undefined) ? haStyle.scaleY : defaultScale;
+                    const finalOpacity = (haStyle && haStyle.opacity !== undefined) ? haStyle.opacity : 1;
+                    const finalAngle = (haStyle && haStyle.angle !== undefined) ? haStyle.angle : 0;
+
+                    img.set({
+                        left: finalLeft,
+                        top: finalTop,
+                        originX: 'left',
+                        originY: 'center',
+                        scaleX: finalScaleX,
+                        scaleY: finalScaleY,
+                        opacity: finalOpacity,
+                        angle: finalAngle,
+                        selectable: true, evented: true,
+                        customType: 'header-asset'
+                    });
+
                     targetCanvas.add(img);
                     targetCanvas.bringToFront(img);
                     targetCanvas.renderAll();
@@ -4057,18 +4113,25 @@ document.getElementById('studio-bg-color')?.addEventListener('input', (e) => { i
 
 // Save Template
 document.getElementById('save-studio-template')?.addEventListener('click', () => {
-    if (!studioCanvas) return;
+    const activeC = studioCanvas || freeformCanvas;
+    if (!activeC) return;
     const name = document.getElementById('studio-template-name').value.trim();
     if (!name) { showToast('Please enter a template name.', 'error'); return; }
     const templates = JSON.parse(localStorage.getItem('cd_templates') || '[]');
     const existing = templates.findIndex(t => t.name === name);
-    const templateData = { name, canvasJson: studioCanvas.toJSON(['isPlaceholder', 'customType']), createdAt: new Date().toISOString() };
+    const templateData = { name, canvasJson: activeC.toJSON(['isPlaceholder', 'customType']), createdAt: new Date().toISOString() };
     if (existing > -1) templates[existing] = templateData;
     else templates.push(templateData);
     localStorage.setItem('cd_templates', JSON.stringify(templates));
+
+    saveCanvasLayoutOverrides(activeC, name);
+    const selPreset = document.getElementById('template-selector')?.value || 'template-classic';
+    saveCanvasLayoutOverrides(activeC, selPreset);
+
     loadStudioSavedList();
     loadSavedTemplatesSelector();
-    showToast(`Template "${name}" saved!`);
+    syncTemplateDropdowns();
+    showToast(`Template "${name}" saved and applied to generator!`);
     document.getElementById('studio-template-name').value = '';
 });
 
@@ -6288,8 +6351,13 @@ function drawMCQCanvas() {
         ctx.save();
         const imgW = mcqBrandLogoImg.naturalWidth || mcqBrandLogoImg.width;
         const imgH = mcqBrandLogoImg.naturalHeight || mcqBrandLogoImg.height;
-        const bannerMaxW = 900;
-        const bannerMaxH = 110;
+        let bannerMaxW = 900;
+        let bannerMaxH = 110;
+        const hStyle = currentBranding?.headerAssetStyle;
+        if (hStyle && hStyle.scaleX) {
+            bannerMaxH = Math.min(200, Math.round(110 * Math.max(0.5, hStyle.scaleX)));
+            bannerMaxW = Math.min(960, Math.round(900 * Math.max(0.5, hStyle.scaleX)));
+        }
         const scale = Math.min(bannerMaxW / imgW, bannerMaxH / imgH);
         const drawW = imgW * scale;
         const drawH = imgH * scale;
