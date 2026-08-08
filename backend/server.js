@@ -1228,15 +1228,25 @@ app.post('/generate-tts', async (req, res) => {
         const shortLangCode = targetLangCode.split('-')[0]; // ne, en, hi
 
         const apiKeys = getGeminiApiKeys();
+        let speechText = text.trim().replace(/[*_#`~]/g, '');
+        const optMatch = speechText.match(/^([A-D])[\.\)]\s*(.+)$/i);
+        if (optMatch) {
+            const letter = optMatch[1].toUpperCase();
+            const optionContent = optMatch[2];
+            speechText = (lang === 'Nepali' || lang === 'ne')
+                ? `विकल्प ${letter}: ${optionContent}`
+                : `Option ${letter}: ${optionContent}`;
+        }
+        const trimmedText = speechText.substring(0, 500);
+
         for (const geminiApiKey of apiKeys) {
             try {
                 const ttsModel = 'gemini-2.5-flash-preview-tts';
                 const voiceName = 'Aoede';
-                const trimmedText = text.substring(0, 500);
 
                 const requestBody = {
                     contents: [{
-                        parts: [{ text: `Say the following ${lang} text exactly as written, naturally and clearly, as a native ${lang} speaker would: "${trimmedText}"` }]
+                        parts: [{ text: `Say the following ${lang} text naturally and clearly, as a professional native ${lang} speaker would: "${trimmedText}"` }]
                     }],
                     generationConfig: {
                         responseModalities: ['AUDIO'],
@@ -1275,6 +1285,9 @@ app.post('/generate-tts', async (req, res) => {
                 }
                 const errDetail = JSON.stringify(gData).substring(0, 300);
                 console.warn(`[/generate-tts] Key attempt returned status ${gRes.status}: ${errDetail}`);
+                if (gRes.status === 429) {
+                    await new Promise(r => setTimeout(r, 400));
+                }
             } catch (ge) {
                 console.warn("[/generate-tts] Key attempt failed:", ge.message);
             }

@@ -5974,15 +5974,14 @@ async function preloadMCQAudioDeck(lang) {
     let completed = 0;
     updateMCQAudioProgress(0, total, `🎙️ Synthesizing HD Voice Narration (0%)...`);
 
-    // Batched parallel loading (3 at a time) for fast & reliable pre-fetching
-    const BATCH_SIZE = 3;
-    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-        const batch = texts.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(async (t) => {
-            await fetchAudioBuffer(t, lang);
-            completed++;
-            updateMCQAudioProgress(completed, total);
-        }));
+    // Sequential pre-loading with 150ms pacing delay to respect API rate limits and avoid 429 robotic fallbacks
+    for (let i = 0; i < texts.length; i++) {
+        await fetchAudioBuffer(texts[i], lang);
+        completed++;
+        updateMCQAudioProgress(completed, total);
+        if (i < texts.length - 1) {
+            await new Promise(r => setTimeout(r, 150));
+        }
     }
 
     mcqState.isPreloadingAudio = false;
@@ -6862,27 +6861,37 @@ function startMCQCountdown(lang, qData) {
 
     playMCQBeep(800, 200);
 
-    const startTime = Date.now();
-    const duration = 3000;
+    const startAudioTime = mcqAudioCtx ? mcqAudioCtx.currentTime : (performance.now() / 1000);
+    const durationSec = 3.0;
+    let lastSecBeeped = 3;
 
-    const cdInterval = setInterval(() => {
-        if (!mcqState.isPlaying) { clearInterval(cdInterval); return; }
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, duration - elapsed);
-        mcqState.countdownArc = remaining / duration;
-        const currentSec = Math.ceil(remaining / 1000);
+    function stepCountdown() {
+        if (!mcqState.isPlaying) return;
+        const now = mcqAudioCtx ? mcqAudioCtx.currentTime : (performance.now() / 1000);
+        const elapsed = Math.max(0, now - startAudioTime);
+        const remaining = Math.max(0, durationSec - elapsed);
+        mcqState.countdownArc = remaining / durationSec;
+        const currentSec = Math.max(1, Math.ceil(remaining));
 
         if (currentSec !== mcqState.countdownSec && currentSec > 0) {
             mcqState.countdownSec = currentSec;
-            playMCQBeep(800, 200);
+            if (currentSec < lastSecBeeped) {
+                playMCQBeep(800, 200);
+                lastSecBeeped = currentSec;
+            }
         }
 
         if (remaining <= 0) {
-            clearInterval(cdInterval);
-            // Finish Countdown -> Proceed to Phase 4: Dedicated Explanation Screen
+            mcqState.countdownSec = 0;
+            mcqState.countdownArc = 0;
+            playMCQBeep(1200, 450);
             revealMCQAnswer(lang, qData);
+        } else {
+            mcqState.typewriterInterval = requestAnimationFrame(stepCountdown);
         }
-    }, 50);
+    }
+
+    mcqState.typewriterInterval = requestAnimationFrame(stepCountdown);
 }
 
 function revealMCQAnswer(lang, qData) {
