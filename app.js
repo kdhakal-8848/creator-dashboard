@@ -7386,123 +7386,70 @@ function drawVideoBriefCanvas() {
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
 
-    // 2. Top Header — Book Brief Header Pill (Y = 260px in Safe Zone)
-    ctx.save();
-    ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
-    ctx.strokeStyle = 'rgba(217, 119, 6, 0.4)';
-    ctx.lineWidth = 3;
-    const headerW = 900; const headerH = 90; const headerX = (width - headerW) / 2; const headerY = 260;
-    ctx.beginPath();
-    ctx.roundRect(headerX, headerY, headerW, headerH, 45);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.font = 'bold 34px "Inter", sans-serif';
-    ctx.fillStyle = '#b45309';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const displayTitle = (videoBriefState.bookTitle || videoBriefState.topic || 'BOOK BRIEF').toUpperCase();
-    const sceneCountText = videoBriefState.scenes.length > 0 ? ` • SCENE ${videoBriefState.currentIndex + 1}/${videoBriefState.scenes.length}` : '';
-    ctx.fillText(`📖 ${displayTitle.substring(0, 32)}${sceneCountText}`, width / 2, headerY + headerH / 2);
-    ctx.restore();
-
-    // 3. Sketch Illustration Stage Frame (Y = 380px to 1420px)
+    // 2. Full-Stage Sketch Illustration Frame (NO TEXT OVERLAYS AS REQUESTED)
     const activeScene = videoBriefState.scenes[videoBriefState.currentIndex];
-    const frameX = 80;
-    const frameY = 380;
-    const frameW = width - 160; // 920px
-    const frameH = 1040;
+    const frameX = 60;
+    const frameY = 100;
+    const frameW = width - 120; // 960px
+    const frameH = 1720;        // Full-bleed 1720px tall sketch frame
 
-    // Paper Card Background
+    // Paper Card Background & Border
     ctx.save();
     ctx.shadowColor = 'rgba(180, 83, 9, 0.15)';
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetY = 12;
+    ctx.shadowBlur = 36;
+    ctx.shadowOffsetY = 16;
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)';
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.35)';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.roundRect(frameX, frameY, frameW, frameH, 32);
+    ctx.roundRect(frameX, frameY, frameW, frameH, 36);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    if (activeScene && activeScene.imageObj && activeScene.imageObj.complete) {
+    // Determine active sketch image based on 3.5s rotation frequency
+    let activeImageObj = null;
+    if (activeScene) {
+        if (activeScene.sketchImages && activeScene.sketchImages.length > 0) {
+            const now = briefAudioCtx ? briefAudioCtx.currentTime : (performance.now() / 1000);
+            const elapsed = Math.max(0, now - (videoBriefState.sceneStartTime || now));
+            const imgIdx = Math.floor(elapsed / 3.5) % activeScene.sketchImages.length;
+            activeImageObj = activeScene.sketchImages[imgIdx] || activeScene.sketchImages[0];
+        } else if (activeScene.imageObj) {
+            activeImageObj = activeScene.imageObj;
+        }
+    }
+
+    if (activeImageObj && (activeImageObj.complete || activeImageObj.naturalWidth > 0)) {
         ctx.save();
         ctx.beginPath();
-        ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 26);
+        ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
         ctx.clip();
 
         // Ken Burns Gentle Zoom & Pan Effect
         videoBriefState.panZoomProgress = (videoBriefState.panZoomProgress + 0.0012) % 1.0;
-        const zoomScale = 1.0 + Math.sin(videoBriefState.panZoomProgress * Math.PI) * 0.06;
-        const panX = Math.cos(videoBriefState.panZoomProgress * Math.PI * 2) * 15;
-        const panY = Math.sin(videoBriefState.panZoomProgress * Math.PI * 2) * 10;
+        const zoomScale = 1.0 + Math.sin(videoBriefState.panZoomProgress * Math.PI) * 0.05;
+        const panX = Math.cos(videoBriefState.panZoomProgress * Math.PI * 2) * 12;
+        const panY = Math.sin(videoBriefState.panZoomProgress * Math.PI * 2) * 8;
 
-        const imgW = activeScene.imageObj.naturalWidth || activeScene.imageObj.width;
-        const imgH = activeScene.imageObj.naturalHeight || activeScene.imageObj.height;
+        const imgW = activeImageObj.naturalWidth || activeImageObj.width || 1080;
+        const imgH = activeImageObj.naturalHeight || activeImageObj.height || 1350;
         const scale = Math.max((frameW - 16) / imgW, (frameH - 16) / imgH) * zoomScale;
         const drawW = imgW * scale;
         const drawH = imgH * scale;
         const drawX = frameX + 8 + ((frameW - 16) - drawW) / 2 + panX;
         const drawY = frameY + 8 + ((frameH - 16) - drawH) / 2 + panY;
 
-        ctx.drawImage(activeScene.imageObj, drawX, drawY, drawW, drawH);
+        ctx.drawImage(activeImageObj, drawX, drawY, drawW, drawH);
         ctx.restore();
     } else {
-        // Fallback Sketch Placeholder
+        // Sketch Placeholder
         ctx.save();
         ctx.font = 'bold 36px "Inter", sans-serif';
         ctx.fillStyle = '#94a3b8';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('🎨 Drawing Consistent Sketch Scene...', width / 2, frameY + frameH / 2);
-        ctx.restore();
-    }
-
-    // 4. Subtitle Captions Overlay (Y = 1460px to 1750px in Bottom Safe Zone)
-    const captionText = videoBriefState.subtitlesText || (activeScene ? activeScene.narration : '');
-    if (captionText) {
-        ctx.save();
-        const capW = 920;
-        const capX = (width - capW) / 2;
-        const capY = 1460;
-        const capH = 260;
-
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.roundRect(capX, capY, capW, capH, 24);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.font = 'bold 38px "Inter", sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-
-        const words = captionText.split(' ');
-        let line = '';
-        let lines = [];
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > capW - 60 && n > 0) {
-                lines.push(line);
-                line = words[n] + ' ';
-            } else {
-                line = testLine;
-            }
-        }
-        lines.push(line);
-
-        const lineHeight = 50;
-        const startY = capY + (capH - (lines.length * lineHeight)) / 2;
-        lines.slice(0, 4).forEach((l, i) => {
-            ctx.fillText(l.trim(), width / 2, startY + (i * lineHeight));
-        });
-
         ctx.restore();
     }
 }
@@ -7605,6 +7552,7 @@ async function startVideoBriefSequence(isExportingRun = false) {
         }
 
         videoBriefState.currentIndex = idx;
+        videoBriefState.sceneStartTime = briefAudioCtx ? briefAudioCtx.currentTime : (performance.now() / 1000);
         const scene = videoBriefState.scenes[idx];
         const phaseLabel = document.getElementById('brief-phase-label');
         if (phaseLabel) phaseLabel.innerText = `Scene ${idx + 1}/${videoBriefState.scenes.length}: ${scene.title}`;
@@ -7810,23 +7758,30 @@ function initVideoBriefStudio() {
 
                     for (let i = 0; i < videoBriefState.scenes.length; i++) {
                         const scene = videoBriefState.scenes[i];
+                        scene.sketchImages = [];
 
-                        if (progressText) progressText.innerText = `🎨 Synthesizing Sketch Image ${i + 1}/${videoBriefState.scenes.length}...`;
-                        try {
-                            const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ prompt: scene.sketch_prompt, scene_number: scene.scene_number })
-                            });
-                            const skData = await skRes.json();
-                            if (skData.image_url) {
-                                scene.imageUrl = skData.image_url;
-                                const img = new Image();
-                                img.crossOrigin = 'anonymous';
-                                img.src = skData.image_url;
-                                scene.imageObj = img;
-                            }
-                        } catch(e){}
+                        const sketchPrompts = (scene.sketch_prompts && scene.sketch_prompts.length > 0)
+                            ? scene.sketch_prompts
+                            : [scene.sketch_prompt || `Minimalist sketch illustration for ${scene.title}`];
+
+                        for (let k = 0; k < sketchPrompts.length; k++) {
+                            const p = sketchPrompts[k];
+                            if (progressText) progressText.innerText = `🎨 Drawing Sketch ${k + 1}/${sketchPrompts.length} for Scene ${i + 1}/${videoBriefState.scenes.length}...`;
+                            try {
+                                const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ prompt: p, scene_number: scene.scene_number, sketch_index: k })
+                                });
+                                const skData = await skRes.json();
+                                if (skData.image_url) {
+                                    const img = new Image();
+                                    img.src = skData.image_url;
+                                    scene.sketchImages.push(img);
+                                    if (k === 0) scene.imageObj = img;
+                                }
+                            } catch(e){}
+                        }
 
                         currentStep++;
                         if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;

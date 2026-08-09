@@ -1342,6 +1342,7 @@ High Quality Content Directives:
 - Deeply insightful narration summarizing core key takeaways, main character arcs, and central themes.
 - Written in eloquent, compelling, professional storytelling voice (avoiding low-effort summaries or repetitive tropes).
 - Generate precise physical Character Anchors for main characters to preserve visual consistency across scene sketches.
+- For EACH scene (~15 seconds narration), provide FOUR (4) distinct sequential sketch prompts so that a new sketch appears every 3 to 4 seconds.
 
 Return JSON ONLY matching this schema:
 {
@@ -1354,8 +1355,13 @@ Return JSON ONLY matching this schema:
     {
       "scene_number": 1,
       "title": "Evocative Scene Title",
-      "narration": "What the narrator speaks in eloquent, natural, engaging language (2-3 sentences)",
-      "sketch_prompt": "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details]. Clean linework, artistic storybook sketch, high quality.",
+      "narration": "What the narrator speaks in eloquent, natural, engaging language (3-4 sentences, ~15 seconds duration)",
+      "sketch_prompts": [
+        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 1. Clean linework, storybook sketch.",
+        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 2. Clean linework, storybook sketch.",
+        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 3. Clean linework, storybook sketch.",
+        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 4. Clean linework, storybook sketch."
+      ],
       "estimated_duration_sec": 15
     }
   ]
@@ -1402,13 +1408,13 @@ Return JSON ONLY matching this schema:
 // ============================================================
 app.post('/generate-brief-sketch', async (req, res) => {
     try {
-        const { prompt, scene_number, seed } = req.body;
+        const { prompt, scene_number, sketch_index, seed } = req.body;
         if (!prompt) return res.status(400).json({ error: "Prompt is required for sketch generation" });
 
         const enhancedPrompt = `${prompt}, minimalist hand-drawn ink and pencil sketch illustration on light beige paper background (#f5f2eb), aesthetic storybook sketch, warm paper texture, high quality art, detailed linework, no background clutter`;
         const encodedPrompt = encodeURIComponent(enhancedPrompt);
-        const imageSeed = seed || (1000 + (scene_number || 1) * 77);
-        const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1080&height=1350&seed=${imageSeed}&nologo=true`;
+        const imageSeed = seed || (1000 + (scene_number || 1) * 100 + (sketch_index || 0) * 17);
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${imageSeed}&width=1080&height=1350&nologo=true`;
 
         return res.json({
             success: true,
