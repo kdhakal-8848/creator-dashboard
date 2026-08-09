@@ -7275,7 +7275,9 @@ let videoBriefState = {
     animFrameId: null,
     typewriterInterval: null,
     subtitlesText: '',
-    panZoomProgress: 0
+    panZoomProgress: 0,
+    // Wall-clock based timing for sketch rotation (independent of AudioContext)
+    sceneWallStartMs: 0
 };
 
 let briefAudioCtx = null;
@@ -7408,13 +7410,23 @@ function drawVideoBriefCanvas() {
     ctx.restore();
 
     // Determine active sketch image based on 3.5s rotation frequency
+    // Use reliable wall-clock time so sketches always display even before audio loads
     let activeImageObj = null;
     if (activeScene) {
         if (activeScene.sketchImages && activeScene.sketchImages.length > 0) {
-            const now = briefAudioCtx ? briefAudioCtx.currentTime : (performance.now() / 1000);
-            const elapsed = Math.max(0, now - (videoBriefState.sceneStartTime || now));
-            const imgIdx = Math.floor(elapsed / 3.5) % activeScene.sketchImages.length;
-            activeImageObj = activeScene.sketchImages[imgIdx] || activeScene.sketchImages[0];
+            const elapsedMs = videoBriefState.isPlaying
+                ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
+                : 0;
+            const imgIdx = Math.floor(elapsedMs / 3500) % activeScene.sketchImages.length;
+            // Walk forward until we find a loaded image
+            let foundImg = null;
+            for (let attempt = 0; attempt < activeScene.sketchImages.length; attempt++) {
+                const candidate = activeScene.sketchImages[(imgIdx + attempt) % activeScene.sketchImages.length];
+                if (candidate && (candidate.complete || candidate.naturalWidth > 0)) {
+                    foundImg = candidate; break;
+                }
+            }
+            activeImageObj = foundImg || activeScene.sketchImages[0];
         } else if (activeScene.imageObj) {
             activeImageObj = activeScene.imageObj;
         }
@@ -7521,20 +7533,29 @@ async function speakBriefText(text, lang, onEnd, onProgress) {
     }
 }
 
-async function startVideoBriefSequence(isExportingRun = false) {
-    if (!isExportingRun) {
-        videoBriefState.isExporting = false;
-        stopVideoBriefSequence(false);
-    } else {
-        stopVideoBriefSequence(true);
-    }
-
+async function startVideoBriefSequence(isExportingRun = false, resumeFromIndex = 0) {
     const lang = document.getElementById('brief-language')?.value || 'English';
     if (!videoBriefState.scenes || videoBriefState.scenes.length === 0) return;
 
-    videoBriefState.isPlaying = true;
-    videoBriefState.currentIndex = 0;
+    // Stop any existing playback cleanly without resetting scenes
+    if (!isExportingRun) {
+        videoBriefState.isExporting = false;
+    }
+    // Cancel existing animation frame & audio but preserve scenes & currentIndex
+    stopCurrentBriefAudio();
+    if (videoBriefState.typewriterInterval) {
+        cancelAnimationFrame(videoBriefState.typewriterInterval);
+        videoBriefState.typewriterInterval = null;
+    }
+    if (videoBriefState.animFrameId) {
+        cancelAnimationFrame(videoBriefState.animFrameId);
+        videoBriefState.animFrameId = null;
+    }
 
+    videoBriefState.isPlaying = true;
+    videoBriefState.currentIndex = resumeFromIndex;
+
+    // Start render loop
     function renderLoop() {
         if (videoBriefState.isPlaying || videoBriefState.isExporting) {
             drawVideoBriefCanvas();
@@ -7547,26 +7568,36 @@ async function startVideoBriefSequence(isExportingRun = false) {
     function animateScene(idx) {
         if (!videoBriefState.isPlaying) return;
         if (idx >= videoBriefState.scenes.length) {
-            stopVideoBriefSequence(videoBriefState.isExporting);
+            // Playback complete
+            videoBriefState.isPlaying = false;
+            if (isExportingRun && videoBriefState.mediaRecorder && videoBriefState.mediaRecorder.state !== 'inactive') {
+                try { videoBriefState.mediaRecorder.stop(); } catch(e){}
+            }
+            if (videoBriefState.animFrameId) cancelAnimationFrame(videoBriefState.animFrameId);
+            const phaseLabel = document.getElementById('brief-phase-label');
+            if (phaseLabel) phaseLabel.innerText = 'Playback Complete';
+            drawVideoBriefCanvas();
             return;
         }
 
         videoBriefState.currentIndex = idx;
-        videoBriefState.sceneStartTime = briefAudioCtx ? briefAudioCtx.currentTime : (performance.now() / 1000);
+        // Use wall-clock time for reliable sketch rotation
+        videoBriefState.sceneWallStartMs = performance.now();
         const scene = videoBriefState.scenes[idx];
         const phaseLabel = document.getElementById('brief-phase-label');
         if (phaseLabel) phaseLabel.innerText = `Scene ${idx + 1}/${videoBriefState.scenes.length}: ${scene.title}`;
 
         speakBriefText(scene.narration, lang, () => {
             if (!videoBriefState.isPlaying) return;
-            setTimeout(() => animateScene(idx + 1), 300);
+            setTimeout(() => animateScene(idx + 1), 200);
         });
     }
 
-    animateScene(0);
+    animateScene(resumeFromIndex);
 }
 
 function stopVideoBriefSequence(keepRecorder = false) {
+    // Pause playback — preserve currentIndex so resume works from where we stopped
     videoBriefState.isPlaying = false;
     stopCurrentBriefAudio();
 
@@ -7576,6 +7607,7 @@ function stopVideoBriefSequence(keepRecorder = false) {
     }
     if (videoBriefState.animFrameId) {
         cancelAnimationFrame(videoBriefState.animFrameId);
+        videoBriefState.animFrameId = null;
     }
 
     if (!keepRecorder && videoBriefState.mediaRecorder && videoBriefState.mediaRecorder.state !== 'inactive') {
@@ -7584,7 +7616,10 @@ function stopVideoBriefSequence(keepRecorder = false) {
     if (!keepRecorder) videoBriefState.isExporting = false;
 
     const phaseLabel = document.getElementById('brief-phase-label');
-    if (phaseLabel && !videoBriefState.isExporting) phaseLabel.innerText = "Stopped";
+    if (phaseLabel && !videoBriefState.isExporting) {
+        const sc = videoBriefState.scenes[videoBriefState.currentIndex];
+        phaseLabel.innerText = sc ? `⏸ Paused — Scene ${videoBriefState.currentIndex + 1}: ${sc.title}` : 'Paused';
+    }
     drawVideoBriefCanvas();
 }
 
@@ -7808,7 +7843,9 @@ function initVideoBriefStudio() {
     }
 
     document.getElementById('brief-play-btn')?.addEventListener('click', () => {
-        startVideoBriefSequence();
+        if (videoBriefState.isPlaying) return; // Already playing
+        const resumeIdx = videoBriefState.currentIndex || 0;
+        startVideoBriefSequence(false, resumeIdx);
     });
 
     document.getElementById('brief-stop-btn')?.addEventListener('click', () => {
@@ -7818,6 +7855,43 @@ function initVideoBriefStudio() {
     document.getElementById('brief-export-btn')?.addEventListener('click', () => {
         exportVideoBrief();
     });
+
+    // Slider: seek to any scene
+    const slider = document.getElementById('brief-timeline-slider');
+    if (slider) {
+        slider.addEventListener('mousedown', () => { slider.__isDragging = true; });
+        slider.addEventListener('touchstart', () => { slider.__isDragging = true; }, { passive: true });
+        slider.addEventListener('input', () => {
+            if (!videoBriefState.scenes.length) return;
+            const pct = parseFloat(slider.value);
+            const totalScenes = videoBriefState.scenes.length;
+            const targetIdx = Math.max(0, Math.min(totalScenes - 1, Math.round((pct / 100) * totalScenes - 0.5)));
+            videoBriefState.currentIndex = targetIdx;
+            videoBriefState.sceneWallStartMs = performance.now();
+            const label = document.getElementById('brief-time-label');
+            if (label) label.innerText = `Scene ${targetIdx + 1} / ${totalScenes}`;
+            const phaseLabel = document.getElementById('brief-phase-label');
+            const sc = videoBriefState.scenes[targetIdx];
+            if (phaseLabel && sc) phaseLabel.innerText = `Scene ${targetIdx + 1}: ${sc.title}`;
+            drawVideoBriefCanvas();
+        });
+        slider.addEventListener('change', () => {
+            slider.__isDragging = false;
+            // If was playing, restart from new position
+            if (videoBriefState.scenes.length) {
+                const pct = parseFloat(slider.value);
+                const totalScenes = videoBriefState.scenes.length;
+                const targetIdx = Math.max(0, Math.min(totalScenes - 1, Math.round((pct / 100) * totalScenes - 0.5)));
+                if (videoBriefState.isPlaying) {
+                    startVideoBriefSequence(false, targetIdx);
+                } else {
+                    videoBriefState.currentIndex = targetIdx;
+                    videoBriefState.sceneWallStartMs = performance.now();
+                    drawVideoBriefCanvas();
+                }
+            }
+        });
+    }
 }
 
 window.videoBriefState = videoBriefState;

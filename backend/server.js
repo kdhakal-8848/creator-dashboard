@@ -1340,16 +1340,22 @@ Summarize the book/novel/topic "${topic}" into a captivating, high-impact 2-minu
 
 High Quality Content Directives:
 - Deeply insightful narration summarizing core key takeaways, main character arcs, and central themes.
-- Written in eloquent, compelling, professional storytelling voice (avoiding low-effort summaries or repetitive tropes).
-- Generate precise physical Character Anchors for main characters to preserve visual consistency across scene sketches.
-- For EACH scene (~15 seconds narration), provide FOUR (4) distinct sequential sketch prompts so that a new sketch appears every 3 to 4 seconds.
+- Written in eloquent, compelling, professional storytelling voice (no filler, no generic summaries).
+- Generate precise physical Character Anchors for main characters to preserve visual consistency.
+- For EACH scene, provide FOUR (4) distinct sketch prompts showing different moments/angles of that scene.
+- CRITICAL for sketch prompts: Each sketch must depict a FULL SCENE with rich setting details:
+  * Include the environment/location (e.g., "a dimly lit speakeasy", "a sun-drenched dock", "a cluttered attic")
+  * Include atmospheric elements (time of day, weather, mood lighting, era-appropriate objects/furniture)
+  * Include character action and body language (e.g., "reaching toward", "turning away", "slumped against")
+  * Include relevant symbolic or narrative props (e.g., "a telephone on the desk", "a wilting flower")
+  * Do NOT just describe characters standing — show them doing something in a vivid location
 
 Return JSON ONLY matching this schema:
 {
   "book_title": "${topic}",
   "tagline": "A powerful 1-sentence hook summary capturing the essence of the work",
   "characters": [
-    { "name": "Character Name", "anchor": "Detailed physical appearance description (age, hair style, clothing of the era, facial features) to maintain visual consistency across all sketches" }
+    { "name": "Character Name", "anchor": "Detailed physical appearance (age, hair, clothing of the era, facial features)" }
   ],
   "scenes": [
     {
@@ -1357,10 +1363,10 @@ Return JSON ONLY matching this schema:
       "title": "Evocative Scene Title",
       "narration": "What the narrator speaks in eloquent, natural, engaging language (3-4 sentences, ~15 seconds duration)",
       "sketch_prompts": [
-        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 1. Clean linework, storybook sketch.",
-        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 2. Clean linework, storybook sketch.",
-        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 3. Clean linework, storybook sketch.",
-        "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details] doing action 4. Clean linework, storybook sketch."
+        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Setting: describe the specific location and atmosphere in detail]. [Characters: name with anchor details, specific action/pose]. [Symbolic detail or prop that enhances the mood]. Clean linework, storybook illustration style.",
+        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Different angle or moment of the same scene]. [Characters with anchor details, different action]. [Atmospheric detail]. Clean linework, storybook illustration style.",
+        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Another visual beat of this scene]. [Characters with anchor details]. [Setting and mood detail]. Clean linework, storybook illustration style.",
+        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Closing visual of this scene]. [Characters or symbolic imagery with anchor details]. [Narrative prop or environmental detail]. Clean linework, storybook illustration style."
       ],
       "estimated_duration_sec": 15
     }
