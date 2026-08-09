@@ -1327,6 +1327,94 @@ app.post('/generate-tts', async (req, res) => {
     }
 });
 
+// ============================================================
+// POST /generate-video-brief — AI 2-Minute Book/Novel Summarizer
+// ============================================================
+app.post('/generate-video-brief', async (req, res) => {
+    try {
+        const { topic, mode } = req.body;
+        if (!topic) return res.status(400).json({ error: "Book title or topic is required" });
+
+        const prompt = `You are an elite video brief producer and book summarizer.
+Summarize the book/novel/topic "${topic}" into a compelling 2-minute video overview script divided into 8 distinct sequential scenes.
+Return JSON ONLY matching this schema:
+{
+  "book_title": "${topic}",
+  "tagline": "A concise 1-sentence hook summary",
+  "characters": [
+    { "name": "Character Name", "anchor": "Detailed physical appearance description (age, hair, clothing style, facial features) to maintain visual consistency across all sketches" }
+  ],
+  "scenes": [
+    {
+      "scene_number": 1,
+      "title": "Scene title",
+      "narration": "What the narrator says in natural engaging language (2-3 sentences)",
+      "sketch_prompt": "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details]. Clean linework, artistic storybook sketch, high quality.",
+      "estimated_duration_sec": 12
+    }
+  ]
+}`;
+
+        const apiKeys = getGeminiApiKeys();
+        let briefResult = null;
+
+        for (const apiKey of apiKeys) {
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (jsonText) {
+                        briefResult = JSON.parse(jsonText);
+                        break;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (!briefResult) {
+            return res.status(500).json({ error: "Failed to generate video brief script from Gemini AI" });
+        }
+
+        return res.json({ success: true, brief: briefResult });
+
+    } catch (err) {
+        console.error("Video Brief AI error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================================
+// POST /generate-brief-sketch — Character-Consistent Sketch Generator
+// ============================================================
+app.post('/generate-brief-sketch', async (req, res) => {
+    try {
+        const { prompt, scene_number, seed } = req.body;
+        if (!prompt) return res.status(400).json({ error: "Prompt is required for sketch generation" });
+
+        const enhancedPrompt = `${prompt}, minimalist hand-drawn ink and pencil sketch illustration on light beige paper background (#f5f2eb), aesthetic storybook sketch, warm paper texture, high quality art, detailed linework, no background clutter`;
+        const encodedPrompt = encodeURIComponent(enhancedPrompt);
+        const imageSeed = seed || (1000 + (scene_number || 1) * 77);
+        const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1080&height=1350&seed=${imageSeed}&nologo=true`;
+
+        return res.json({
+            success: true,
+            image_url: imageUrl
+        });
+
+    } catch (err) {
+        console.error("Brief sketch error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Creator's Den Backend v2.0 running on port ${port}`);
 });

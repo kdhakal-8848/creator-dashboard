@@ -563,6 +563,9 @@ function switchView(targetViewId, linkElement = null) {
     if (targetViewId === 'mcq-video-view') {
         try { initMCQVideoStudio(); } catch (err) { console.error("initMCQVideoStudio error:", err); }
     }
+    if (targetViewId === 'video-brief-view') {
+        try { initVideoBriefStudio(); } catch (err) { console.error("initVideoBriefStudio error:", err); }
+    }
 
     syncTemplateDropdowns();
 }
@@ -7252,4 +7255,614 @@ window.stopMCQSequence = stopMCQSequence;
 window.jumpMCQToSection = jumpMCQToSection;
 window.seekMCQToTime = seekMCQToTime;
 window.buildMCQTimelineMap = buildMCQTimelineMap;
+
+// ============================================================
+// 12. VIDEO BRIEF LAB (Book / Novel 2-Min Audio-Visual Summarizer)
+// ============================================================
+let videoBriefState = {
+    topic: 'The Great Gatsby',
+    bookTitle: 'The Great Gatsby',
+    tagline: '',
+    characters: [],
+    scenes: [],
+    currentIndex: 0,
+    isPlaying: false,
+    isExporting: false,
+    isGenerating: false,
+    audioCache: {},
+    mediaRecorder: null,
+    recordedChunks: [],
+    animFrameId: null,
+    typewriterInterval: null,
+    subtitlesText: '',
+    panZoomProgress: 0
+};
+
+let briefAudioCtx = null;
+let briefAudioDest = null;
+let currentBriefAudioEl = null;
+
+function getBriefAudioDestination() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        if (!briefAudioCtx) {
+            briefAudioCtx = new AudioCtx({ sampleRate: 44100 });
+        }
+        if (briefAudioCtx.state === 'suspended') {
+            briefAudioCtx.resume().catch(() => {});
+        }
+        if (!briefAudioDest) {
+            briefAudioDest = briefAudioCtx.createMediaStreamDestination();
+        }
+        return briefAudioDest;
+    } catch(e) {
+        console.warn("getBriefAudioDestination error:", e);
+        return null;
+    }
+}
+
+function stopCurrentBriefAudio() {
+    if (currentBriefAudioEl) {
+        try { currentBriefAudioEl.stop(); } catch(e){}
+        try { currentBriefAudioEl.pause(); } catch(e){}
+        currentBriefAudioEl = null;
+    }
+}
+
+async function fetchBriefAudioBuffer(text, lang) {
+    if (!text) return null;
+    if (videoBriefState.audioCache[text]) return videoBriefState.audioCache[text];
+
+    try {
+        getBriefAudioDestination();
+        if (!briefAudioCtx) return null;
+        if (briefAudioCtx.state === 'suspended') {
+            briefAudioCtx.resume().catch(() => {});
+        }
+
+        const res = await fetch(`${API_URL}/generate-tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, language: lang })
+        });
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) return null;
+
+        const data = await res.json();
+        if (!data || !data.audio_url) return null;
+
+        let arrayBuf;
+        if (data.audio_url.startsWith('data:')) {
+            const base64Str = data.audio_url.split(',')[1];
+            const binaryStr = window.atob(base64Str);
+            const len = binaryStr.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            arrayBuf = bytes.buffer;
+        } else {
+            return null;
+        }
+
+        const decodedBuffer = await new Promise((resolve, reject) => {
+            try {
+                const res = briefAudioCtx.decodeAudioData(arrayBuf, buf => resolve(buf), err => reject(err));
+                if (res && typeof res.then === 'function') {
+                    res.then(resolve).catch(reject);
+                }
+            } catch(err) {
+                reject(err);
+            }
+        });
+        videoBriefState.audioCache[text] = decodedBuffer;
+        return decodedBuffer;
+    } catch(e) {
+        console.warn("fetchBriefAudioBuffer warning:", e);
+        return null;
+    }
+}
+
+function drawVideoBriefCanvas() {
+    const canvas = document.getElementById('brief-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;  // 1080
+    const height = canvas.height; // 1920
+
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Warm Beige Paper Background (#faf7f0)
+    ctx.fillStyle = '#faf7f0';
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle paper grain & warm border vignette
+    ctx.save();
+    const bgGlow = ctx.createRadialGradient(width / 2, height / 2, 400, width / 2, height / 2, 1000);
+    bgGlow.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+    bgGlow.addColorStop(1, 'rgba(217, 119, 6, 0.08)');
+    ctx.fillStyle = bgGlow;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    // 2. Top Header — Book Brief Header Pill (Y = 260px in Safe Zone)
+    ctx.save();
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
+    ctx.strokeStyle = 'rgba(217, 119, 6, 0.4)';
+    ctx.lineWidth = 3;
+    const headerW = 900; const headerH = 90; const headerX = (width - headerW) / 2; const headerY = 260;
+    ctx.beginPath();
+    ctx.roundRect(headerX, headerY, headerW, headerH, 45);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = 'bold 34px "Inter", sans-serif';
+    ctx.fillStyle = '#b45309';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const displayTitle = (videoBriefState.bookTitle || videoBriefState.topic || 'BOOK BRIEF').toUpperCase();
+    const sceneCountText = videoBriefState.scenes.length > 0 ? ` • SCENE ${videoBriefState.currentIndex + 1}/${videoBriefState.scenes.length}` : '';
+    ctx.fillText(`📖 ${displayTitle.substring(0, 32)}${sceneCountText}`, width / 2, headerY + headerH / 2);
+    ctx.restore();
+
+    // 3. Sketch Illustration Stage Frame (Y = 380px to 1420px)
+    const activeScene = videoBriefState.scenes[videoBriefState.currentIndex];
+    const frameX = 80;
+    const frameY = 380;
+    const frameW = width - 160; // 920px
+    const frameH = 1040;
+
+    // Paper Card Background
+    ctx.save();
+    ctx.shadowColor = 'rgba(180, 83, 9, 0.15)';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetY = 12;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(frameX, frameY, frameW, frameH, 32);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    if (activeScene && activeScene.imageObj && activeScene.imageObj.complete) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 26);
+        ctx.clip();
+
+        // Ken Burns Gentle Zoom & Pan Effect
+        videoBriefState.panZoomProgress = (videoBriefState.panZoomProgress + 0.0012) % 1.0;
+        const zoomScale = 1.0 + Math.sin(videoBriefState.panZoomProgress * Math.PI) * 0.06;
+        const panX = Math.cos(videoBriefState.panZoomProgress * Math.PI * 2) * 15;
+        const panY = Math.sin(videoBriefState.panZoomProgress * Math.PI * 2) * 10;
+
+        const imgW = activeScene.imageObj.naturalWidth || activeScene.imageObj.width;
+        const imgH = activeScene.imageObj.naturalHeight || activeScene.imageObj.height;
+        const scale = Math.max((frameW - 16) / imgW, (frameH - 16) / imgH) * zoomScale;
+        const drawW = imgW * scale;
+        const drawH = imgH * scale;
+        const drawX = frameX + 8 + ((frameW - 16) - drawW) / 2 + panX;
+        const drawY = frameY + 8 + ((frameH - 16) - drawH) / 2 + panY;
+
+        ctx.drawImage(activeScene.imageObj, drawX, drawY, drawW, drawH);
+        ctx.restore();
+    } else {
+        // Fallback Sketch Placeholder
+        ctx.save();
+        ctx.font = 'bold 36px "Inter", sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎨 Drawing Consistent Sketch Scene...', width / 2, frameY + frameH / 2);
+        ctx.restore();
+    }
+
+    // 4. Subtitle Captions Overlay (Y = 1460px to 1750px in Bottom Safe Zone)
+    const captionText = videoBriefState.subtitlesText || (activeScene ? activeScene.narration : '');
+    if (captionText) {
+        ctx.save();
+        const capW = 920;
+        const capX = (width - capW) / 2;
+        const capY = 1460;
+        const capH = 260;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(capX, capY, capW, capH, 24);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = 'bold 38px "Inter", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const words = captionText.split(' ');
+        let line = '';
+        let lines = [];
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > capW - 60 && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+
+        const lineHeight = 50;
+        const startY = capY + (capH - (lines.length * lineHeight)) / 2;
+        lines.slice(0, 4).forEach((l, i) => {
+            ctx.fillText(l.trim(), width / 2, startY + (i * lineHeight));
+        });
+
+        ctx.restore();
+    }
+}
+
+async function speakBriefText(text, lang, onEnd, onProgress) {
+    if (!text) { if (onEnd) onEnd(); return; }
+    stopCurrentBriefAudio();
+
+    if (videoBriefState.typewriterInterval) {
+        cancelAnimationFrame(videoBriefState.typewriterInterval);
+        videoBriefState.typewriterInterval = null;
+    }
+
+    let handled = false;
+
+    const startSubtitleLoop = (durMs) => {
+        const startTime = briefAudioCtx ? briefAudioCtx.currentTime : (performance.now() / 1000);
+        const totalLen = text.length;
+
+        function step() {
+            if (handled) return;
+            const now = briefAudioCtx ? briefAudioCtx.currentTime : (performance.now() / 1000);
+            const elapsedMs = Math.max(0, (now - startTime) * 1000);
+            const ratio = Math.min(1.0, elapsedMs / Math.max(1, durMs));
+
+            const charCount = Math.min(totalLen, Math.floor(ratio * totalLen));
+            videoBriefState.subtitlesText = text.substring(0, charCount);
+            if (onProgress) onProgress(charCount, ratio);
+
+            if (ratio < 1.0) {
+                videoBriefState.typewriterInterval = requestAnimationFrame(step);
+            }
+        }
+        videoBriefState.typewriterInterval = requestAnimationFrame(step);
+    };
+
+    const finish = () => {
+        if (!handled) {
+            handled = true;
+            if (videoBriefState.typewriterInterval) {
+                cancelAnimationFrame(videoBriefState.typewriterInterval);
+                videoBriefState.typewriterInterval = null;
+            }
+            videoBriefState.subtitlesText = text;
+            if (onEnd) onEnd();
+        }
+    };
+
+    try {
+        const audioBuffer = await fetchBriefAudioBuffer(text, lang);
+        if (audioBuffer && briefAudioCtx) {
+            const source = briefAudioCtx.createBufferSource();
+            currentBriefAudioEl = source;
+            source.buffer = audioBuffer;
+            const dest = getBriefAudioDestination();
+            if (dest) source.connect(dest);
+            if (!videoBriefState.isExporting) {
+                source.connect(briefAudioCtx.destination);
+            }
+            const durMs = audioBuffer.duration * 1000;
+            startSubtitleLoop(durMs);
+            source.onended = () => finish();
+            source.start(0);
+        } else {
+            finish();
+        }
+    } catch(e) {
+        finish();
+    }
+}
+
+async function startVideoBriefSequence(isExportingRun = false) {
+    if (!isExportingRun) {
+        videoBriefState.isExporting = false;
+        stopVideoBriefSequence(false);
+    } else {
+        stopVideoBriefSequence(true);
+    }
+
+    const lang = document.getElementById('brief-language')?.value || 'English';
+    if (!videoBriefState.scenes || videoBriefState.scenes.length === 0) return;
+
+    videoBriefState.isPlaying = true;
+    videoBriefState.currentIndex = 0;
+
+    function renderLoop() {
+        if (videoBriefState.isPlaying || videoBriefState.isExporting) {
+            drawVideoBriefCanvas();
+            updateBriefTimelineProgress();
+            videoBriefState.animFrameId = requestAnimationFrame(renderLoop);
+        }
+    }
+    videoBriefState.animFrameId = requestAnimationFrame(renderLoop);
+
+    function animateScene(idx) {
+        if (!videoBriefState.isPlaying) return;
+        if (idx >= videoBriefState.scenes.length) {
+            stopVideoBriefSequence(videoBriefState.isExporting);
+            return;
+        }
+
+        videoBriefState.currentIndex = idx;
+        const scene = videoBriefState.scenes[idx];
+        const phaseLabel = document.getElementById('brief-phase-label');
+        if (phaseLabel) phaseLabel.innerText = `Scene ${idx + 1}/${videoBriefState.scenes.length}: ${scene.title}`;
+
+        speakBriefText(scene.narration, lang, () => {
+            if (!videoBriefState.isPlaying) return;
+            setTimeout(() => animateScene(idx + 1), 300);
+        });
+    }
+
+    animateScene(0);
+}
+
+function stopVideoBriefSequence(keepRecorder = false) {
+    videoBriefState.isPlaying = false;
+    stopCurrentBriefAudio();
+
+    if (videoBriefState.typewriterInterval) {
+        cancelAnimationFrame(videoBriefState.typewriterInterval);
+        videoBriefState.typewriterInterval = null;
+    }
+    if (videoBriefState.animFrameId) {
+        cancelAnimationFrame(videoBriefState.animFrameId);
+    }
+
+    if (!keepRecorder && videoBriefState.mediaRecorder && videoBriefState.mediaRecorder.state !== 'inactive') {
+        try { videoBriefState.mediaRecorder.stop(); } catch(e){}
+    }
+    if (!keepRecorder) videoBriefState.isExporting = false;
+
+    const phaseLabel = document.getElementById('brief-phase-label');
+    if (phaseLabel && !videoBriefState.isExporting) phaseLabel.innerText = "Stopped";
+    drawVideoBriefCanvas();
+}
+
+function updateBriefTimelineProgress() {
+    const totalScenes = videoBriefState.scenes.length;
+    if (totalScenes === 0) return;
+
+    const slider = document.getElementById('brief-timeline-slider');
+    const label = document.getElementById('brief-time-label');
+
+    const pct = ((videoBriefState.currentIndex + 1) / totalScenes) * 100;
+    if (slider && !slider.__isDragging) slider.value = pct;
+    if (label) label.innerText = `Scene ${videoBriefState.currentIndex + 1} / ${totalScenes}`;
+}
+
+async function exportVideoBrief() {
+    const canvas = document.getElementById('brief-canvas');
+    if (!canvas) return;
+
+    const exportBtn = document.getElementById('brief-export-btn');
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Exporting HD Video...`;
+    }
+
+    const phaseLabel = document.getElementById('brief-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "🎬 Recording Video Brief Reel...";
+
+    stopVideoBriefSequence();
+    videoBriefState.isExporting = true;
+    videoBriefState.isPlaying = true;
+    videoBriefState.recordedChunks = [];
+
+    const canvasStream = canvas.captureStream(30);
+    const audioDest = getBriefAudioDestination();
+
+    const combinedStream = new MediaStream();
+    canvasStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+    if (audioDest && audioDest.stream.getAudioTracks().length > 0) {
+        audioDest.stream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+    }
+
+    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm' };
+    }
+
+    try {
+        const recorder = new MediaRecorder(combinedStream, options);
+        videoBriefState.mediaRecorder = recorder;
+
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                videoBriefState.recordedChunks.push(e.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(videoBriefState.recordedChunks, { type: 'video/mp4' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const filename = (videoBriefState.bookTitle || 'Video_Brief').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            a.download = `${filename}_brief_reel_${Date.now()}.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            videoBriefState.isExporting = false;
+            videoBriefState.isPlaying = false;
+
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = `<i data-feather="check"></i> Brief Downloaded!`;
+                setTimeout(() => {
+                    exportBtn.innerHTML = `<i data-feather="download"></i> Export Brief (.mp4)`;
+                }, 4000);
+            }
+        };
+
+        recorder.start(100);
+        startVideoBriefSequence(true);
+
+    } catch (err) {
+        console.error("Brief export error:", err);
+        alert("Failed to record video stream: " + err.message);
+        videoBriefState.isExporting = false;
+        videoBriefState.isPlaying = false;
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<i data-feather="download"></i> Export Brief (.mp4)`;
+        }
+    }
+}
+
+function initVideoBriefStudio() {
+    drawVideoBriefCanvas();
+
+    const triggerBtn = document.getElementById('trigger-brief-generate');
+    if (triggerBtn && !triggerBtn.__bound) {
+        triggerBtn.__bound = true;
+        triggerBtn.addEventListener('click', async () => {
+            const topic = document.getElementById('brief-topic')?.value?.trim();
+            const voiceMode = document.getElementById('brief-voice-mode')?.value || 'storyteller';
+            const lang = document.getElementById('brief-language')?.value || 'English';
+            const feedback = document.getElementById('brief-feedback');
+
+            if (!topic) {
+                if (feedback) { feedback.style.display = 'block'; feedback.innerText = 'Please enter a book title or topic.'; }
+                return;
+            }
+
+            triggerBtn.disabled = true;
+            triggerBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Summarizing & Generating Sketches...`;
+            if (feedback) { feedback.style.display = 'none'; }
+
+            try {
+                const res = await fetch(`${API_URL}/generate-video-brief`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic, mode: voiceMode })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to generate brief script');
+
+                if (data.brief && data.brief.scenes) {
+                    videoBriefState.bookTitle = data.brief.book_title || topic;
+                    videoBriefState.tagline = data.brief.tagline || '';
+                    videoBriefState.characters = data.brief.characters || [];
+                    videoBriefState.scenes = data.brief.scenes;
+                    videoBriefState.currentIndex = 0;
+
+                    const anchorDiv = document.getElementById('brief-character-anchors');
+                    if (anchorDiv && videoBriefState.characters.length > 0) {
+                        anchorDiv.innerHTML = `<strong>Character Anchors:</strong> ` + videoBriefState.characters.map(c => `<span style="color:#f59e0b;font-weight:600;">${c.name}</span> (${c.anchor})`).join(' • ');
+                    }
+
+                    const listContainer = document.getElementById('brief-scenes-list');
+                    const badgeCount = document.getElementById('brief-scene-count-badge');
+                    if (badgeCount) badgeCount.innerText = `${videoBriefState.scenes.length} Scenes`;
+
+                    if (listContainer) {
+                        listContainer.innerHTML = '';
+                        videoBriefState.scenes.forEach((s, idx) => {
+                            const card = document.createElement('div');
+                            card.style.cssText = `padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:12px;cursor:pointer;`;
+                            card.innerHTML = `<div style="font-weight:700;color:#f59e0b;">Scene ${s.scene_number}: ${s.title}</div><div style="color:var(--color-fg-muted);margin-top:2px;">${s.narration.substring(0, 60)}...</div>`;
+                            card.onclick = () => {
+                                videoBriefState.currentIndex = idx;
+                                drawVideoBriefCanvas();
+                            };
+                            listContainer.appendChild(card);
+                        });
+                    }
+
+                    const totalSteps = videoBriefState.scenes.length * 2;
+                    let currentStep = 0;
+
+                    const progressModal = document.getElementById('brief-progress-container');
+                    const progressText = document.getElementById('brief-progress-text');
+                    const progressBar = document.getElementById('brief-progress-bar-inner');
+
+                    if (progressModal) progressModal.style.display = 'flex';
+
+                    for (let i = 0; i < videoBriefState.scenes.length; i++) {
+                        const scene = videoBriefState.scenes[i];
+
+                        if (progressText) progressText.innerText = `🎨 Synthesizing Sketch Image ${i + 1}/${videoBriefState.scenes.length}...`;
+                        try {
+                            const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ prompt: scene.sketch_prompt, scene_number: scene.scene_number })
+                            });
+                            const skData = await skRes.json();
+                            if (skData.image_url) {
+                                scene.imageUrl = skData.image_url;
+                                const img = new Image();
+                                img.crossOrigin = 'anonymous';
+                                img.src = skData.image_url;
+                                scene.imageObj = img;
+                            }
+                        } catch(e){}
+
+                        currentStep++;
+                        if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;
+
+                        if (progressText) progressText.innerText = `🎙️ Pre-loading HD Voice Narration ${i + 1}/${videoBriefState.scenes.length}...`;
+                        await fetchBriefAudioBuffer(scene.narration, lang);
+
+                        currentStep++;
+                        if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;
+                    }
+
+                    if (progressModal) progressModal.style.display = 'none';
+
+                    drawVideoBriefCanvas();
+                }
+            } catch(err) {
+                console.error("Video Brief error:", err);
+                if (feedback) { feedback.style.display = 'block'; feedback.innerText = err.message; }
+            } finally {
+                triggerBtn.disabled = false;
+                triggerBtn.innerHTML = `<i data-feather="book-open" style="width: 16px; height: 16px;"></i> Generate 2-Min Video Brief`;
+            }
+        });
+    }
+
+    document.getElementById('brief-play-btn')?.addEventListener('click', () => {
+        startVideoBriefSequence();
+    });
+
+    document.getElementById('brief-stop-btn')?.addEventListener('click', () => {
+        stopVideoBriefSequence();
+    });
+
+    document.getElementById('brief-export-btn')?.addEventListener('click', () => {
+        exportVideoBrief();
+    });
+}
+
+window.videoBriefState = videoBriefState;
+window.initVideoBriefStudio = initVideoBriefStudio;
+window.drawVideoBriefCanvas = drawVideoBriefCanvas;
+window.startVideoBriefSequence = startVideoBriefSequence;
+window.stopVideoBriefSequence = stopVideoBriefSequence;
+window.exportVideoBrief = exportVideoBrief;
 

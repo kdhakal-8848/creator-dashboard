@@ -1312,3 +1312,32 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
     cursor: pointer;
 }
+
+#brief-timeline-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #f59e0b;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+    cursor: pointer;
+    transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+#brief-timeline-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    background: #d97706;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.9);
+}
+
+#brief-timeline-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #f59e0b;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+    cursor: pointer;
+}
