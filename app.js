@@ -7760,6 +7760,12 @@ function initVideoBriefStudio() {
                     body: JSON.stringify({ topic, mode: voiceMode })
                 });
 
+                const contentType = res.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    const errorText = await res.text();
+                    throw new Error(`Server response error (${res.status}): ${errorText.substring(0, 100)}... Please wait a moment while the backend finishes booting.`);
+                }
+
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed to generate brief script');
 

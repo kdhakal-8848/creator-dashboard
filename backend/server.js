@@ -1335,22 +1335,28 @@ app.post('/generate-video-brief', async (req, res) => {
         const { topic, mode } = req.body;
         if (!topic) return res.status(400).json({ error: "Book title or topic is required" });
 
-        const prompt = `You are an elite video brief producer and book summarizer.
-Summarize the book/novel/topic "${topic}" into a compelling 2-minute video overview script divided into 8 distinct sequential scenes.
+        const prompt = `You are an elite video brief producer and master literary analyst.
+Summarize the book/novel/topic "${topic}" into a captivating, high-impact 2-minute video overview script divided into 8 distinct sequential narrative scenes.
+
+High Quality Content Directives:
+- Deeply insightful narration summarizing core key takeaways, main character arcs, and central themes.
+- Written in eloquent, compelling, professional storytelling voice (avoiding low-effort summaries or repetitive tropes).
+- Generate precise physical Character Anchors for main characters to preserve visual consistency across scene sketches.
+
 Return JSON ONLY matching this schema:
 {
   "book_title": "${topic}",
-  "tagline": "A concise 1-sentence hook summary",
+  "tagline": "A powerful 1-sentence hook summary capturing the essence of the work",
   "characters": [
-    { "name": "Character Name", "anchor": "Detailed physical appearance description (age, hair, clothing style, facial features) to maintain visual consistency across all sketches" }
+    { "name": "Character Name", "anchor": "Detailed physical appearance description (age, hair style, clothing of the era, facial features) to maintain visual consistency across all sketches" }
   ],
   "scenes": [
     {
       "scene_number": 1,
-      "title": "Scene title",
-      "narration": "What the narrator says in natural engaging language (2-3 sentences)",
+      "title": "Evocative Scene Title",
+      "narration": "What the narrator speaks in eloquent, natural, engaging language (2-3 sentences)",
       "sketch_prompt": "Minimalist hand-drawn pencil & ink sketch illustration on light beige paper background (#f5f2eb). Featuring [character names with exact physical anchor details]. Clean linework, artistic storybook sketch, high quality.",
-      "estimated_duration_sec": 12
+      "estimated_duration_sec": 15
     }
   ]
 }`;
