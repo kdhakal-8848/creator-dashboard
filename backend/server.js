@@ -1371,31 +1371,43 @@ Return JSON ONLY matching this schema:
 }`;
 
         const apiKeys = getGeminiApiKeys();
+        const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
         let briefResult = null;
+        let lastErrorMsg = '';
 
         for (const apiKey of apiKeys) {
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { responseMimeType: "application/json" }
-                    })
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (jsonText) {
-                        briefResult = JSON.parse(jsonText);
-                        break;
+            if (briefResult) break;
+            for (const modelName of modelsToTry) {
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (jsonText) {
+                            briefResult = JSON.parse(jsonText);
+                            break;
+                        }
+                    } else {
+                        const errTxt = await response.text();
+                        console.warn(`Gemini brief try model ${modelName} failed (${response.status}):`, errTxt.substring(0, 150));
+                        lastErrorMsg = `HTTP ${response.status}: ${errTxt.substring(0, 100)}`;
                     }
+                } catch(e) {
+                    console.warn(`Gemini brief fetch error (${modelName}):`, e.message);
+                    lastErrorMsg = e.message;
                 }
-            } catch(e) {}
+            }
         }
 
         if (!briefResult) {
-            return res.status(500).json({ error: "Failed to generate video brief script from Gemini AI" });
+            return res.status(500).json({ error: `Failed to generate video brief script from Gemini AI: ${lastErrorMsg || 'API quota or network issue'}` });
         }
 
         // Generate clean Copy-Paste Prompt Script block
