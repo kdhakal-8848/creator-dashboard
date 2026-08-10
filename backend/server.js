@@ -1341,11 +1341,11 @@ Summarize the book/novel/topic "${topic}" into a captivating, high-impact 2-minu
 High Quality Content Directives:
 - Deeply insightful narration summarizing core key takeaways, main character arcs, and central themes.
 - Written in eloquent, compelling, professional storytelling voice (no filler, no generic summaries).
-- Generate precise physical Character Anchors for main characters to preserve visual consistency.
-- For EACH scene, provide a "visual" metadata object (see schema) to drive the canvas sketch renderer.
-- The "visual.setting" must be a specific location type keyword from this list:
-  mansion_interior | library | study | ballroom | dining_room | prison_cell | garden | forest | ocean_dock | city_street | open_countryside | cottage | graveyard | courtroom | market | battlefield
-- The "visual.characters_present" must list the exact character NAMES from your "characters" array who appear in the scene (not descriptions).
+- Generate precise physical Character Anchors for main characters to preserve visual consistency across all sketches.
+- For EACH scene, provide FOUR (4) distinct sketch prompts showing different visual beats/angles of that scene.
+- ART STYLE DIRECTIVE (Option 2 - Charcoal & Muted Watercolor Wash):
+  * Every sketch prompt MUST follow this exact style: "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Specific setting/location in rich detail]. [Characters with physical anchor details in specific action/pose]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic, high detail."
+  * Do NOT just describe characters standing — show them interacting with their environment, narrative props, atmospheric lighting, and key scene beats.
 
 Return JSON ONLY matching this schema:
 {
@@ -1359,19 +1359,16 @@ Return JSON ONLY matching this schema:
       "scene_number": 1,
       "title": "Evocative Scene Title",
       "narration": "What the narrator speaks in eloquent, natural, engaging language (3-4 sentences, ~15 seconds duration)",
-      "visual": {
-        "setting": "one of the setting keywords from the list above",
-        "time": "day | night | dusk",
-        "mood": "hopeful | tragic | mysterious | joyful | tense | melancholic | triumphant | ominous",
-        "action": "dialogue | solitude | conflict | reunion | departure | celebration | mourning | discovery | confrontation | reaching | sitting | arguing",
-        "characters_present": ["Name1", "Name2"],
-        "key_element": "green_light | book | letter | photograph | crown | weapon | flower | candle | fire | rain | crowd | window | door | ship | lantern | none"
-      },
+      "sketch_prompts": [
+        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Setting: specific location & atmosphere in detail]. [Characters with anchor details, specific action/pose 1]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic.",
+        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Different angle or visual beat of scene 1]. [Characters with anchor details, action/pose 2]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic.",
+        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Another visual beat of scene 1]. [Characters with anchor details, action/pose 3]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic.",
+        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Closing visual beat of scene 1]. [Characters or narrative props with anchor details]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic."
+      ],
       "estimated_duration_sec": 15
     }
   ]
 }`;
-
 
         const apiKeys = getGeminiApiKeys();
         let briefResult = null;
@@ -1410,7 +1407,7 @@ Return JSON ONLY matching this schema:
 });
 
 // ============================================================
-// POST /generate-brief-sketch — Character-Consistent Sketch Generator
+// POST /generate-brief-sketch — AI Charcoal & Watercolor Sketch Proxy
 // Proxies image through backend as base64 — fixes CORS and broken-image errors
 // ============================================================
 app.post('/generate-brief-sketch', async (req, res) => {
@@ -1418,9 +1415,9 @@ app.post('/generate-brief-sketch', async (req, res) => {
         const { prompt, scene_number, sketch_index, seed } = req.body;
         if (!prompt) return res.status(400).json({ error: "Prompt is required for sketch generation" });
 
-        // Build a safe, truncated prompt (max 800 chars before encoding)
-        const qualitySuffix = ', minimalist hand-drawn pencil and ink sketch, warm beige paper texture (#f5f2eb), clean linework, storybook illustration, high quality, detailed';
-        const maxPromptLen = 800;
+        // Build a safe, truncated prompt with Charcoal & Watercolor Wash style suffix
+        const qualitySuffix = ', artistic charcoal sketch with soft muted watercolor wash, textured warm cream paper background (#f5f0e4), expressive charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic, high quality, masterpiece';
+        const maxPromptLen = 750;
         const trimmedPrompt = prompt.length > maxPromptLen ? prompt.substring(0, maxPromptLen) : prompt;
         const finalPrompt = `${trimmedPrompt}${qualitySuffix}`;
         const encodedPrompt = encodeURIComponent(finalPrompt);

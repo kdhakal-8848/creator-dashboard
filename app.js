@@ -7922,20 +7922,72 @@ function drawVideoBriefCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // Draw sketch procedurally — always fills the frame, no blank canvas
+    // Determine active AI sketch image based on 3.5s rotation frequency
+    let activeImageObj = null;
     if (activeScene) {
-        const elapsedMs = videoBriefState.isPlaying
-            ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
-            : 0;
-        const variationIdx = Math.floor(elapsedMs / 3500) % 4;
-        const sceneIdx = videoBriefState.currentIndex;
+        if (activeScene.sketchImages && activeScene.sketchImages.length > 0) {
+            const elapsedMs = videoBriefState.isPlaying
+                ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
+                : 0;
+            const imgIdx = Math.floor(elapsedMs / 3500) % activeScene.sketchImages.length;
+            for (let attempt = 0; attempt < activeScene.sketchImages.length; attempt++) {
+                const candidate = activeScene.sketchImages[(imgIdx + attempt) % activeScene.sketchImages.length];
+                if (candidate && candidate._loaded && !candidate._broken && candidate.naturalWidth > 0) {
+                    activeImageObj = candidate; break;
+                }
+                if (candidate && !candidate._broken && candidate.complete && candidate.naturalWidth > 0) {
+                    activeImageObj = candidate; break;
+                }
+            }
+        } else if (activeScene.imageObj && !activeScene.imageObj._broken) {
+            activeImageObj = activeScene.imageObj;
+        }
+    }
 
+    const imgReady = activeImageObj
+        && !activeImageObj._broken
+        && activeImageObj.complete
+        && activeImageObj.naturalWidth > 0
+        && activeImageObj.naturalHeight > 0;
+
+    if (imgReady) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
+        ctx.clip();
+
+        // Ken Burns Gentle Zoom & Pan Effect
+        videoBriefState.panZoomProgress = (videoBriefState.panZoomProgress + 0.0012) % 1.0;
+        const zoomScale = 1.0 + Math.sin(videoBriefState.panZoomProgress * Math.PI) * 0.04;
+        const panX = Math.cos(videoBriefState.panZoomProgress * Math.PI * 2) * 10;
+        const panY = Math.sin(videoBriefState.panZoomProgress * Math.PI * 2) * 6;
+
+        const imgW = activeImageObj.naturalWidth;
+        const imgH = activeImageObj.naturalHeight;
+        const scale = Math.max((frameW - 16) / imgW, (frameH - 16) / imgH) * zoomScale;
+        const drawW = imgW * scale;
+        const drawH = imgH * scale;
+        const drawX = frameX + 8 + ((frameW - 16) - drawW) / 2 + panX;
+        const drawY = frameY + 8 + ((frameH - 16) - drawH) / 2 + panY;
+
+        try {
+            ctx.drawImage(activeImageObj, drawX, drawY, drawW, drawH);
+        } catch(drawErr) {
+            console.warn('drawImage skipped:', drawErr.message);
+        }
+        ctx.restore();
+    } else if (activeScene) {
+        // Fallback procedural sketch while loading or if images unavailable
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
         ctx.clip();
         ctx.translate(frameX + 8, frameY + 8);
-        drawSceneSketch(ctx, frameW - 16, frameH - 16, activeScene, sceneIdx, variationIdx, videoBriefState.characters || []);
+        const elapsedMs = videoBriefState.isPlaying
+            ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
+            : 0;
+        const variationIdx = Math.floor(elapsedMs / 3500) % 4;
+        drawSceneSketch(ctx, frameW - 16, frameH - 16, activeScene, videoBriefState.currentIndex, variationIdx, videoBriefState.characters || []);
         ctx.restore();
     }
 }
@@ -8257,8 +8309,8 @@ function initVideoBriefStudio() {
                         });
                     }
 
-                    // Sketches are drawn procedurally — only preload audio narration
-                    const totalSteps = videoBriefState.scenes.length;
+                    // Preload AI Charcoal & Watercolor Sketches + Voice Narration
+                    const totalSteps = videoBriefState.scenes.length * 2;
                     let currentStep = 0;
 
                     const progressModal = document.getElementById('brief-progress-container');
@@ -8269,8 +8321,46 @@ function initVideoBriefStudio() {
 
                     for (let i = 0; i < videoBriefState.scenes.length; i++) {
                         const scene = videoBriefState.scenes[i];
-                        if (progressText) progressText.innerText = `🎙️ Pre-loading Voice Narration ${i + 1}/${videoBriefState.scenes.length}...`;
-                        if (progressBar) progressBar.style.width = `${Math.round(((i + 0.5) / totalSteps) * 100)}%`;
+                        scene.sketchImages = [];
+
+                        const sketchPrompts = (scene.sketch_prompts && scene.sketch_prompts.length > 0)
+                            ? scene.sketch_prompts
+                            : [scene.sketch_prompt || `Artistic charcoal sketch with soft muted watercolor wash for ${scene.title}`];
+
+                        // Generate AI Charcoal & Watercolor sketch images
+                        for (let k = 0; k < Math.min(sketchPrompts.length, 3); k++) {
+                            const p = sketchPrompts[k];
+                            if (progressText) progressText.innerText = `🎨 Painting Charcoal & Watercolor Sketch ${k + 1}/${Math.min(sketchPrompts.length, 3)} for Scene ${i + 1}/${videoBriefState.scenes.length}...`;
+                            try {
+                                const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ prompt: p, scene_number: scene.scene_number, sketch_index: k })
+                                });
+                                const skData = await skRes.json();
+                                const imgSrc = skData.image_data || skData.image_url;
+                                if (imgSrc) {
+                                    const img = new Image();
+                                    img._broken = false;
+                                    img._loaded = false;
+                                    await new Promise((resolve) => {
+                                        img.onload = () => { img._loaded = true; resolve(); };
+                                        img.onerror = () => { img._broken = true; resolve(); };
+                                        img.src = imgSrc;
+                                        setTimeout(resolve, 30000);
+                                    });
+                                    scene.sketchImages.push(img);
+                                    if (k === 0) scene.imageObj = img;
+                                }
+                            } catch(e) {
+                                console.warn(`Scene ${i+1} sketch ${k+1} fetch failed:`, e);
+                            }
+                        }
+
+                        currentStep++;
+                        if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;
+
+                        if (progressText) progressText.innerText = `🎙️ Pre-loading HD Voice Narration ${i + 1}/${videoBriefState.scenes.length}...`;
                         await fetchBriefAudioBuffer(scene.narration, lang);
                         currentStep++;
                         if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;
