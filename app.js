@@ -7366,6 +7366,519 @@ async function fetchBriefAudioBuffer(text, lang) {
     }
 }
 
+// ============================================================
+// PROCEDURAL SKETCH RENDERER — hand-drawn canvas art engine
+// Always visible, consistent characters, genuine sketch aesthetic
+// ============================================================
+
+// Deterministic seeded random so each scene+variation is stable across frames
+function makeSeededRnd(seed) {
+    let s = (Math.abs(seed) * 1664525 + 1013904223) >>> 0;
+    return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+const SKCLR = {
+    ink:     '#2c1f0e',
+    inkMid:  '#5a3a18',
+    inkLight:'#8a6030',
+    paper:   '#f5f0e4',
+};
+
+// Wobbly hand-drawn line
+function skLine(ctx, x1, y1, x2, y2, rnd, wobble, color, lw) {
+    const segs = Math.max(2, Math.ceil(Math.hypot(x2-x1, y2-y1) / 28));
+    wobble = wobble || 1.5;
+    ctx.save();
+    ctx.strokeStyle = color || SKCLR.ink;
+    ctx.lineWidth   = lw    || 2;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x1+(rnd()-0.5)*wobble, y1+(rnd()-0.5)*wobble);
+    for (let i = 1; i <= segs; i++) {
+        const t = i/segs;
+        ctx.lineTo(x1+(x2-x1)*t+(rnd()-0.5)*wobble*1.6, y1+(y2-y1)*t+(rnd()-0.5)*wobble*1.6);
+    }
+    ctx.stroke(); ctx.restore();
+}
+
+// Wobbly oval
+function skOval(ctx, cx, cy, rx, ry, rnd, color, lw, fill) {
+    ctx.save();
+    ctx.strokeStyle = color || SKCLR.ink;
+    ctx.lineWidth   = lw    || 2;
+    ctx.lineCap = 'round';
+    if (fill) ctx.fillStyle = fill;
+    const steps = 44;
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+        const a = (i/steps)*Math.PI*2;
+        const jit = (rnd()-0.5)*1.5;
+        const x = cx + Math.cos(a)*(rx+jit);
+        const y = cy + Math.sin(a)*(ry+jit*0.5);
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    if (fill) ctx.fill();
+    ctx.stroke(); ctx.restore();
+}
+
+// ---- CHARACTER FIGURE DRAWER ----
+// cx,baseY = foot-center; figH = total body height; gender='M'|'F'; pose = standing|reaching|arguing|sitting
+function drawFigure(ctx, cx, baseY, figH, gender, pose, rnd) {
+    const h = figH;
+    const headR   = h*0.093;
+    const neckH   = h*0.040;
+    const shouldW = h*(gender==='F' ? 0.172 : 0.218);
+    const torsoH  = h*0.270;
+    const hipW    = h*(gender==='F' ? 0.152 : 0.172);
+    const legH    = h*0.385;
+    const armH    = h*0.268;
+    const lw = Math.max(1.8, h*0.016);
+    const c = SKCLR.ink, cm = SKCLR.inkMid;
+
+    const headCY  = baseY - h + headR;
+    const neckBot = headCY + headR + neckH;
+    const shY     = neckBot;
+    const waistY  = shY + torsoH*0.60;
+    const hipY    = shY + torsoH;
+    const kneeY   = hipY + legH*0.52;
+    const footY   = baseY;
+
+    // HEAD
+    skOval(ctx, cx, headCY, headR, headR*1.07, rnd, c, lw, 'rgba(245,240,230,0.97)');
+
+    // HAIR
+    if (gender==='F') {
+        ctx.save(); ctx.strokeStyle=c; ctx.lineWidth=lw*0.78; ctx.lineCap='round';
+        ctx.beginPath();
+        ctx.moveTo(cx-headR*0.88, headCY-headR*0.64);
+        ctx.bezierCurveTo(cx-headR*1.55, headCY, cx-headR*1.75, headCY+headR*2, cx-headR*1.15, headCY+headR*2.85);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx+headR*0.88, headCY-headR*0.64);
+        ctx.bezierCurveTo(cx+headR*1.55, headCY, cx+headR*1.75, headCY+headR*2, cx+headR*1.15, headCY+headR*2.85);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx-headR*0.9, headCY-headR*0.60);
+        ctx.quadraticCurveTo(cx, headCY-headR*1.48, cx+headR*0.9, headCY-headR*0.60);
+        ctx.stroke(); ctx.restore();
+    } else {
+        ctx.save(); ctx.strokeStyle=c; ctx.lineWidth=lw*0.88;
+        ctx.beginPath();
+        ctx.moveTo(cx-headR*0.94, headCY-headR*0.20);
+        ctx.quadraticCurveTo(cx, headCY-headR*1.36, cx+headR*0.94, headCY-headR*0.20);
+        ctx.stroke(); ctx.restore();
+    }
+
+    // FACE
+    skLine(ctx, cx-headR*0.44, headCY-headR*0.10, cx-headR*0.12, headCY-headR*0.10, rnd, 0.4, c, lw*0.60);
+    skLine(ctx, cx+headR*0.12, headCY-headR*0.10, cx+headR*0.44, headCY-headR*0.10, rnd, 0.4, c, lw*0.60);
+    // eyebrows
+    skLine(ctx, cx-headR*0.46, headCY-headR*0.28, cx-headR*0.13, headCY-headR*0.24, rnd, 0.4, c, lw*0.48);
+    skLine(ctx, cx+headR*0.13, headCY-headR*0.24, cx+headR*0.46, headCY-headR*0.28, rnd, 0.4, c, lw*0.48);
+    // nose
+    ctx.save(); ctx.fillStyle=c; ctx.globalAlpha=0.68;
+    ctx.beginPath(); ctx.arc(cx, headCY+headR*0.22, headR*0.065, 0, Math.PI*2); ctx.fill(); ctx.restore();
+    // mouth
+    const mouthY = headCY+headR*0.46;
+    ctx.save(); ctx.strokeStyle=c; ctx.lineWidth=lw*0.58; ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(cx-headR*0.27, mouthY);
+    ctx.quadraticCurveTo(cx, mouthY+(pose==='arguing'?-3:2.5), cx+headR*0.27, mouthY);
+    ctx.stroke(); ctx.restore();
+
+    // NECK
+    skLine(ctx, cx-headR*0.27, headCY+headR, cx-headR*0.21, shY, rnd, 0.5, c, lw*0.70);
+    skLine(ctx, cx+headR*0.27, headCY+headR, cx+headR*0.21, shY, rnd, 0.5, c, lw*0.70);
+
+    // SHOULDER / TORSO
+    skLine(ctx, cx-shouldW, shY+5, cx+shouldW, shY+5, rnd, 2, c, lw);
+    skLine(ctx, cx-shouldW, shY, cx-hipW, hipY, rnd, 1.8, c, lw*0.86);
+    skLine(ctx, cx+shouldW, shY, cx+hipW, hipY, rnd, 1.8, c, lw*0.86);
+    skLine(ctx, cx-hipW*1.10, waistY, cx+hipW*1.10, waistY, rnd, 1.5, c, lw*0.46);
+    skLine(ctx, cx, shY+neckH*0.5, cx, hipY-5, rnd, 0.4, cm, lw*0.40);
+
+    // ARMS
+    if (pose==='reaching') {
+        const elbow={x:cx+shouldW+armH*0.45,y:shY-armH*0.34};
+        const hand ={x:cx+shouldW+armH*0.82,y:shY-armH*0.84};
+        skLine(ctx, cx+shouldW, shY+5, elbow.x, elbow.y, rnd, 2.5, c, lw*0.84);
+        skLine(ctx, elbow.x, elbow.y, hand.x, hand.y, rnd, 2.5, c, lw*0.84);
+        skOval(ctx, hand.x+6, hand.y-4, headR*0.50, headR*0.40, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+        skLine(ctx, cx-shouldW, shY+5, cx-shouldW-armH*0.08, shY+armH*0.84, rnd, 1.8, c, lw*0.84);
+        skOval(ctx, cx-shouldW-armH*0.08, shY+armH*0.84+8, headR*0.48, headR*0.38, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+    } else if (pose==='arguing') {
+        skLine(ctx, cx+shouldW, shY+5, cx+shouldW+armH*0.66, shY-armH*0.43, rnd, 2.5, c, lw*0.84);
+        skLine(ctx, cx-shouldW, shY+5, cx-shouldW-armH*0.56, shY-armH*0.33, rnd, 2.5, c, lw*0.84);
+        skOval(ctx, cx+shouldW+armH*0.66+8, shY-armH*0.43-4, headR*0.50, headR*0.40, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+        skOval(ctx, cx-shouldW-armH*0.56-8, shY-armH*0.33-4, headR*0.50, headR*0.40, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+    } else if (pose==='sitting') {
+        skLine(ctx, cx+shouldW, shY+5, cx+shouldW+armH*0.10, shY+armH*0.64, rnd, 1.8, c, lw*0.84);
+        skLine(ctx, cx-shouldW, shY+5, cx-shouldW-armH*0.08, shY+armH*0.64, rnd, 1.8, c, lw*0.84);
+        skOval(ctx, cx+shouldW+armH*0.10, shY+armH*0.64+8, headR*0.48, headR*0.38, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+        skOval(ctx, cx-shouldW-armH*0.08, shY+armH*0.64+8, headR*0.48, headR*0.38, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+    } else {
+        skLine(ctx, cx+shouldW, shY+5, cx+shouldW+armH*0.12, shY+armH*0.88, rnd, 1.8, c, lw*0.84);
+        skLine(ctx, cx-shouldW, shY+5, cx-shouldW-armH*0.10, shY+armH*0.88, rnd, 1.8, c, lw*0.84);
+        skOval(ctx, cx+shouldW+armH*0.12, shY+armH*0.88+8, headR*0.48, headR*0.38, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+        skOval(ctx, cx-shouldW-armH*0.10, shY+armH*0.88+8, headR*0.48, headR*0.38, rnd, c, lw*0.68, 'rgba(245,240,230,0.95)');
+    }
+
+    // HIP LINE
+    skLine(ctx, cx-hipW, hipY, cx+hipW, hipY, rnd, 1.5, c, lw*0.72);
+
+    // LOWER BODY
+    if (gender==='F') {
+        const dressW = hipW*1.52;
+        skLine(ctx, cx-hipW, hipY, cx-dressW, footY, rnd, 2.5, c, lw*0.80);
+        skLine(ctx, cx+hipW, hipY, cx+dressW, footY, rnd, 2.5, c, lw*0.80);
+        ctx.save(); ctx.strokeStyle=c; ctx.lineWidth=lw*0.83; ctx.lineCap='round';
+        ctx.beginPath();
+        ctx.moveTo(cx-dressW, footY);
+        ctx.quadraticCurveTo(cx, footY+6+(rnd()-0.5)*4, cx+dressW, footY);
+        ctx.stroke(); ctx.restore();
+        for (let f=1; f<4; f++) {
+            const fy=hipY+(footY-hipY)*f/4;
+            skLine(ctx, cx-hipW*(1+f*0.1), fy, cx+hipW*(1+f*0.1), fy+(rnd()-0.5)*5, rnd, 2, cm, lw*0.40);
+        }
+        skOval(ctx, cx-dressW*0.54, footY+6, hipW*0.36, hipW*0.17, rnd, c, lw*0.84, 'rgba(60,35,15,0.55)');
+        skOval(ctx, cx+dressW*0.54, footY+6, hipW*0.36, hipW*0.17, rnd, c, lw*0.84, 'rgba(60,35,15,0.55)');
+    } else if (pose==='sitting') {
+        skLine(ctx, cx-hipW*0.6, hipY, cx-hipW*0.82-legH*0.44, hipY+legH*0.38, rnd, 2, c, lw*0.80);
+        skLine(ctx, cx-hipW*0.82-legH*0.44, hipY+legH*0.38, cx-hipW*0.56-legH*0.2, hipY+legH*0.38+22, rnd, 2, c, lw*0.80);
+        skLine(ctx, cx+hipW*0.6, hipY, cx+hipW*0.82+legH*0.44, hipY+legH*0.38, rnd, 2, c, lw*0.80);
+        skLine(ctx, cx+hipW*0.82+legH*0.44, hipY+legH*0.38, cx+hipW*0.56+legH*0.2, hipY+legH*0.38+22, rnd, 2, c, lw*0.80);
+    } else {
+        // Left leg
+        skLine(ctx, cx-hipW*0.54, hipY, cx-hipW*0.43, kneeY, rnd, 2, c, lw*0.86);
+        skLine(ctx, cx-hipW*0.43, kneeY, cx-hipW*0.37, footY, rnd, 2, c, lw*0.86);
+        skLine(ctx, cx-hipW*0.27, hipY+14, cx-hipW*0.23, kneeY, rnd, 1.5, cm, lw*0.46);
+        skOval(ctx, cx-hipW*0.43, kneeY, hipW*0.21, hipW*0.17, rnd, cm, lw*0.48, null);
+        // Right leg
+        skLine(ctx, cx+hipW*0.54, hipY, cx+hipW*0.43, kneeY, rnd, 2, c, lw*0.86);
+        skLine(ctx, cx+hipW*0.43, kneeY, cx+hipW*0.37, footY, rnd, 2, c, lw*0.86);
+        skLine(ctx, cx+hipW*0.27, hipY+14, cx+hipW*0.23, kneeY, rnd, 1.5, cm, lw*0.46);
+        skOval(ctx, cx+hipW*0.43, kneeY, hipW*0.21, hipW*0.17, rnd, cm, lw*0.48, null);
+        // Shoes
+        skLine(ctx, cx-hipW*0.37-7, footY, cx-hipW*0.37+h*0.088, footY+6, rnd, 1, c, lw*1.1);
+        skLine(ctx, cx-hipW*0.37-7, footY, cx-hipW*0.37-7, footY+8, rnd, 0.5, c, lw);
+        skLine(ctx, cx+hipW*0.37-7, footY, cx+hipW*0.37+h*0.088, footY+6, rnd, 1, c, lw*1.1);
+        skLine(ctx, cx+hipW*0.37-7, footY, cx+hipW*0.37-7, footY+8, rnd, 0.5, c, lw);
+    }
+}
+
+// ---- INTERIOR BACKGROUND ----
+function drawBg_Interior(ctx, w, h, rnd, variation) {
+    const horizY = h*0.54;
+    // Perspective floor
+    const vp = w/2;
+    for (let i=0; i<=6; i++) {
+        const fx = w*0.05+(w*0.9/6)*i;
+        ctx.save(); ctx.strokeStyle=SKCLR.inkLight; ctx.lineWidth=0.9; ctx.globalAlpha=0.40;
+        ctx.beginPath(); ctx.moveTo(fx,h-20); ctx.lineTo(vp+(fx-vp)*0.26,horizY+4); ctx.stroke(); ctx.restore();
+    }
+    skLine(ctx, 30, horizY, w-30, horizY, rnd, 2.5, SKCLR.ink, 2.5);
+    skLine(ctx, 30, horizY+16, w-30, horizY+16, rnd, 1, SKCLR.inkMid, 1.2);
+    // Walls
+    skLine(ctx, 36, 52, w-36, 52, rnd, 2, SKCLR.ink, 2);
+    skLine(ctx, 36, 52, 36, horizY, rnd, 1.5, SKCLR.ink, 2);
+    skLine(ctx, w-36, 52, w-36, horizY, rnd, 1.5, SKCLR.ink, 2);
+    // Subtle wallpaper lines
+    ctx.save(); ctx.globalAlpha=0.05;
+    for (let hy=78; hy<horizY; hy+=20) {
+        ctx.strokeStyle=SKCLR.inkMid; ctx.lineWidth=0.65;
+        ctx.beginPath(); ctx.moveTo(36,hy); ctx.lineTo(w-36,hy); ctx.stroke();
+    }
+    ctx.restore();
+
+    if (variation%2===0) {
+        // Window right
+        const wx=w-208, wy=80, ww=152, wh=208;
+        skLine(ctx,wx,wy,wx+ww,wy,rnd,1.5,SKCLR.ink,2.8); skLine(ctx,wx,wy,wx,wy+wh,rnd,1.5,SKCLR.ink,2.8);
+        skLine(ctx,wx+ww,wy,wx+ww,wy+wh,rnd,1.5,SKCLR.ink,2.8); skLine(ctx,wx,wy+wh,wx+ww,wy+wh,rnd,1.5,SKCLR.ink,2.8);
+        skLine(ctx,wx+ww/2,wy,wx+ww/2,wy+wh,rnd,1,SKCLR.ink,1.5); skLine(ctx,wx,wy+wh/2,wx+ww,wy+wh/2,rnd,1,SKCLR.ink,1.5);
+        ctx.save(); ctx.globalAlpha=0.20; ctx.fillStyle='#dff0fc'; ctx.fillRect(wx+3,wy+3,ww-6,wh-6); ctx.restore();
+        // Curtains
+        for (let fi=0; fi<5; fi++) {
+            const fcx=wx+fi*(ww*0.3/4); skLine(ctx,fcx,wy,fcx+(rnd()-0.5)*8,wy+wh,rnd,4,SKCLR.inkLight,1);
+        }
+        for (let fi=0; fi<5; fi++) {
+            const fcx=wx+ww-fi*(ww*0.3/4); skLine(ctx,fcx,wy,fcx+(rnd()-0.5)*8,wy+wh,rnd,4,SKCLR.inkLight,1);
+        }
+    }
+    if (variation%2===1) {
+        // Bookshelf left with colourful spines
+        const bx=44, by=68, bw=112, bh=horizY-86;
+        skLine(ctx,bx,by,bx+bw,by,rnd,1,SKCLR.ink,2.5); skLine(ctx,bx,by,bx,by+bh,rnd,1,SKCLR.ink,2.5);
+        skLine(ctx,bx+bw,by,bx+bw,by+bh,rnd,1,SKCLR.ink,2.5);
+        const ns=4;
+        for (let s=0; s<=ns; s++) {
+            const sy=by+bh*(s/ns); skLine(ctx,bx,sy,bx+bw,sy,rnd,1,SKCLR.inkMid,1.5);
+            if (s<ns) {
+                let bkx=bx+5; const shH=bh/ns-8;
+                while (bkx<bx+bw-7) {
+                    const bkw=9+rnd()*15, bky=by+bh*(s/ns)+4;
+                    ctx.save(); ctx.fillStyle=`hsl(${20+rnd()*55},${36+rnd()*34}%,${52+rnd()*20}%)`; ctx.globalAlpha=0.74; ctx.fillRect(bkx,bky,bkw,shH); ctx.restore();
+                    skLine(ctx,bkx,bky,bkx,bky+shH,rnd,0.5,SKCLR.ink,1.2); skLine(ctx,bkx+bkw,bky,bkx+bkw,bky+shH,rnd,0.5,SKCLR.ink,1.2);
+                    bkx+=bkw+2+rnd()*4;
+                }
+            }
+        }
+    }
+    // Fireplace (variation 0,3)
+    if (variation===0||variation===3) {
+        const fx2=52, fy2=horizY-88, fw2=98, fh2=88;
+        skLine(ctx,fx2,fy2,fx2+fw2,fy2,rnd,1,SKCLR.ink,2.5); skLine(ctx,fx2,fy2,fx2,fy2+fh2,rnd,1,SKCLR.ink,2.5);
+        skLine(ctx,fx2+fw2,fy2,fx2+fw2,fy2+fh2,rnd,1,SKCLR.ink,2.5);
+        ctx.save(); ctx.globalAlpha=0.14; ctx.fillStyle='#111'; ctx.fillRect(fx2+3,fy2+3,fw2-6,fh2-6); ctx.restore();
+        skOval(ctx,fx2+fw2/2,fy2+fh2-24,18,22,rnd,'#c06020',1.5,'rgba(230,128,38,0.66)');
+        skOval(ctx,fx2+fw2/2-10,fy2+fh2-17,10,13,rnd,'#c08020',1,'rgba(242,180,58,0.60)');
+    }
+    // Small table
+    const tx=w*0.72, ty=horizY;
+    skLine(ctx,tx-48,ty-48,tx+48,ty-48,rnd,2,SKCLR.ink,2);
+    skLine(ctx,tx-42,ty-48,tx-38,ty,rnd,1,SKCLR.inkMid,1.5); skLine(ctx,tx+42,ty-48,tx+38,ty,rnd,1,SKCLR.inkMid,1.5);
+}
+
+// ---- EXTERIOR BACKGROUND ----
+function drawBg_Exterior(ctx, w, h, rnd, variation, timeOfDay, settingType) {
+    const horizY = h*0.44;
+    // Sky
+    if (timeOfDay==='night') {
+        ctx.save(); ctx.globalAlpha=0.08; ctx.fillStyle='#0a0a2a'; ctx.fillRect(0,0,w,horizY); ctx.restore();
+        for (let si=0; si<45; si++) {
+            ctx.save(); ctx.globalAlpha=0.76; ctx.fillStyle=SKCLR.inkMid;
+            ctx.beginPath(); ctx.arc(rnd()*w, rnd()*horizY, 0.8+rnd()*1.8, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        }
+        skOval(ctx, w*0.80, h*0.10, 30,30, rnd, SKCLR.ink, 1.5, 'rgba(255,248,200,0.72)');
+    } else if (timeOfDay==='dusk') {
+        ctx.save(); ctx.globalAlpha=0.10;
+        for (let dy=0; dy<horizY; dy+=18) {
+            ctx.strokeStyle=dy<horizY*0.45?'#6a3060':'#c08040'; ctx.lineWidth=0.7;
+            ctx.beginPath(); ctx.moveTo(0,dy); ctx.lineTo(w,dy); ctx.stroke();
+        }
+        ctx.restore();
+        skOval(ctx, w*0.72, horizY-30, 38,38, rnd,'#c06020',2,'rgba(220,130,50,0.54)');
+    } else {
+        // Clouds
+        [[0.20,0.12,68,28],[0.62,0.08,85,32],[0.44,0.19,58,22]].forEach(([fx,fy,rx,ry]) => {
+            const ccx=w*fx,ccy=h*fy;
+            skOval(ctx,ccx,ccy,rx,ry,rnd,SKCLR.inkLight,0.9,null);
+            skOval(ctx,ccx-rx*0.38,ccy+ry*0.18,rx*0.60,ry*0.78,rnd,SKCLR.inkLight,0.8,null);
+            skOval(ctx,ccx+rx*0.38,ccy+ry*0.12,rx*0.55,ry*0.72,rnd,SKCLR.inkLight,0.8,null);
+        });
+    }
+    // Horizon
+    skLine(ctx,24,horizY,w-24,horizY,rnd,3,SKCLR.ink,2.5);
+
+    if (settingType==='ocean') {
+        for (let wi=0; wi<16; wi++) {
+            const wy=horizY+6+wi*14, wlen=w*(0.36+rnd()*0.54);
+            skLine(ctx,(w-wlen)/2,wy,(w+wlen)/2,wy,rnd,4,SKCLR.inkLight,0.85);
+        }
+        skLine(ctx,w*0.37,horizY,w*0.37,horizY+106,rnd,2,SKCLR.ink,3.6);
+        skLine(ctx,w*0.63,horizY,w*0.63,horizY+106,rnd,2,SKCLR.ink,3.6);
+        for (let dp=0; dp<5; dp++) skLine(ctx,w*0.37,horizY+dp*22,w*0.63,horizY+dp*22,rnd,2.5,SKCLR.ink,1.9);
+        if (variation%2===0) {
+            const bx=w*0.14;
+            skLine(ctx,bx-30,horizY-5,bx+30,horizY-5,rnd,1,SKCLR.ink,2);
+            skLine(ctx,bx-28,horizY-5,bx-22,horizY+12,rnd,1,SKCLR.ink,2);
+            skLine(ctx,bx+28,horizY-5,bx+22,horizY+12,rnd,1,SKCLR.ink,2);
+            skLine(ctx,bx,horizY-5,bx,horizY-34,rnd,1,SKCLR.ink,1.5);
+        }
+    } else if (settingType==='forest') {
+        [0.07,0.21,0.76,0.89,0.55].forEach((tp,ti) => {
+            drawSketchTree(ctx, w*tp, horizY, [142,124,136,148,115][ti%5], rnd);
+        });
+        ctx.save(); ctx.globalAlpha=0.12;
+        for (let gi=0; gi<20; gi++) {
+            const gx=rnd()*w, gy=horizY+5+rnd()*(h-horizY-60);
+            ctx.strokeStyle=SKCLR.inkMid; ctx.lineWidth=0.8;
+            ctx.beginPath(); ctx.moveTo(gx,gy); ctx.lineTo(gx+(rnd()-0.5)*20,gy+8+rnd()*12); ctx.stroke();
+        }
+        ctx.restore();
+    } else if (settingType==='city') {
+        drawSketchCityscape(ctx, w, horizY, rnd);
+        // Street lamp
+        skLine(ctx,w*0.25,horizY,w*0.25,horizY-122,rnd,1,SKCLR.ink,2.5);
+        ctx.save(); ctx.strokeStyle=SKCLR.ink; ctx.lineWidth=2; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(w*0.25,horizY-122);
+        ctx.bezierCurveTo(w*0.25,horizY-142,w*0.25+36,horizY-142,w*0.25+36,horizY-122); ctx.stroke(); ctx.restore();
+        skOval(ctx,w*0.25+36,horizY-120,10,8,rnd,'#c0a020',1.2,'rgba(255,240,120,0.50)');
+    } else {
+        // Open landscape
+        ctx.save(); ctx.strokeStyle=SKCLR.ink; ctx.lineWidth=2.2;
+        ctx.beginPath(); ctx.moveTo(0,horizY+18);
+        for (let xi=0; xi<=w; xi+=14) {
+            ctx.lineTo(xi+(rnd()-0.5)*4, horizY+18+Math.sin(xi*0.009)*26+Math.sin(xi*0.023)*13+(rnd()-0.5)*3);
+        }
+        ctx.lineTo(w,h); ctx.lineTo(0,h);
+        ctx.globalAlpha=0.08; ctx.fillStyle=SKCLR.inkLight; ctx.fill();
+        ctx.globalAlpha=0.85; ctx.stroke(); ctx.restore();
+        // Vegetation tufts
+        for (let vi=0; vi<8; vi++) {
+            const vx=50+rnd()*(w-100), vy=horizY+5+rnd()*80;
+            for (let vj=0; vj<3; vj++) skLine(ctx,vx+(rnd()-0.5)*18,vy,vx+(rnd()-0.5)*14,vy+12+rnd()*18,rnd,2,SKCLR.inkMid,1.1);
+        }
+        if (variation>=2) drawSketchTree(ctx, w*0.84, horizY, 110, rnd);
+    }
+}
+
+function drawSketchTree(ctx, x, groundY, h, rnd) {
+    const tw=h*0.075;
+    skLine(ctx,x-tw,groundY,x-tw*0.5,groundY-h*0.42,rnd,2.5,SKCLR.ink,3.2);
+    skLine(ctx,x+tw,groundY,x+tw*0.5,groundY-h*0.42,rnd,2.5,SKCLR.ink,3.2);
+    skLine(ctx,x-tw*0.5,groundY-h*0.42,x+tw*0.5,groundY-h*0.42,rnd,1,SKCLR.ink,2);
+    skLine(ctx,x,groundY-h*0.42,x-h*0.21,groundY-h*0.68,rnd,2.5,SKCLR.ink,2.2);
+    skLine(ctx,x,groundY-h*0.42,x+h*0.20,groundY-h*0.64,rnd,2.5,SKCLR.ink,2.2);
+    skLine(ctx,x,groundY-h*0.42,x+h*0.04,groundY-h*0.75,rnd,2.5,SKCLR.ink,2);
+    [[0,-0.72,0.30,0.32],[-.18,-0.65,0.24,0.27],[.20,-0.62,0.26,0.29],[0,-0.86,0.20,0.24]].forEach(([dx,dy,rx,ry]) => {
+        skOval(ctx, x+dx*h, groundY+dy*h, rx*h, ry*h, rnd, SKCLR.ink, 1.9, null);
+    });
+}
+
+function drawSketchCityscape(ctx, w, horizY, rnd) {
+    [{x:0,bw:108,bh:198},{x:98,bw:72,bh:275},{x:162,bw:92,bh:158},{x:248,bw:62,bh:235},
+     {x:w-348,bw:88,bh:218},{x:w-268,bw:108,bh:172},{x:w-162,bw:78,bh:295},{x:w-88,bw:92,bh:188}
+    ].forEach(b => {
+        const by=horizY-b.bh;
+        ctx.save(); ctx.globalAlpha=0.11; ctx.fillStyle=SKCLR.inkLight; ctx.fillRect(b.x+2,by+2,b.bw-4,b.bh-2); ctx.restore();
+        skLine(ctx,b.x,horizY,b.x,by,rnd,1.5,SKCLR.ink,2); skLine(ctx,b.x+b.bw,horizY,b.x+b.bw,by,rnd,1.5,SKCLR.ink,2);
+        skLine(ctx,b.x,by,b.x+b.bw,by+(rnd()-0.5)*3,rnd,1.5,SKCLR.ink,2);
+        for (let wy=by+18; wy<horizY-18; wy+=26) {
+            for (let wx2=b.x+10; wx2<b.x+b.bw-8; wx2+=20) {
+                if (rnd()>0.22) {
+                    ctx.save(); ctx.fillStyle=rnd()>0.40?'rgba(255,238,110,0.45)':'rgba(195,218,255,0.25)'; ctx.globalAlpha=0.9;
+                    ctx.fillRect(wx2,wy,9,12); ctx.strokeStyle=SKCLR.inkMid; ctx.lineWidth=0.7; ctx.strokeRect(wx2,wy,9,12); ctx.restore();
+                }
+            }
+        }
+    });
+}
+
+// ---- MAIN SKETCH COMPOSITOR ----
+function drawSceneSketch(ctx, fw, fh, scene, sceneIdx, variation, characters) {
+    const seed = (sceneIdx*10+variation)*997+7;
+    const rnd  = makeSeededRnd(seed);
+
+    const visual = scene.visual || {};
+    const rawSetting = ((visual.setting||'')+' '+(scene.title||'')).toLowerCase();
+    const isInterior = /\b(mansion|library|study|room|indoor|interior|hall|parlor|inn|dining|ballroom|prison|cell|office|court)\b/.test(rawSetting);
+    const isOcean    = /\b(ocean|dock|river|lake|water|sea|shore|harbor|boat|ship)\b/.test(rawSetting);
+    const isForest   = /\b(forest|wood|nature|garden|park|meadow|countryside)\b/.test(rawSetting);
+    const isCity     = /\b(city|street|town|urban|alley|plaza)\b/.test(rawSetting);
+    const timeOfDay  = visual.time || 'day';
+    const action     = (visual.action||'').toLowerCase();
+    const keyEl      = (visual.key_element||'').toLowerCase();
+
+    // Paper background
+    ctx.fillStyle = SKCLR.paper;
+    ctx.fillRect(0,0,fw,fh);
+
+    const groundY = fh * (isInterior ? 0.72 : 0.67);
+
+    // Background
+    if (isInterior) {
+        drawBg_Interior(ctx, fw, fh, rnd, variation);
+    } else {
+        const st = isOcean?'ocean': isForest?'forest': isCity?'city':'open';
+        drawBg_Exterior(ctx, fw, fh, rnd, variation, timeOfDay, st);
+    }
+
+    // Characters
+    const charNames = (visual.characters_present && visual.characters_present.length>0)
+        ? visual.characters_present.slice(0,3)
+        : (characters.length>0 ? [characters[0].name] : ['Protagonist']);
+
+    const numChars = Math.min(charNames.length,3);
+    const posMap   = {1:[0.50],2:[0.33,0.67],3:[0.22,0.52,0.78]};
+    const xPos     = posMap[numChars]||[0.50];
+    const figH     = Math.min(fh*0.40, groundY-fh*0.08);
+
+    // Determine poses from action
+    const poseList = [];
+    if (/reach|touch|grasp|extend|hold|gesture/.test(action)) poseList.push('reaching');
+    else if (/argu|fight|confront|demand|accuse|shout/.test(action)) poseList.push('arguing');
+    else if (/sit|seat|rest|slump/.test(action)) poseList.push('sitting');
+    else poseList.push('standing');
+    if (numChars>1) poseList.push(action.includes('confront')?'arguing':'standing');
+
+    const FEMALE_NAMES = /^(mary|jane|elizabeth|emma|anne|daisy|helen|nora|margaret|rose|violet|lily|alice|eleanor|sophia|isabella|charlotte|mia|evelyn|abigail|scarlett|hester|pip|estella|cathy|hermione|desdemona|ophelia|portia|juliet|beatrice|rowena|lydia|caroline|dorothy|jane|lucy)\b/i;
+
+    for (let i=0; i<numChars; i++) {
+        const cx = fw * xPos[i];
+        const charName = charNames[i] || '';
+        const anchor = characters.find(c => {
+            if (!c.name||!charName) return false;
+            const cn=c.name.toLowerCase(), ch=charName.toLowerCase();
+            return cn.includes(ch.split(' ')[0])||ch.includes(cn.split(' ')[0]);
+        });
+        const anchorText = (anchor?.anchor||'').toLowerCase();
+        const isFemale = /\b(woman|female|girl|lady|her\b|she\b)\b/.test(anchorText)||FEMALE_NAMES.test(charName);
+        const pose = poseList[i%poseList.length]||'standing';
+        drawFigure(ctx, cx, groundY, figH, isFemale?'F':'M', pose, rnd);
+
+        // Name label
+        ctx.save();
+        ctx.font=`italic ${Math.max(18,fw*0.020)}px Georgia, serif`;
+        ctx.fillStyle=SKCLR.inkMid; ctx.textAlign='center'; ctx.globalAlpha=0.88;
+        ctx.fillText(anchor?.name||charName, cx, groundY+24);
+        ctx.restore();
+    }
+
+    // Atmospheric props based on key_element
+    if (keyEl.includes('light') && !keyEl.includes('daylight')) {
+        const lx=fw*0.82, ly=fh*0.20;
+        ctx.save(); ctx.globalAlpha=0.62;
+        for (let ri=0; ri<4; ri++) skOval(ctx,lx,ly,15+ri*12,15+ri*12,rnd,ri%2===0?'#1a6a1a':'#2d8a2d',0.6,null);
+        skOval(ctx,lx,ly,16,16,rnd,'#1a4a1a',2.2,'rgba(50,190,50,0.55)');
+        ctx.restore();
+    }
+    if (keyEl.includes('rain')||(timeOfDay==='night'&&variation%2===0)) {
+        ctx.save(); ctx.strokeStyle=SKCLR.inkLight; ctx.lineWidth=0.65; ctx.globalAlpha=0.28;
+        for (let ri=0; ri<38; ri++) {
+            const rx=rnd()*fw, ry=rnd()*fh;
+            ctx.beginPath(); ctx.moveTo(rx,ry); ctx.lineTo(rx-4,ry+15); ctx.stroke();
+        }
+        ctx.restore();
+    }
+    if (keyEl.includes('fire')||keyEl.includes('candle')||keyEl.includes('lamp')) {
+        const fx=fw*0.12, fy=groundY-55;
+        skLine(ctx,fx-18,groundY-42,fx+25,groundY-42,rnd,2,SKCLR.inkMid,1.5);
+        skLine(ctx,fx+4,groundY-42,fx+4,fy+20,rnd,1,SKCLR.inkMid,1.5);
+        skOval(ctx,fx+4,fy,8,13,rnd,'#c05010',1.5,'rgba(235,125,35,0.72)');
+    }
+    if (keyEl.includes('crowd')||action.includes('celebrat')||action.includes('party')) {
+        ctx.save(); ctx.globalAlpha=0.22;
+        for (let ci=0; ci<12; ci++) {
+            const cx2=35+rnd()*(fw-70), cr=12+rnd()*8;
+            const cy2=groundY-55-rnd()*70;
+            skOval(ctx,cx2,cy2,cr,cr*1.08,rnd,SKCLR.inkLight,1.1,SKCLR.paper);
+            skLine(ctx,cx2,cy2+cr,cx2,cy2+cr+32,rnd,1.5,SKCLR.inkLight,1.2);
+        }
+        ctx.restore();
+    }
+    if (keyEl.includes('book')||keyEl.includes('letter')||keyEl.includes('scroll')||keyEl.includes('photograph')) {
+        const px=fw*0.78, py=groundY-34;
+        skLine(ctx,px,py,px+52,py,rnd,1,SKCLR.ink,2.2); skLine(ctx,px,py,px,py+36,rnd,1,SKCLR.ink,2.2);
+        skLine(ctx,px+52,py,px+52,py+36,rnd,1,SKCLR.ink,2.2); skLine(ctx,px,py+36,px+52,py+36,rnd,1,SKCLR.ink,2.2);
+        skLine(ctx,px,py+18,px+52,py+18,rnd,0.8,SKCLR.inkMid,0.9);
+        skLine(ctx,px+8,py+4,px+44,py+4,rnd,0.5,SKCLR.inkLight,0.7);
+    }
+
+    // Paper grain texture
+    ctx.save(); ctx.globalAlpha=0.04;
+    for (let gi=0; gi<80; gi++) {
+        ctx.fillStyle=SKCLR.inkLight;
+        ctx.beginPath(); ctx.arc(rnd()*fw, rnd()*fh, 0.8+rnd()*1.2, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    // Decorative sketch border
+    ctx.save(); ctx.strokeStyle=SKCLR.inkLight; ctx.lineWidth=0.7; ctx.globalAlpha=0.30;
+    ctx.setLineDash([4,5]); ctx.strokeRect(22,22,fw-44,fh-44); ctx.setLineDash([]); ctx.restore();
+}
+
 function drawVideoBriefCanvas() {
     const canvas = document.getElementById('brief-canvas');
     if (!canvas) return;
@@ -7409,86 +7922,24 @@ function drawVideoBriefCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // Determine active sketch image based on 3.5s rotation frequency
-    // Use reliable wall-clock time so sketches always display even before audio loads
-    let activeImageObj = null;
+    // Draw sketch procedurally — always fills the frame, no blank canvas
     if (activeScene) {
-        if (activeScene.sketchImages && activeScene.sketchImages.length > 0) {
-            const elapsedMs = videoBriefState.isPlaying
-                ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
-                : 0;
-            const imgIdx = Math.floor(elapsedMs / 3500) % activeScene.sketchImages.length;
-            // Walk forward until we find a loaded, non-broken image
-            let foundImg = null;
-            for (let attempt = 0; attempt < activeScene.sketchImages.length; attempt++) {
-                const candidate = activeScene.sketchImages[(imgIdx + attempt) % activeScene.sketchImages.length];
-                if (candidate && candidate._loaded && !candidate._broken && candidate.naturalWidth > 0) {
-                    foundImg = candidate; break;
-                }
-                // Also accept images without explicit _loaded flag (e.g. src loaded synchronously)
-                if (candidate && !candidate._broken && candidate.complete && candidate.naturalWidth > 0) {
-                    foundImg = candidate; break;
-                }
-            }
-            activeImageObj = foundImg; // null is safe — we'll draw a placeholder below
-        } else if (activeScene.imageObj && !activeScene.imageObj._broken) {
-            activeImageObj = activeScene.imageObj;
-        }
-    }
+        const elapsedMs = videoBriefState.isPlaying
+            ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
+            : 0;
+        const variationIdx = Math.floor(elapsedMs / 3500) % 4;
+        const sceneIdx = videoBriefState.currentIndex;
 
-    // Only drawImage when image is genuinely loaded with real dimensions — never on broken images
-    const imgReady = activeImageObj
-        && !activeImageObj._broken
-        && activeImageObj.complete
-        && activeImageObj.naturalWidth > 0
-        && activeImageObj.naturalHeight > 0;
-
-    if (imgReady) {
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
         ctx.clip();
-
-        // Ken Burns Gentle Zoom & Pan Effect
-        videoBriefState.panZoomProgress = (videoBriefState.panZoomProgress + 0.0012) % 1.0;
-        const zoomScale = 1.0 + Math.sin(videoBriefState.panZoomProgress * Math.PI) * 0.05;
-        const panX = Math.cos(videoBriefState.panZoomProgress * Math.PI * 2) * 12;
-        const panY = Math.sin(videoBriefState.panZoomProgress * Math.PI * 2) * 8;
-
-        const imgW = activeImageObj.naturalWidth;
-        const imgH = activeImageObj.naturalHeight;
-        const scale = Math.max((frameW - 16) / imgW, (frameH - 16) / imgH) * zoomScale;
-        const drawW = imgW * scale;
-        const drawH = imgH * scale;
-        const drawX = frameX + 8 + ((frameW - 16) - drawW) / 2 + panX;
-        const drawY = frameY + 8 + ((frameH - 16) - drawH) / 2 + panY;
-
-        try {
-            ctx.drawImage(activeImageObj, drawX, drawY, drawW, drawH);
-        } catch(drawErr) {
-            // Silently ignore — image may have become broken after load
-            console.warn('drawImage skipped:', drawErr.message);
-        }
-        ctx.restore();
-    } else {
-        // Sketch Placeholder while loading or if all images failed
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
-        ctx.clip();
-        ctx.fillStyle = '#f0ece2';
-        ctx.fillRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16);
-        ctx.font = 'bold 34px "Inter", sans-serif';
-        ctx.fillStyle = '#a89070';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('✏️ Drawing Scene...', width / 2, frameY + frameH / 2 - 20);
-        ctx.font = '22px "Inter", sans-serif';
-        ctx.fillStyle = '#b8a890';
-        ctx.fillText('Sketch generating, please wait', width / 2, frameY + frameH / 2 + 24);
+        ctx.translate(frameX + 8, frameY + 8);
+        drawSceneSketch(ctx, frameW - 16, frameH - 16, activeScene, sceneIdx, variationIdx, videoBriefState.characters || []);
         ctx.restore();
     }
 }
+
 
 async function speakBriefText(text, lang, onEnd, onProgress) {
     if (!text) { if (onEnd) onEnd(); return; }
@@ -7806,7 +8257,8 @@ function initVideoBriefStudio() {
                         });
                     }
 
-                    const totalSteps = videoBriefState.scenes.length * 2;
+                    // Sketches are drawn procedurally — only preload audio narration
+                    const totalSteps = videoBriefState.scenes.length;
                     let currentStep = 0;
 
                     const progressModal = document.getElementById('brief-progress-container');
@@ -7817,47 +8269,9 @@ function initVideoBriefStudio() {
 
                     for (let i = 0; i < videoBriefState.scenes.length; i++) {
                         const scene = videoBriefState.scenes[i];
-                        scene.sketchImages = [];
-
-                        const sketchPrompts = (scene.sketch_prompts && scene.sketch_prompts.length > 0)
-                            ? scene.sketch_prompts
-                            : [scene.sketch_prompt || `Minimalist sketch illustration for ${scene.title}`];
-
-                        for (let k = 0; k < sketchPrompts.length; k++) {
-                            const p = sketchPrompts[k];
-                            if (progressText) progressText.innerText = `🎨 Drawing Sketch ${k + 1}/${sketchPrompts.length} for Scene ${i + 1}/${videoBriefState.scenes.length}...`;
-                            try {
-                                const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ prompt: p, scene_number: scene.scene_number, sketch_index: k })
-                                });
-                                const skData = await skRes.json();
-                                const imgSrc = skData.image_data || skData.image_url;
-                                if (imgSrc) {
-                                    // Load image via Promise — wait for it to fully decode or fail
-                                    const img = new Image();
-                                    img._broken = false;
-                                    img._loaded = false;
-                                    await new Promise((resolve) => {
-                                        img.onload = () => { img._loaded = true; resolve(); };
-                                        img.onerror = () => { img._broken = true; resolve(); }; // Resolve even on error so we don't stall
-                                        img.src = imgSrc;
-                                        // Safety timeout — never stall generation for more than 60s per image
-                                        setTimeout(resolve, 60000);
-                                    });
-                                    scene.sketchImages.push(img);
-                                    if (k === 0) scene.imageObj = img;
-                                }
-                            } catch(e){}
-                        }
-
-                        currentStep++;
-                        if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;
-
-                        if (progressText) progressText.innerText = `🎙️ Pre-loading HD Voice Narration ${i + 1}/${videoBriefState.scenes.length}...`;
+                        if (progressText) progressText.innerText = `🎙️ Pre-loading Voice Narration ${i + 1}/${videoBriefState.scenes.length}...`;
+                        if (progressBar) progressBar.style.width = `${Math.round(((i + 0.5) / totalSteps) * 100)}%`;
                         await fetchBriefAudioBuffer(scene.narration, lang);
-
                         currentStep++;
                         if (progressBar) progressBar.style.width = `${Math.round((currentStep / totalSteps) * 100)}%`;
                     }

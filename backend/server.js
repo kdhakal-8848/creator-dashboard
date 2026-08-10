@@ -1342,36 +1342,36 @@ High Quality Content Directives:
 - Deeply insightful narration summarizing core key takeaways, main character arcs, and central themes.
 - Written in eloquent, compelling, professional storytelling voice (no filler, no generic summaries).
 - Generate precise physical Character Anchors for main characters to preserve visual consistency.
-- For EACH scene, provide FOUR (4) distinct sketch prompts showing different moments/angles of that scene.
-- CRITICAL for sketch prompts: Each sketch must depict a FULL SCENE with rich setting details:
-  * Include the environment/location (e.g., "a dimly lit speakeasy", "a sun-drenched dock", "a cluttered attic")
-  * Include atmospheric elements (time of day, weather, mood lighting, era-appropriate objects/furniture)
-  * Include character action and body language (e.g., "reaching toward", "turning away", "slumped against")
-  * Include relevant symbolic or narrative props (e.g., "a telephone on the desk", "a wilting flower")
-  * Do NOT just describe characters standing — show them doing something in a vivid location
+- For EACH scene, provide a "visual" metadata object (see schema) to drive the canvas sketch renderer.
+- The "visual.setting" must be a specific location type keyword from this list:
+  mansion_interior | library | study | ballroom | dining_room | prison_cell | garden | forest | ocean_dock | city_street | open_countryside | cottage | graveyard | courtroom | market | battlefield
+- The "visual.characters_present" must list the exact character NAMES from your "characters" array who appear in the scene (not descriptions).
 
 Return JSON ONLY matching this schema:
 {
   "book_title": "${topic}",
   "tagline": "A powerful 1-sentence hook summary capturing the essence of the work",
   "characters": [
-    { "name": "Character Name", "anchor": "Detailed physical appearance (age, hair, clothing of the era, facial features)" }
+    { "name": "Character Name", "anchor": "Detailed physical appearance (age, sex/gender, hair color and style, clothing of the era, notable facial features)" }
   ],
   "scenes": [
     {
       "scene_number": 1,
       "title": "Evocative Scene Title",
       "narration": "What the narrator speaks in eloquent, natural, engaging language (3-4 sentences, ~15 seconds duration)",
-      "sketch_prompts": [
-        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Setting: describe the specific location and atmosphere in detail]. [Characters: name with anchor details, specific action/pose]. [Symbolic detail or prop that enhances the mood]. Clean linework, storybook illustration style.",
-        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Different angle or moment of the same scene]. [Characters with anchor details, different action]. [Atmospheric detail]. Clean linework, storybook illustration style.",
-        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Another visual beat of this scene]. [Characters with anchor details]. [Setting and mood detail]. Clean linework, storybook illustration style.",
-        "Minimalist hand-drawn pencil & ink sketch on warm beige paper (#f5f2eb). [Closing visual of this scene]. [Characters or symbolic imagery with anchor details]. [Narrative prop or environmental detail]. Clean linework, storybook illustration style."
-      ],
+      "visual": {
+        "setting": "one of the setting keywords from the list above",
+        "time": "day | night | dusk",
+        "mood": "hopeful | tragic | mysterious | joyful | tense | melancholic | triumphant | ominous",
+        "action": "dialogue | solitude | conflict | reunion | departure | celebration | mourning | discovery | confrontation | reaching | sitting | arguing",
+        "characters_present": ["Name1", "Name2"],
+        "key_element": "green_light | book | letter | photograph | crown | weapon | flower | candle | fire | rain | crowd | window | door | ship | lantern | none"
+      },
       "estimated_duration_sec": 15
     }
   ]
 }`;
+
 
         const apiKeys = getGeminiApiKeys();
         let briefResult = null;
