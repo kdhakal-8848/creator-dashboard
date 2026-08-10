@@ -7922,22 +7922,18 @@ function drawVideoBriefCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // Determine active AI sketch image based on 3.5s rotation frequency
+    // Determine active AI sketch image based on 5-second visual beat mapping
     let activeImageObj = null;
     if (activeScene) {
         if (activeScene.sketchImages && activeScene.sketchImages.length > 0) {
             const elapsedMs = videoBriefState.isPlaying
                 ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
                 : 0;
-            const imgIdx = Math.floor(elapsedMs / 3500) % activeScene.sketchImages.length;
-            for (let attempt = 0; attempt < activeScene.sketchImages.length; attempt++) {
-                const candidate = activeScene.sketchImages[(imgIdx + attempt) % activeScene.sketchImages.length];
-                if (candidate && candidate._loaded && !candidate._broken && candidate.naturalWidth > 0) {
-                    activeImageObj = candidate; break;
-                }
-                if (candidate && !candidate._broken && candidate.complete && candidate.naturalWidth > 0) {
-                    activeImageObj = candidate; break;
-                }
+            // Map 5-second beats: Beat 0 (0-5s), Beat 1 (5-10s), Beat 2 (10-15s)
+            const targetBeatIdx = Math.min(activeScene.sketchImages.length - 1, Math.floor((elapsedMs / 1000) / 5));
+            const candidate = activeScene.sketchImages[targetBeatIdx] || activeScene.sketchImages[0];
+            if (candidate && !candidate._broken && (candidate._loaded || candidate.complete) && candidate.naturalWidth > 0) {
+                activeImageObj = candidate;
             }
         } else if (activeScene.imageObj && !activeScene.imageObj._broken) {
             activeImageObj = activeScene.imageObj;
@@ -8286,6 +8282,14 @@ function initVideoBriefStudio() {
                     videoBriefState.scenes = data.brief.scenes;
                     videoBriefState.currentIndex = 0;
 
+                    // Display Copy-Paste Prompt Script if available
+                    const scriptContainer = document.getElementById('brief-script-container');
+                    const scriptText = document.getElementById('brief-script-text');
+                    if (data.brief.copy_paste_script && scriptText && scriptContainer) {
+                        scriptText.value = data.brief.copy_paste_script;
+                        scriptContainer.style.display = 'block';
+                    }
+
                     const anchorDiv = document.getElementById('brief-character-anchors');
                     if (anchorDiv && videoBriefState.characters.length > 0) {
                         anchorDiv.innerHTML = `<strong>Character Anchors:</strong> ` + videoBriefState.characters.map(c => `<span style="color:#f59e0b;font-weight:600;">${c.name}</span> (${c.anchor})`).join(' • ');
@@ -8303,14 +8307,22 @@ function initVideoBriefStudio() {
                             card.innerHTML = `<div style="font-weight:700;color:#f59e0b;">Scene ${s.scene_number}: ${s.title}</div><div style="color:var(--color-fg-muted);margin-top:2px;">${s.narration.substring(0, 60)}...</div>`;
                             card.onclick = () => {
                                 videoBriefState.currentIndex = idx;
-                                drawVideoBriefCanvas();
+                                videoBriefState.sceneWallStartMs = performance.now();
+                                if (videoBriefState.isPlaying) {
+                                    startVideoBriefSequence(false, idx);
+                                } else {
+                                    stopCurrentBriefAudio();
+                                    drawVideoBriefCanvas();
+                                }
                             };
                             listContainer.appendChild(card);
                         });
                     }
 
+                    const selectedMode = document.querySelector('input[name="brief-mode"]:checked')?.value || 'full';
+
                     // Preload AI Charcoal & Watercolor Sketches + Voice Narration
-                    const totalSteps = videoBriefState.scenes.length * 2;
+                    const totalSteps = selectedMode === 'script' ? videoBriefState.scenes.length : videoBriefState.scenes.length * 2;
                     let currentStep = 0;
 
                     const progressModal = document.getElementById('brief-progress-container');
@@ -8323,37 +8335,39 @@ function initVideoBriefStudio() {
                         const scene = videoBriefState.scenes[i];
                         scene.sketchImages = [];
 
-                        const sketchPrompts = (scene.sketch_prompts && scene.sketch_prompts.length > 0)
-                            ? scene.sketch_prompts
-                            : [scene.sketch_prompt || `Artistic charcoal sketch with soft muted watercolor wash for ${scene.title}`];
+                        if (selectedMode !== 'script') {
+                            const sketchPrompts = (scene.sketch_prompts && scene.sketch_prompts.length > 0)
+                                ? scene.sketch_prompts
+                                : [scene.sketch_prompt || `Comic book style charcoal sketch with soft muted watercolor wash for ${scene.title}`];
 
-                        // Generate AI Charcoal & Watercolor sketch images
-                        for (let k = 0; k < Math.min(sketchPrompts.length, 3); k++) {
-                            const p = sketchPrompts[k];
-                            if (progressText) progressText.innerText = `🎨 Painting Charcoal & Watercolor Sketch ${k + 1}/${Math.min(sketchPrompts.length, 3)} for Scene ${i + 1}/${videoBriefState.scenes.length}...`;
-                            try {
-                                const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ prompt: p, scene_number: scene.scene_number, sketch_index: k })
-                                });
-                                const skData = await skRes.json();
-                                const imgSrc = skData.image_data || skData.image_url;
-                                if (imgSrc) {
-                                    const img = new Image();
-                                    img._broken = false;
-                                    img._loaded = false;
-                                    await new Promise((resolve) => {
-                                        img.onload = () => { img._loaded = true; resolve(); };
-                                        img.onerror = () => { img._broken = true; resolve(); };
-                                        img.src = imgSrc;
-                                        setTimeout(resolve, 30000);
+                            // Generate AI Charcoal & Watercolor sketch images for 5s beats
+                            for (let k = 0; k < Math.min(sketchPrompts.length, 3); k++) {
+                                const p = sketchPrompts[k];
+                                if (progressText) progressText.innerText = `🎨 Painting Beat ${k + 1}/${Math.min(sketchPrompts.length, 3)} Charcoal Sketch for Scene ${i + 1}/${videoBriefState.scenes.length}...`;
+                                try {
+                                    const skRes = await fetch(`${API_URL}/generate-brief-sketch`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ prompt: p, scene_number: scene.scene_number, sketch_index: k })
                                     });
-                                    scene.sketchImages.push(img);
-                                    if (k === 0) scene.imageObj = img;
+                                    const skData = await skRes.json();
+                                    const imgSrc = skData.image_data || skData.image_url;
+                                    if (imgSrc) {
+                                        const img = new Image();
+                                        img._broken = false;
+                                        img._loaded = false;
+                                        await new Promise((resolve) => {
+                                            img.onload = () => { img._loaded = true; resolve(); };
+                                            img.onerror = () => { img._broken = true; resolve(); };
+                                            img.src = imgSrc;
+                                            setTimeout(resolve, 30000);
+                                        });
+                                        scene.sketchImages.push(img);
+                                        if (k === 0) scene.imageObj = img;
+                                    }
+                                } catch(e) {
+                                    console.warn(`Scene ${i+1} sketch ${k+1} fetch failed:`, e);
                                 }
-                            } catch(e) {
-                                console.warn(`Scene ${i+1} sketch ${k+1} fetch failed:`, e);
                             }
                         }
 
@@ -8380,6 +8394,27 @@ function initVideoBriefStudio() {
         });
     }
 
+    // 1-Click Copy Prompt Script Button
+    const copyScriptBtn = document.getElementById('brief-copy-script-btn');
+    if (copyScriptBtn && !copyScriptBtn.__bound) {
+        copyScriptBtn.__bound = true;
+        copyScriptBtn.addEventListener('click', () => {
+            const scriptText = document.getElementById('brief-script-text')?.value;
+            if (scriptText) {
+                navigator.clipboard.writeText(scriptText).then(() => {
+                    copyScriptBtn.innerHTML = `<i data-feather="check" style="width: 12px; height: 12px;"></i> Copied!`;
+                    setTimeout(() => {
+                        copyScriptBtn.innerHTML = `<i data-feather="copy" style="width: 12px; height: 12px;"></i> Copy All Prompts`;
+                    }, 2500);
+                }).catch(() => {
+                    // Fallback select
+                    const txt = document.getElementById('brief-script-text');
+                    if (txt) { txt.select(); document.execCommand('copy'); }
+                });
+            }
+        });
+    }
+
     document.getElementById('brief-play-btn')?.addEventListener('click', () => {
         if (videoBriefState.isPlaying) return; // Already playing
         const resumeIdx = videoBriefState.currentIndex || 0;
@@ -8394,16 +8429,17 @@ function initVideoBriefStudio() {
         exportVideoBrief();
     });
 
-    // Slider: seek to any scene
+    // Slider: seek cleanly to any scene
     const slider = document.getElementById('brief-timeline-slider');
-    if (slider) {
+    if (slider && !slider.__bound) {
+        slider.__bound = true;
         slider.addEventListener('mousedown', () => { slider.__isDragging = true; });
         slider.addEventListener('touchstart', () => { slider.__isDragging = true; }, { passive: true });
         slider.addEventListener('input', () => {
             if (!videoBriefState.scenes.length) return;
             const pct = parseFloat(slider.value);
             const totalScenes = videoBriefState.scenes.length;
-            const targetIdx = Math.max(0, Math.min(totalScenes - 1, Math.round((pct / 100) * totalScenes - 0.5)));
+            const targetIdx = Math.max(0, Math.min(totalScenes - 1, Math.floor((pct / 100) * totalScenes)));
             videoBriefState.currentIndex = targetIdx;
             videoBriefState.sceneWallStartMs = performance.now();
             const label = document.getElementById('brief-time-label');
@@ -8415,11 +8451,11 @@ function initVideoBriefStudio() {
         });
         slider.addEventListener('change', () => {
             slider.__isDragging = false;
-            // If was playing, restart from new position
             if (videoBriefState.scenes.length) {
                 const pct = parseFloat(slider.value);
                 const totalScenes = videoBriefState.scenes.length;
-                const targetIdx = Math.max(0, Math.min(totalScenes - 1, Math.round((pct / 100) * totalScenes - 0.5)));
+                const targetIdx = Math.max(0, Math.min(totalScenes - 1, Math.floor((pct / 100) * totalScenes)));
+                stopCurrentBriefAudio();
                 if (videoBriefState.isPlaying) {
                     startVideoBriefSequence(false, targetIdx);
                 } else {

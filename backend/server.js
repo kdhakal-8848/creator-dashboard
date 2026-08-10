@@ -1342,10 +1342,11 @@ High Quality Content Directives:
 - Deeply insightful narration summarizing core key takeaways, main character arcs, and central themes.
 - Written in eloquent, compelling, professional storytelling voice (no filler, no generic summaries).
 - Generate precise physical Character Anchors for main characters to preserve visual consistency across all sketches.
-- For EACH scene, provide FOUR (4) distinct sketch prompts showing different visual beats/angles of that scene.
-- ART STYLE DIRECTIVE (Option 2 - Charcoal & Muted Watercolor Wash):
-  * Every sketch prompt MUST follow this exact style: "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Specific setting/location in rich detail]. [Characters with physical anchor details in specific action/pose]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic, high detail."
-  * Do NOT just describe characters standing — show them interacting with their environment, narrative props, atmospheric lighting, and key scene beats.
+- EACH scene is ~15 seconds long. Split EVERY scene into THREE (3) distinct 5-second visual beats (Beat 1: 0-5s, Beat 2: 5-10s, Beat 3: 10-15s).
+- For EVERY 5-second beat, provide a specific visual sketch prompt matching the EXACT narration moment of that 5s window.
+- COMIC BOOK SKETCH STYLE DIRECTIVE:
+  * Prompts MUST follow comic book sketch aesthetic: clean charcoal/ink line art, expressive character poses, clear readable focal setting, selective muted watercolor wash (amber/slate highlights), comic book concept art, high detail, non-cluttered composition.
+  * Every prompt MUST explicitly include character anchor names and their specific physical action during that 5-second moment.
 
 Return JSON ONLY matching this schema:
 {
@@ -1360,10 +1361,9 @@ Return JSON ONLY matching this schema:
       "title": "Evocative Scene Title",
       "narration": "What the narrator speaks in eloquent, natural, engaging language (3-4 sentences, ~15 seconds duration)",
       "sketch_prompts": [
-        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Setting: specific location & atmosphere in detail]. [Characters with anchor details, specific action/pose 1]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic.",
-        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Different angle or visual beat of scene 1]. [Characters with anchor details, action/pose 2]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic.",
-        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Another visual beat of scene 1]. [Characters with anchor details, action/pose 3]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic.",
-        "An artistic charcoal sketch with soft muted watercolor wash on textured warm cream paper (#f5f0e4). [Closing visual beat of scene 1]. [Characters or narrative props with anchor details]. Charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic."
+        "Comic book style charcoal sketch with soft muted watercolor wash on warm cream paper (#f5f0e4). Beat 1 (0-5s): [Setting & location in detail]. [Character name & physical anchor features performing specific pose/action 1]. Clean linework, expressive comic book concept art, elegant selective color highlights.",
+        "Comic book style charcoal sketch with soft muted watercolor wash on warm cream paper (#f5f0e4). Beat 2 (5-10s): [Camera angle shift or new setting element]. [Character name & physical anchor features performing action/reaction 2]. Clean linework, expressive comic book concept art, elegant selective color highlights.",
+        "Comic book style charcoal sketch with soft muted watercolor wash on warm cream paper (#f5f0e4). Beat 3 (10-15s): [Narrative climax or prop focal point]. [Character name & physical anchor features in dramatic closing pose 3]. Clean linework, expressive comic book concept art, elegant selective color highlights."
       ],
       "estimated_duration_sec": 15
     }
@@ -1398,6 +1398,37 @@ Return JSON ONLY matching this schema:
             return res.status(500).json({ error: "Failed to generate video brief script from Gemini AI" });
         }
 
+        // Generate clean Copy-Paste Prompt Script block
+        let copyPasteScript = `====================================================\n`;
+        copyPasteScript += `VIDEO BRIEF PROMPT SCRIPT: ${briefResult.book_title || topic}\n`;
+        copyPasteScript += `${briefResult.tagline || ''}\n`;
+        copyPasteScript += `====================================================\n\n`;
+        copyPasteScript += `CHARACTER ANCHORS (Include in image prompts for consistency):\n`;
+        if (briefResult.characters && briefResult.characters.length > 0) {
+            briefResult.characters.forEach(c => {
+                copyPasteScript += `• ${c.name}: ${c.anchor}\n`;
+            });
+        }
+        copyPasteScript += `\n----------------------------------------------------\n\n`;
+
+        if (briefResult.scenes && briefResult.scenes.length > 0) {
+            let runningTime = 0;
+            briefResult.scenes.forEach((sc, sIdx) => {
+                copyPasteScript += `SCENE ${sc.scene_number || (sIdx + 1)}: ${sc.title}\n`;
+                copyPasteScript += `NARRATION: "${sc.narration}"\n\n`;
+                const prompts = sc.sketch_prompts || [];
+                prompts.forEach((p, pIdx) => {
+                    const startTime = runningTime + pIdx * 5;
+                    const endTime = startTime + 5;
+                    copyPasteScript += `[PROMPT ${pIdx + 1}] Timecode (${startTime}s - ${endTime}s):\n${p}\n\n`;
+                });
+                runningTime += sc.estimated_duration_sec || 15;
+                copyPasteScript += `----------------------------------------------------\n\n`;
+            });
+        }
+
+        briefResult.copy_paste_script = copyPasteScript;
+
         return res.json({ success: true, brief: briefResult });
 
     } catch (err) {
@@ -1407,7 +1438,7 @@ Return JSON ONLY matching this schema:
 });
 
 // ============================================================
-// POST /generate-brief-sketch — AI Charcoal & Watercolor Sketch Proxy
+// POST /generate-brief-sketch — AI Comic Book Charcoal Sketch Proxy
 // Proxies image through backend as base64 — fixes CORS and broken-image errors
 // ============================================================
 app.post('/generate-brief-sketch', async (req, res) => {
@@ -1415,14 +1446,16 @@ app.post('/generate-brief-sketch', async (req, res) => {
         const { prompt, scene_number, sketch_index, seed } = req.body;
         if (!prompt) return res.status(400).json({ error: "Prompt is required for sketch generation" });
 
-        // Build a safe, truncated prompt with Charcoal & Watercolor Wash style suffix
-        const qualitySuffix = ', artistic charcoal sketch with soft muted watercolor wash, textured warm cream paper background (#f5f0e4), expressive charcoal line work, subtle amber and slate watercolor washes, storybook concept art, elegant and dramatic, high quality, masterpiece';
+        // Build a safe prompt with comic book sketch quality suffix
+        const qualitySuffix = ', comic book style charcoal sketch, soft muted watercolor wash, warm cream paper background (#f5f0e4), clean charcoal line art, expressive character poses, clear focal setting, selective amber and slate watercolor accents, storybook concept art, high quality, highly detailed';
         const maxPromptLen = 750;
         const trimmedPrompt = prompt.length > maxPromptLen ? prompt.substring(0, maxPromptLen) : prompt;
         const finalPrompt = `${trimmedPrompt}${qualitySuffix}`;
         const encodedPrompt = encodeURIComponent(finalPrompt);
 
-        const imageSeed = seed || (1000 + (scene_number || 1) * 100 + (sketch_index || 0) * 17);
+        // Ensure completely unique seed per scene and beat
+        const hashSeed = (s) => s.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0);
+        const imageSeed = seed || Math.abs(hashSeed(prompt) + (scene_number || 1) * 1337 + (sketch_index || 0) * 401);
         const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${imageSeed}&width=1080&height=1350&nologo=true&model=flux`;
 
         // Fetch the image server-side (avoids CORS and validates the image actually loaded)

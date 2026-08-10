@@ -1156,16 +1156,43 @@
                         <div class="form-group" style="margin-bottom: 16px;">
                             <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Art Style Backdrop</label>
                             <select id="brief-style" class="full-width" style="padding: 10px; border-radius: 8px; font-weight: 600; background: var(--color-bg-primary, #0d1117); color: var(--color-fg-default, #c9d1d9); border: 1px solid var(--color-border-default, rgba(255,255,255,0.15));">
-                                <option value="beige_paper" selected>📜 Warm Beige Paper & Pencil Sketch (#f5f2eb)</option>
+                                <option value="beige_paper" selected>📜 Warm Beige Paper & Charcoal Wash (#f5f2eb)</option>
                                 <option value="vintage_sepia">🎞️ Vintage Sepia Ink & Wash</option>
                                 <option value="editorial_dark">🌙 Midnight Editorial Charcoal</option>
                             </select>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Output Generation Mode</label>
+                            <div style="display: flex; gap: 8px; margin-top: 4px;">
+                                <label style="flex: 1; display: flex; align-items: center; gap: 6px; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 12px; cursor: pointer; color: #fff;">
+                                    <input type="radio" name="brief-mode" value="full" checked style="accent-color: #f59e0b;">
+                                    <span>🎥 Full Video Reel</span>
+                                </label>
+                                <label style="flex: 1; display: flex; align-items: center; gap: 6px; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 12px; cursor: pointer; color: #fff;">
+                                    <input type="radio" name="brief-mode" value="script" style="accent-color: #f59e0b;">
+                                    <span>📝 Audio & Script</span>
+                                </label>
+                            </div>
                         </div>
 
                         <button id="trigger-brief-generate" class="btn-primary full-width" style="padding: 12px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; cursor: pointer; color: #fff;">
                             <i data-feather="book-open" style="width: 16px; height: 16px;"></i> Generate 2-Min Video Brief
                         </button>
                         <p id="brief-feedback" style="margin-top: 8px; font-size: 13px; display: none; color: #f87171;"></p>
+
+                        <!-- Copy-Paste Prompt Script Container -->
+                        <div id="brief-script-container" style="display: none; margin-top: 16px; background: rgba(0,0,0,0.4); border: 1px solid rgba(245,158,11,0.4); border-radius: 10px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+                                    <i data-feather="file-text" style="width: 14px; height: 14px;"></i> Copy-Paste Prompt Script
+                                </span>
+                                <button id="brief-copy-script-btn" style="padding: 4px 10px; background: #f59e0b; color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    <i data-feather="copy" style="width: 12px; height: 12px;"></i> Copy All Prompts
+                                </button>
+                            </div>
+                            <textarea id="brief-script-text" readonly style="width: 100%; height: 160px; background: rgba(15,23,42,0.9); color: #e2e8f0; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); resize: vertical; box-sizing: border-box;"></textarea>
+                        </div>
 
                         <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--color-border-default, rgba(255,255,255,0.1));">
 
