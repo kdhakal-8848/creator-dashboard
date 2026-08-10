@@ -7418,21 +7418,32 @@ function drawVideoBriefCanvas() {
                 ? Math.max(0, performance.now() - (videoBriefState.sceneWallStartMs || performance.now()))
                 : 0;
             const imgIdx = Math.floor(elapsedMs / 3500) % activeScene.sketchImages.length;
-            // Walk forward until we find a loaded image
+            // Walk forward until we find a loaded, non-broken image
             let foundImg = null;
             for (let attempt = 0; attempt < activeScene.sketchImages.length; attempt++) {
                 const candidate = activeScene.sketchImages[(imgIdx + attempt) % activeScene.sketchImages.length];
-                if (candidate && (candidate.complete || candidate.naturalWidth > 0)) {
+                if (candidate && candidate._loaded && !candidate._broken && candidate.naturalWidth > 0) {
+                    foundImg = candidate; break;
+                }
+                // Also accept images without explicit _loaded flag (e.g. src loaded synchronously)
+                if (candidate && !candidate._broken && candidate.complete && candidate.naturalWidth > 0) {
                     foundImg = candidate; break;
                 }
             }
-            activeImageObj = foundImg || activeScene.sketchImages[0];
-        } else if (activeScene.imageObj) {
+            activeImageObj = foundImg; // null is safe — we'll draw a placeholder below
+        } else if (activeScene.imageObj && !activeScene.imageObj._broken) {
             activeImageObj = activeScene.imageObj;
         }
     }
 
-    if (activeImageObj && (activeImageObj.complete || activeImageObj.naturalWidth > 0)) {
+    // Only drawImage when image is genuinely loaded with real dimensions — never on broken images
+    const imgReady = activeImageObj
+        && !activeImageObj._broken
+        && activeImageObj.complete
+        && activeImageObj.naturalWidth > 0
+        && activeImageObj.naturalHeight > 0;
+
+    if (imgReady) {
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
@@ -7444,24 +7455,37 @@ function drawVideoBriefCanvas() {
         const panX = Math.cos(videoBriefState.panZoomProgress * Math.PI * 2) * 12;
         const panY = Math.sin(videoBriefState.panZoomProgress * Math.PI * 2) * 8;
 
-        const imgW = activeImageObj.naturalWidth || activeImageObj.width || 1080;
-        const imgH = activeImageObj.naturalHeight || activeImageObj.height || 1350;
+        const imgW = activeImageObj.naturalWidth;
+        const imgH = activeImageObj.naturalHeight;
         const scale = Math.max((frameW - 16) / imgW, (frameH - 16) / imgH) * zoomScale;
         const drawW = imgW * scale;
         const drawH = imgH * scale;
         const drawX = frameX + 8 + ((frameW - 16) - drawW) / 2 + panX;
         const drawY = frameY + 8 + ((frameH - 16) - drawH) / 2 + panY;
 
-        ctx.drawImage(activeImageObj, drawX, drawY, drawW, drawH);
+        try {
+            ctx.drawImage(activeImageObj, drawX, drawY, drawW, drawH);
+        } catch(drawErr) {
+            // Silently ignore — image may have become broken after load
+            console.warn('drawImage skipped:', drawErr.message);
+        }
         ctx.restore();
     } else {
-        // Sketch Placeholder
+        // Sketch Placeholder while loading or if all images failed
         ctx.save();
-        ctx.font = 'bold 36px "Inter", sans-serif';
-        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.roundRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16, 30);
+        ctx.clip();
+        ctx.fillStyle = '#f0ece2';
+        ctx.fillRect(frameX + 8, frameY + 8, frameW - 16, frameH - 16);
+        ctx.font = 'bold 34px "Inter", sans-serif';
+        ctx.fillStyle = '#a89070';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🎨 Drawing Consistent Sketch Scene...', width / 2, frameY + frameH / 2);
+        ctx.fillText('✏️ Drawing Scene...', width / 2, frameY + frameH / 2 - 20);
+        ctx.font = '22px "Inter", sans-serif';
+        ctx.fillStyle = '#b8a890';
+        ctx.fillText('Sketch generating, please wait', width / 2, frameY + frameH / 2 + 24);
         ctx.restore();
     }
 }
@@ -7809,9 +7833,19 @@ function initVideoBriefStudio() {
                                     body: JSON.stringify({ prompt: p, scene_number: scene.scene_number, sketch_index: k })
                                 });
                                 const skData = await skRes.json();
-                                if (skData.image_url) {
+                                const imgSrc = skData.image_data || skData.image_url;
+                                if (imgSrc) {
+                                    // Load image via Promise — wait for it to fully decode or fail
                                     const img = new Image();
-                                    img.src = skData.image_url;
+                                    img._broken = false;
+                                    img._loaded = false;
+                                    await new Promise((resolve) => {
+                                        img.onload = () => { img._loaded = true; resolve(); };
+                                        img.onerror = () => { img._broken = true; resolve(); }; // Resolve even on error so we don't stall
+                                        img.src = imgSrc;
+                                        // Safety timeout — never stall generation for more than 60s per image
+                                        setTimeout(resolve, 60000);
+                                    });
                                     scene.sketchImages.push(img);
                                     if (k === 0) scene.imageObj = img;
                                 }

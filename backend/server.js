@@ -1411,20 +1411,74 @@ Return JSON ONLY matching this schema:
 
 // ============================================================
 // POST /generate-brief-sketch — Character-Consistent Sketch Generator
+// Proxies image through backend as base64 — fixes CORS and broken-image errors
 // ============================================================
 app.post('/generate-brief-sketch', async (req, res) => {
     try {
         const { prompt, scene_number, sketch_index, seed } = req.body;
         if (!prompt) return res.status(400).json({ error: "Prompt is required for sketch generation" });
 
-        const enhancedPrompt = `${prompt}, minimalist hand-drawn ink and pencil sketch illustration on light beige paper background (#f5f2eb), aesthetic storybook sketch, warm paper texture, high quality art, detailed linework, no background clutter`;
-        const encodedPrompt = encodeURIComponent(enhancedPrompt);
+        // Build a safe, truncated prompt (max 800 chars before encoding)
+        const qualitySuffix = ', minimalist hand-drawn pencil and ink sketch, warm beige paper texture (#f5f2eb), clean linework, storybook illustration, high quality, detailed';
+        const maxPromptLen = 800;
+        const trimmedPrompt = prompt.length > maxPromptLen ? prompt.substring(0, maxPromptLen) : prompt;
+        const finalPrompt = `${trimmedPrompt}${qualitySuffix}`;
+        const encodedPrompt = encodeURIComponent(finalPrompt);
+
         const imageSeed = seed || (1000 + (scene_number || 1) * 100 + (sketch_index || 0) * 17);
-        const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${imageSeed}&width=1080&height=1350&nologo=true`;
+        const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${imageSeed}&width=1080&height=1350&nologo=true&model=flux`;
+
+        // Fetch the image server-side (avoids CORS and validates the image actually loaded)
+        let imageBase64 = null;
+        let contentType = 'image/jpeg';
+        const MAX_RETRIES = 3;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout per attempt
+                const imgRes = await fetch(pollinationsUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!imgRes.ok) {
+                    console.warn(`Pollinations attempt ${attempt} failed: HTTP ${imgRes.status}`);
+                    if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 2000)); continue; }
+                    break;
+                }
+
+                const ctype = imgRes.headers.get('content-type') || '';
+                if (!ctype.includes('image/')) {
+                    console.warn(`Pollinations attempt ${attempt} returned non-image content-type: ${ctype}`);
+                    if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 2000)); continue; }
+                    break;
+                }
+
+                const buffer = await imgRes.arrayBuffer();
+                if (!buffer || buffer.byteLength < 1000) {
+                    console.warn(`Pollinations attempt ${attempt} returned too-small response: ${buffer?.byteLength} bytes`);
+                    if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 2000)); continue; }
+                    break;
+                }
+
+                contentType = ctype.split(';')[0].trim();
+                imageBase64 = Buffer.from(buffer).toString('base64');
+                break; // Success
+            } catch (fetchErr) {
+                console.warn(`Pollinations attempt ${attempt} error:`, fetchErr.message);
+                if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        if (!imageBase64) {
+            // All retries failed — return a placeholder SVG as base64 so the canvas never breaks
+            const svgPlaceholder = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" style="background:#f5f2eb"><rect width="1080" height="1350" fill="#f5f2eb"/><text x="540" y="675" font-family="Georgia,serif" font-size="48" fill="#a89070" text-anchor="middle" dominant-baseline="middle">✏️ Sketch Loading...</text></svg>`;
+            imageBase64 = Buffer.from(svgPlaceholder).toString('base64');
+            contentType = 'image/svg+xml';
+        }
 
         return res.json({
             success: true,
-            image_url: imageUrl
+            image_data: `data:${contentType};base64,${imageBase64}`
         });
 
     } catch (err) {
