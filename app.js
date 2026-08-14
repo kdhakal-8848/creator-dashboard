@@ -566,6 +566,9 @@ function switchView(targetViewId, linkElement = null) {
     if (targetViewId === 'video-brief-view') {
         try { initVideoBriefStudio(); } catch (err) { console.error("initVideoBriefStudio error:", err); }
     }
+    if (targetViewId === 'book-reel-view') {
+        try { initBookReelStudio(); } catch (err) { console.error("initBookReelStudio error:", err); }
+    }
 
     syncTemplateDropdowns();
 }
@@ -8474,4 +8477,589 @@ window.drawVideoBriefCanvas = drawVideoBriefCanvas;
 window.startVideoBriefSequence = startVideoBriefSequence;
 window.stopVideoBriefSequence = stopVideoBriefSequence;
 window.exportVideoBrief = exportVideoBrief;
+
+// ============================================================
+// BOOK STORYTELLER & REEL GENERATOR STUDIO (PHASE 1)
+// ============================================================
+const bookReelState = {
+    bookTitle: "Atomic Habits by James Clear",
+    notes: "",
+    duration: 45,
+    voiceStyle: "warm_storyteller",
+    isPlaying: false,
+    currentIndex: 0,
+    animFrameId: null,
+    wallStartMs: 0,
+    scenes: []
+};
+
+function formatTimeCode(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    const ms = Math.floor((sec % 1) * 10);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${ms}`;
+}
+
+function generateMockBookReelData(title, durationSec = 45) {
+    const numScenes = durationSec === 30 ? 9 : (durationSec === 60 ? 18 : 14);
+    const sceneDuration = parseFloat((durationSec / (numScenes - 1)).toFixed(1));
+
+    const scenes = [{
+        scene_number: 0,
+        title: "Minimalist Book Cover",
+        isCover: true,
+        start_sec: 0.0,
+        end_sec: 2.5,
+        timestamp_range: "00:00.0 - 00:02.5",
+        voiceover_snippet: `Title Intro: "${title}"`,
+        prompt: `Minimalist typography book cover illustration for '${title}', elegant hardcover design, warm parchment background, clean aesthetic`,
+        bgColor: "#1e1b4b",
+        accentColor: "#818cf8"
+    }];
+
+    const topics = [
+        { t: "The 1% Compounding Effect", v: "Small 1% daily improvements compound into massive long-term transformations over time.", bg: "#0f172a", acc: "#38bdf8" },
+        { t: "Identity-Based Habits", v: "Focus not on what you want to achieve, but on the type of person you wish to become.", bg: "#1e293b", acc: "#f59e0b" },
+        { t: "The 4 Laws of Behavior Change", v: "Make it obvious, make it attractive, make it easy, and make it satisfying.", bg: "#111827", acc: "#10b981" },
+        { t: "Environment Design Beats Willpower", v: "Structure your physical environment so positive cues are prominent and friction is minimized.", bg: "#1e1b4b", acc: "#a855f7" },
+        { t: "Habit Stacking Blueprint", v: "Anchor new behaviors directly onto established daily routines using specific time triggers.", bg: "#0f172a", acc: "#ec4899" },
+        { t: "Overcoming Plateau of Latent Potential", v: "Results lag behind effort; breakthrough moments are built upon months of silent work.", bg: "#111827", acc: "#f43f5e" },
+        { t: "Two-Minute Rule Momentum", v: "Scale down any habit so it takes under two minutes to start, eliminating initial resistance.", bg: "#1e293b", acc: "#06b6d4" },
+        { t: "Habit Tracking & Visual Feedback", v: "Don't break the chain. Visual evidence of progress reinforces self-identity daily.", bg: "#1e1b4b", acc: "#84cc16" },
+        { t: "Systems Over Goals", v: "Goals set the direction, but systems deliver continuous progress and lasting transformation.", bg: "#0f172a", acc: "#6366f1" }
+    ];
+
+    let tAccum = 2.5;
+    for (let i = 1; i < numScenes; i++) {
+        const item = topics[(i - 1) % topics.length];
+        const endT = parseFloat((tAccum + sceneDuration).toFixed(1));
+        scenes.push({
+            scene_number: i,
+            title: `Scene ${i}: ${item.t}`,
+            isCover: false,
+            start_sec: tAccum,
+            end_sec: endT,
+            timestamp_range: `${formatTimeCode(tAccum)} - ${formatTimeCode(endT)}`,
+            voiceover_snippet: item.v,
+            prompt: `Cinematic 9:16 story illustration for '${item.t}' in ${title}. ${item.v}. Clean graphic art, deep lighting, rich atmospheric detail, portrait framing`,
+            bgColor: item.bg,
+            accentColor: item.acc
+        });
+        tAccum = endT;
+    }
+
+    return scenes;
+}
+
+function drawBookReelCanvas() {
+    const canvas = document.getElementById('book-reel-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;  // 1080
+    const h = canvas.height; // 1920
+
+    ctx.clearRect(0, 0, w, h);
+
+    const scene = (bookReelState.scenes && bookReelState.scenes[bookReelState.currentIndex]) || {
+        isCover: true,
+        title: bookReelState.bookTitle,
+        bgColor: "#1e1b4b",
+        accentColor: "#818cf8"
+    };
+
+    // Dark Background Gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+    bgGrad.addColorStop(0, scene.bgColor || '#0f172a');
+    bgGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Decorative Geometric Backdrop Circles
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = scene.accentColor || '#6366f1';
+    ctx.lineWidth = 4;
+    for (let r = 200; r < 900; r += 180) {
+        ctx.beginPath();
+        ctx.arc(w / 2, h / 2 - 100, r, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    if (scene.isCover) {
+        // Minimalist Book Cover Card (Scene 0)
+        const frameX = 120, frameY = 320, frameW = 840, frameH = 1200;
+        ctx.save();
+        ctx.shadowColor = scene.accentColor || '#6366f1';
+        ctx.shadowBlur = 50;
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = scene.accentColor || '#6366f1';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.roundRect(frameX, frameY, frameW, frameH, 32);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Title Text
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 64px Inter, sans-serif';
+        const words = (bookReelState.bookTitle || 'Book Storyteller').split(' ');
+        let line = '', y = frameY + 360;
+        for (let word of words) {
+            let testLine = line + word + ' ';
+            if (ctx.measureText(testLine).width > frameW - 120 && line !== '') {
+                ctx.fillText(line, w / 2, y);
+                line = word + ' ';
+                y += 80;
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.fillText(line, w / 2, y);
+
+        // Subtitle Badge
+        ctx.font = '600 36px Inter, sans-serif';
+        ctx.fillStyle = scene.accentColor || '#818cf8';
+        ctx.fillText('BOOK SUMMARY REEL', w / 2, y + 100);
+
+        // Minimalist Emblem Icon
+        ctx.beginPath();
+        ctx.arc(w / 2, frameY + frameH - 220, 70, 0, Math.PI * 2);
+        ctx.fillStyle = scene.accentColor || '#6366f1';
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 44px Inter, sans-serif';
+        ctx.fillText('📖', w / 2, frameY + frameH - 205);
+        ctx.restore();
+
+    } else {
+        // Scene Card Illustration Preview Frame (9:16 Aspect)
+        const frameX = 80, frameY = 160, frameW = 920, frameH = 1380;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 40;
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        ctx.strokeStyle = scene.accentColor || '#38bdf8';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(frameX, frameY, frameW, frameH, 28);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Ken Burns Gentle Zoom Simulation
+        const elapsed = performance.now() - (bookReelState.wallStartMs || performance.now());
+        const zoom = 1 + Math.sin(elapsed / 1500) * 0.03;
+
+        ctx.save();
+        ctx.translate(w / 2, frameY + frameH / 2);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-w / 2, -(frameY + frameH / 2));
+
+        // Animated Scene Graphic Primitives
+        ctx.fillStyle = scene.accentColor || '#6366f1';
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath();
+        ctx.arc(w / 2, frameY + 450, 260, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.9;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 54px Inter, sans-serif';
+        ctx.fillText(scene.title || `Scene ${bookReelState.currentIndex}`, w / 2, frameY + 460);
+        ctx.restore();
+
+        // Subtitle Overlay Box (Bottom 9:16 Video Frame)
+        ctx.save();
+        const subBoxY = frameY + frameH - 320;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(frameX + 40, subBoxY, frameW - 80, 240, 20);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '600 38px Inter, sans-serif';
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        
+        const subWords = (scene.voiceover_snippet || '').split(' ');
+        let subLine = '', subY = subBoxY + 75;
+        for (let word of subWords) {
+            let testLine = subLine + word + ' ';
+            if (ctx.measureText(testLine).width > frameW - 140 && subLine !== '') {
+                ctx.fillText(subLine, w / 2, subY);
+                subLine = word + ' ';
+                subY += 54;
+            } else {
+                subLine = testLine;
+            }
+        }
+        ctx.fillText(subLine, w / 2, subY);
+        ctx.restore();
+    }
+
+    // Top Header Badge
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, w, 100);
+    ctx.fillStyle = '#818cf8';
+    ctx.font = 'bold 36px Inter, sans-serif';
+    ctx.fillText(`📚 ${bookReelState.bookTitle || 'Book Reel'}`, 50, 64);
+    ctx.restore();
+}
+
+function renderBookReelScriptList() {
+    const list = document.getElementById('book-reel-script-list');
+    const badge = document.getElementById('book-reel-scene-count');
+    if (!list) return;
+
+    if (badge) badge.innerText = `${bookReelState.scenes.length} Segments`;
+    list.innerHTML = '';
+
+    bookReelState.scenes.forEach((sc, idx) => {
+        const item = document.createElement('div');
+        item.style.cssText = `padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid ${idx===bookReelState.currentIndex ? '#6366f1' : 'rgba(255,255,255,0.08)'};border-radius:10px;cursor:pointer;`;
+        item.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:12px;font-weight:700;color:${sc.isCover ? '#818cf8' : '#38bdf8'};">${sc.title}</span>
+                <span style="font-size:10px;font-family:monospace;background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;color:#c9d1d9;">${sc.timestamp_range}</span>
+            </div>
+            <textarea class="book-script-input" data-idx="${idx}" rows="2" style="width:100%;padding:6px 8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;font-size:12px;resize:none;box-sizing:border-box;">${sc.voiceover_snippet}</textarea>
+        `;
+        item.onclick = (e) => {
+            if (e.target.tagName !== 'TEXTAREA') {
+                bookReelState.currentIndex = idx;
+                bookReelState.wallStartMs = performance.now();
+                drawBookReelCanvas();
+                renderBookReelScriptList();
+                updateBookReelUI();
+            }
+        };
+        list.appendChild(item);
+    });
+
+    list.querySelectorAll('.book-script-input').forEach(ta => {
+        ta.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.getAttribute('data-idx'));
+            if (bookReelState.scenes[idx]) {
+                bookReelState.scenes[idx].voiceover_snippet = e.target.value;
+                if (idx === bookReelState.currentIndex) drawBookReelCanvas();
+            }
+        });
+    });
+}
+
+function renderBookReelWaveform() {
+    const barsContainer = document.getElementById('audio-waveform-bars');
+    const wordsGrid = document.getElementById('book-audio-words-grid');
+    if (barsContainer) {
+        barsContainer.innerHTML = '';
+        for (let i = 0; i < 48; i++) {
+            const bar = document.createElement('div');
+            const h = Math.floor(15 + Math.random() * 45);
+            bar.style.cssText = `width:4px;height:${h}px;background:${i < 12 ? '#10b981' : 'rgba(255,255,255,0.2)'};border-radius:2px;`;
+            barsContainer.appendChild(bar);
+        }
+    }
+    if (wordsGrid) {
+        wordsGrid.innerHTML = '';
+        const allText = bookReelState.scenes.map(s => s.voiceover_snippet).join(' ');
+        const words = allText.split(' ').slice(0, 40);
+        let t = 0.0;
+        words.forEach(w => {
+            if (!w) return;
+            const chip = document.createElement('span');
+            chip.style.cssText = `font-size:11px;padding:3px 8px;background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);border-radius:6px;font-family:monospace;`;
+            chip.innerText = `${w} (${t.toFixed(1)}s)`;
+            wordsGrid.appendChild(chip);
+            t += 0.35 + (w.length * 0.04);
+        });
+    }
+}
+
+function renderBookStoryboardGrid() {
+    const grid = document.getElementById('book-storyboard-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    bookReelState.scenes.forEach((sc, idx) => {
+        const card = document.createElement('div');
+        card.style.cssText = `background:rgba(255,255,255,0.04);border:1px solid ${idx===bookReelState.currentIndex ? '#6366f1' : 'rgba(255,255,255,0.1)'};border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);`;
+        
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:11px;font-weight:800;color:${sc.isCover ? '#818cf8' : '#f59e0b'};">${sc.isCover ? 'Scene 0 • Cover' : `Scene ${idx}`}</span>
+                <span style="font-size:10px;font-family:monospace;color:var(--color-fg-muted);">${sc.timestamp_range}</span>
+            </div>
+
+            <!-- 9:16 Aspect Frame Container -->
+            <div class="aspect-[9/16]" style="position:relative;width:100%;aspect-ratio:9/16;background:${sc.bgColor || '#0f172a'};border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;">
+                <div style="width:40px;height:40px;border-radius:50%;background:${sc.accentColor || '#6366f1'};display:flex;align-items:center;justify-content:center;margin-bottom:8px;box-shadow:0 4px 12px ${sc.accentColor || '#6366f1'}66;">
+                    <span style="font-size:18px;">${sc.isCover ? '📖' : '🎨'}</span>
+                </div>
+                <div style="font-size:11px;font-weight:700;color:#fff;text-align:center;line-height:1.3;max-height:48px;overflow:hidden;">${sc.title}</div>
+            </div>
+
+            <div style="font-size:11px;color:var(--color-fg-muted);line-height:1.3;max-height:34px;overflow:hidden;">
+                "${sc.voiceover_snippet.substring(0, 50)}..."
+            </div>
+
+            <!-- Prompt Override Input & Regenerate Frame Action -->
+            <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px;">
+                <input type="text" class="frame-prompt-override" data-idx="${idx}" placeholder="Prompt override..." value="${sc.prompt.substring(0,40)}..." style="width:100%;padding:5px 8px;border-radius:6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.12);color:#c9d1d9;font-size:10px;box-sizing:border-box;">
+                <button class="regen-frame-btn" data-idx="${idx}" style="width:100%;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+                    ⚡ Regenerate Frame
+                </button>
+            </div>
+        `;
+
+        card.onclick = (e) => {
+            if (!e.target.closest('.frame-prompt-override') && !e.target.closest('.regen-frame-btn')) {
+                bookReelState.currentIndex = idx;
+                bookReelState.wallStartMs = performance.now();
+                drawBookReelCanvas();
+                renderBookStoryboardGrid();
+                updateBookReelUI();
+            }
+        };
+
+        grid.appendChild(card);
+    });
+
+    grid.querySelectorAll('.regen-frame-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.getAttribute('data-idx'));
+            const input = grid.querySelector(`.frame-prompt-override[data-idx="${idx}"]`);
+            const newPrompt = input ? input.value : '';
+            
+            btn.innerHTML = `<i data-feather="loader" class="spin"></i> Regenerating...`;
+            btn.disabled = true;
+
+            setTimeout(() => {
+                if (bookReelState.scenes[idx]) {
+                    bookReelState.scenes[idx].prompt = newPrompt || bookReelState.scenes[idx].prompt;
+                    const palette = ['#0f172a', '#1e293b', '#1e1b4b', '#111827'];
+                    const accs = ['#f59e0b', '#38bdf8', '#10b981', '#a855f7', '#ec4899'];
+                    bookReelState.scenes[idx].bgColor = palette[(idx + Math.floor(Math.random()*3)) % palette.length];
+                    bookReelState.scenes[idx].accentColor = accs[Math.floor(Math.random()*accs.length)];
+                }
+                btn.innerHTML = `✅ Regenerated!`;
+                btn.disabled = false;
+                if (idx === bookReelState.currentIndex) drawBookReelCanvas();
+                renderBookStoryboardGrid();
+                setTimeout(() => {
+                    btn.innerHTML = `⚡ Regenerate Frame`;
+                }, 2000);
+            }, 600);
+        });
+    });
+}
+
+function updateBookReelUI() {
+    const totalScenes = bookReelState.scenes.length || 1;
+    const label = document.getElementById('book-reel-scene-label');
+    const timeCode = document.getElementById('book-reel-time-code');
+    const slider = document.getElementById('book-reel-slider');
+
+    const sc = bookReelState.scenes[bookReelState.currentIndex];
+    if (label) label.innerText = sc ? sc.title : `Scene ${bookReelState.currentIndex}`;
+    if (timeCode) timeCode.innerText = `${sc ? sc.timestamp_range.split(' - ')[0] : '00:00'} / 00:${bookReelState.duration}`;
+    if (slider) slider.value = Math.round(((bookReelState.currentIndex + 1) / totalScenes) * 100);
+}
+
+function startBookReelSequence() {
+    if (bookReelState.isPlaying) return;
+    bookReelState.isPlaying = true;
+
+    function reelLoop() {
+        if (bookReelState.isPlaying) {
+            drawBookReelCanvas();
+            bookReelState.animFrameId = requestAnimationFrame(reelLoop);
+        }
+    }
+    bookReelState.animFrameId = requestAnimationFrame(reelLoop);
+
+    const total = bookReelState.scenes.length || 1;
+    const intervalMs = (bookReelState.duration * 1000) / total;
+
+    bookReelState.intervalId = setInterval(() => {
+        if (!bookReelState.isPlaying) return;
+        bookReelState.currentIndex = (bookReelState.currentIndex + 1) % total;
+        bookReelState.wallStartMs = performance.now();
+        updateBookReelUI();
+    }, intervalMs);
+}
+
+function stopBookReelSequence() {
+    bookReelState.isPlaying = false;
+    if (bookReelState.animFrameId) {
+        cancelAnimationFrame(bookReelState.animFrameId);
+        bookReelState.animFrameId = null;
+    }
+    if (bookReelState.intervalId) {
+        clearInterval(bookReelState.intervalId);
+        bookReelState.intervalId = null;
+    }
+    drawBookReelCanvas();
+}
+
+function initBookReelStudio() {
+    const titleInput = document.getElementById('book-reel-title');
+    const durInput = document.getElementById('book-reel-duration');
+    const initialTitle = titleInput?.value?.trim() || "Atomic Habits by James Clear";
+    const initialDur = parseInt(durInput?.value || "45");
+
+    bookReelState.bookTitle = initialTitle;
+    bookReelState.duration = initialDur;
+    bookReelState.scenes = generateMockBookReelData(initialTitle, initialDur);
+    bookReelState.currentIndex = 0;
+    bookReelState.wallStartMs = performance.now();
+
+    renderBookReelScriptList();
+    renderBookReelWaveform();
+    renderBookStoryboardGrid();
+    drawBookReelCanvas();
+    updateBookReelUI();
+
+    const tabs = document.querySelectorAll('.book-pipeline-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => {
+                t.classList.remove('active');
+                t.style.background = 'transparent';
+                t.style.color = 'var(--color-fg-muted)';
+            });
+            tab.classList.add('active');
+            tab.style.background = '#6366f1';
+            tab.style.color = '#fff';
+
+            const target = tab.getAttribute('data-tab');
+            document.querySelectorAll('.book-tab-content').forEach(c => c.style.display = 'none');
+            const targetEl = document.getElementById(target);
+            if (targetEl) targetEl.style.display = 'block';
+        });
+    });
+
+    const genBtn = document.getElementById('trigger-book-reel-generate');
+    if (genBtn && !genBtn.__bound) {
+        genBtn.__bound = true;
+        genBtn.addEventListener('click', () => {
+            const t = document.getElementById('book-reel-title')?.value?.trim() || "Atomic Habits by James Clear";
+            const d = parseInt(document.getElementById('book-reel-duration')?.value || "45");
+            const v = document.getElementById('book-reel-voice')?.value || "warm_storyteller";
+            const notes = document.getElementById('book-reel-notes')?.value || "";
+
+            genBtn.disabled = true;
+            genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating Story & Assets...`;
+
+            setTimeout(() => {
+                bookReelState.bookTitle = t;
+                bookReelState.duration = d;
+                bookReelState.voiceStyle = v;
+                bookReelState.notes = notes;
+                bookReelState.scenes = generateMockBookReelData(t, d);
+                bookReelState.currentIndex = 0;
+                bookReelState.wallStartMs = performance.now();
+
+                renderBookReelScriptList();
+                renderBookReelWaveform();
+                renderBookStoryboardGrid();
+                drawBookReelCanvas();
+                updateBookReelUI();
+
+                genBtn.disabled = false;
+                genBtn.innerHTML = `<i data-feather="sparkles"></i> Generate Story & Assets`;
+                if (window.feather) window.feather.replace();
+            }, 800);
+        });
+    }
+
+    document.querySelectorAll('.book-demo-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            const title = pill.getAttribute('data-title');
+            const dur = pill.getAttribute('data-dur');
+            if (titleInput) titleInput.value = title;
+            if (durInput) durInput.value = dur;
+            genBtn?.click();
+        });
+    });
+
+    document.getElementById('book-reel-play-btn')?.addEventListener('click', () => {
+        startBookReelSequence();
+    });
+    document.getElementById('book-reel-pause-btn')?.addEventListener('click', () => {
+        stopBookReelSequence();
+    });
+    document.getElementById('book-reel-stop-btn')?.addEventListener('click', () => {
+        stopBookReelSequence();
+        bookReelState.currentIndex = 0;
+        updateBookReelUI();
+    });
+
+    const slider = document.getElementById('book-reel-slider');
+    if (slider && !slider.__bound) {
+        slider.__bound = true;
+        slider.addEventListener('input', () => {
+            const total = bookReelState.scenes.length || 1;
+            const pct = parseFloat(slider.value);
+            const idx = Math.max(0, Math.min(total - 1, Math.floor((pct / 100) * total)));
+            bookReelState.currentIndex = idx;
+            bookReelState.wallStartMs = performance.now();
+            drawBookReelCanvas();
+            updateBookReelUI();
+        });
+    }
+
+    const renderBtn = document.getElementById('book-reel-render-btn');
+    if (renderBtn && !renderBtn.__bound) {
+        renderBtn.__bound = true;
+        renderBtn.addEventListener('click', () => {
+            renderBtn.disabled = true;
+            renderBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Rendering Final Video...`;
+            const overlay = document.getElementById('book-reel-player-overlay');
+            if (overlay) overlay.style.display = 'flex';
+
+            setTimeout(() => {
+                renderBtn.disabled = false;
+                renderBtn.innerHTML = `✅ Render Complete!`;
+                if (overlay) overlay.style.display = 'none';
+                setTimeout(() => {
+                    renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
+                    if (window.feather) window.feather.replace();
+                }, 2500);
+            }, 1200);
+        });
+    }
+
+    const downloadBtn = document.getElementById('book-reel-download-btn');
+    if (downloadBtn && !downloadBtn.__bound) {
+        downloadBtn.__bound = true;
+        downloadBtn.addEventListener('click', () => {
+            downloadBtn.innerHTML = `📥 Downloading Reel MP4...`;
+            setTimeout(() => {
+                downloadBtn.innerHTML = `✅ Downloaded!`;
+                setTimeout(() => {
+                    downloadBtn.innerHTML = `<i data-feather="download"></i> Download MP4 Video`;
+                    if (window.feather) window.feather.replace();
+                }, 2000);
+            }, 800);
+        });
+    }
+
+    if (window.feather) window.feather.replace();
+}
+
+window.bookReelState = bookReelState;
+window.initBookReelStudio = initBookReelStudio;
+window.drawBookReelCanvas = drawBookReelCanvas;
+window.startBookReelSequence = startBookReelSequence;
+window.stopBookReelSequence = stopBookReelSequence;
 
