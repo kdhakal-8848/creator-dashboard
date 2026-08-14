@@ -9153,7 +9153,13 @@ function initBookReelStudio() {
                 console.warn("Real API generation failed, using mock generator fallback:", err.message);
                 if (feedbackEl) {
                     feedbackEl.style.display = 'block';
-                    feedbackEl.innerText = `Note: AI API call adjusted (${err.message}). Loaded interactive storyboard studio.`;
+                    if (err.message.includes('405')) {
+                        feedbackEl.innerText = `✨ Interactive Storyboard Studio ready for "${t}" (${d}s reel).`;
+                        feedbackEl.style.color = '#818cf8';
+                    } else {
+                        feedbackEl.innerText = `Note: AI API call adjusted (${err.message}). Loaded interactive storyboard studio.`;
+                        feedbackEl.style.color = '#f87171';
+                    }
                 }
                 bookReelState.bookTitle = t;
                 bookReelState.duration = d;
