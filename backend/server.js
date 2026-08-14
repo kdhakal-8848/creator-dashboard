@@ -1815,6 +1815,77 @@ app.post('/api/reel/generate-audio', async (req, res) => {
     app._router.handle(req, res);
 });
 
+/**
+ * Generate 9:16 vertical comic book sketch art URL for Book Summary Reel scenes
+ */
+function buildBookReelImageUrl(prompt, characterAnchor = '', seed = undefined, artStyle = 'comic_sketch') {
+    let basePrompt = prompt || "Expressive story scene illustration";
+    if (characterAnchor && !basePrompt.toLowerCase().includes(characterAnchor.toLowerCase().substring(0, 15))) {
+        basePrompt = `[${characterAnchor}]. ${basePrompt}`;
+    }
+
+    let styleModifier = "comic book sketch art, detailed ink drawing, charcoal shading, dramatic comic novel illustration, vertical 9:16 aspect ratio";
+    if (artStyle === 'pencil_noir') {
+        styleModifier = "black and white pencil sketch, noir graphic novel style, high contrast ink lines, vertical 9:16 aspect ratio";
+    } else if (artStyle === 'charcoal_watercolor') {
+        styleModifier = "charcoal sketch with subtle muted watercolor washes, artistic narrative illustration, vertical 9:16 aspect ratio";
+    }
+
+    const fullPrompt = `${basePrompt}, ${styleModifier}`;
+    const randomSeed = seed !== undefined ? seed : Math.floor(Math.random() * 999999);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?seed=${randomSeed}&nologo=true&width=1080&height=1920`;
+}
+
+// POST /api/reel/generate-images — Batch image generation for all scenes
+app.post('/api/reel/generate-images', async (req, res) => {
+    try {
+        const { scenes = [], character_anchor = '', art_style = 'comic_sketch', base_seed } = req.body;
+        const rootSeed = base_seed || Math.floor(Math.random() * 80000) + 10000;
+
+        const updatedScenes = scenes.map((sc, i) => {
+            const seed = rootSeed + (i * 137);
+            const prompt = sc.prompt || sc.image_prompt || sc.action_description || `Scene ${i} narrative sketch`;
+            const imageUrl = buildBookReelImageUrl(prompt, character_anchor, seed, art_style);
+            return {
+                ...sc,
+                image_url: imageUrl,
+                seed
+            };
+        });
+
+        return res.json({
+            success: true,
+            scenes: updatedScenes
+        });
+    } catch (err) {
+        console.error("/api/reel/generate-images error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/reel/generate-scene-image — Single frame regeneration / prompt override
+app.post('/api/reel/generate-scene-image', async (req, res) => {
+    try {
+        const { prompt, character_anchor = '', scene_index = 0, seed, art_style = 'comic_sketch' } = req.body;
+        if (!prompt) {
+            return res.status(400).json({ error: "Missing image prompt" });
+        }
+        const activeSeed = seed !== undefined ? seed : Math.floor(Math.random() * 999999);
+        const imageUrl = buildBookReelImageUrl(prompt, character_anchor, activeSeed, art_style);
+
+        return res.json({
+            success: true,
+            scene_index,
+            prompt,
+            image_url: imageUrl,
+            seed: activeSeed
+        });
+    } catch (err) {
+        console.error("/api/reel/generate-scene-image error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Creator's Den Backend v2.0 running on port ${port}`);
 });

@@ -8784,27 +8784,42 @@ function renderBookReelWaveform() {
 }
 
 function renderBookStoryboardGrid() {
-    const grid = document.getElementById('book-storyboard-grid');
+    const grid = document.getElementById('book-reel-storyboard-grid');
     if (!grid) return;
-
     grid.innerHTML = '';
 
     bookReelState.scenes.forEach((sc, idx) => {
+        const isCurrent = idx === bookReelState.currentIndex;
         const card = document.createElement('div');
-        card.style.cssText = `background:rgba(255,255,255,0.04);border:1px solid ${idx===bookReelState.currentIndex ? '#6366f1' : 'rgba(255,255,255,0.1)'};border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);`;
-        
+        card.className = `storyboard-card ${isCurrent ? 'active' : ''}`;
+        card.style.cssText = `
+            background: ${isCurrent ? 'rgba(99,102,241,0.12)' : 'var(--color-bg-subtle)'};
+            border: 1.5px solid ${isCurrent ? '#6366f1' : 'rgba(255,255,255,0.1)'};
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        `;
+
         card.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:11px;font-weight:800;color:${sc.isCover ? '#818cf8' : '#f59e0b'};">${sc.isCover ? 'Scene 0 • Cover' : `Scene ${idx}`}</span>
-                <span style="font-size:10px;font-family:monospace;color:var(--color-fg-muted);">${sc.timestamp_range}</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:11px;font-weight:700;color:${sc.accentColor || '#818cf8'};">${sc.isCover ? 'COVER' : 'SCENE ' + sc.scene_number}</span>
+                <span style="font-size:10px;color:var(--color-fg-muted);font-family:monospace;">${sc.timestamp_range}</span>
             </div>
 
             <!-- 9:16 Aspect Frame Container -->
-            <div class="aspect-[9/16]" style="position:relative;width:100%;aspect-ratio:9/16;background:${sc.bgColor || '#0f172a'};border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;box-sizing:border-box;">
-                <div style="width:40px;height:40px;border-radius:50%;background:${sc.accentColor || '#6366f1'};display:flex;align-items:center;justify-content:center;margin-bottom:8px;box-shadow:0 4px 12px ${sc.accentColor || '#6366f1'}66;">
-                    <span style="font-size:18px;">${sc.isCover ? '📖' : '🎨'}</span>
-                </div>
-                <div style="font-size:11px;font-weight:700;color:#fff;text-align:center;line-height:1.3;max-height:48px;overflow:hidden;">${sc.title}</div>
+            <div class="aspect-[9/16]" style="position:relative;width:100%;aspect-ratio:9/16;background:${sc.bgColor || '#0f172a'};border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;">
+                ${sc.image_url ? `
+                    <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy">
+                ` : `
+                    <div style="width:40px;height:40px;border-radius:50%;background:${sc.accentColor || '#6366f1'};display:flex;align-items:center;justify-content:center;margin-bottom:8px;box-shadow:0 4px 12px ${sc.accentColor || '#6366f1'}66;">
+                        <span style="font-size:18px;">${sc.isCover ? '📖' : '🎨'}</span>
+                    </div>
+                    <div style="font-size:11px;font-weight:700;color:#fff;text-align:center;line-height:1.3;max-height:48px;overflow:hidden;padding:0 8px;">${sc.title}</div>
+                `}
             </div>
 
             <div style="font-size:11px;color:var(--color-fg-muted);line-height:1.3;max-height:34px;overflow:hidden;">
@@ -8813,7 +8828,7 @@ function renderBookStoryboardGrid() {
 
             <!-- Prompt Override Input & Regenerate Frame Action -->
             <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px;">
-                <input type="text" class="frame-prompt-override" data-idx="${idx}" placeholder="Prompt override..." value="${sc.prompt.substring(0,40)}..." style="width:100%;padding:5px 8px;border-radius:6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.12);color:#c9d1d9;font-size:10px;box-sizing:border-box;">
+                <input type="text" class="frame-prompt-override" data-idx="${idx}" placeholder="Prompt override..." value="${(sc.prompt || '').substring(0,60)}" style="width:100%;padding:5px 8px;border-radius:6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.12);color:#c9d1d9;font-size:10px;box-sizing:border-box;">
                 <button class="regen-frame-btn" data-idx="${idx}" style="width:100%;padding:6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
                     ⚡ Regenerate Frame
                 </button>
@@ -8834,11 +8849,10 @@ function renderBookStoryboardGrid() {
     });
 
     grid.querySelectorAll('.regen-frame-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const idx = parseInt(btn.getAttribute('data-idx'));
             const input = grid.querySelector(`.frame-prompt-override[data-idx="${idx}"]`);
-            const newPrompt = input ? input.value : '';
             
             btn.innerHTML = `<i data-feather="loader" class="spin"></i> Regenerating...`;
             btn.disabled = true;
@@ -9051,6 +9065,34 @@ function initBookReelStudio() {
                     });
                 });
 
+                // 3. Call AI Sketch Image Generation Endpoint
+                genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating 9:16 AI Sketch Artwork...`;
+                if (window.feather) window.feather.replace();
+
+                try {
+                    const imgRes = await fetch('/api/reel/generate-images', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            scenes: formattedScenes,
+                            character_anchor: scriptData.character_anchor || "",
+                            art_style: "comic_sketch"
+                        })
+                    });
+                    if (imgRes.ok) {
+                        const imgJson = await imgRes.json();
+                        if (imgJson.scenes) {
+                            imgJson.scenes.forEach((imgSc, idx) => {
+                                if (formattedScenes[idx]) {
+                                    formattedScenes[idx].image_url = imgSc.image_url;
+                                }
+                            });
+                        }
+                    }
+                } catch (imgErr) {
+                    console.warn("Batch image generation fallback:", imgErr.message);
+                }
+
                 bookReelState.bookTitle = scriptData.book_title || t;
                 bookReelState.author = scriptData.author || "Author";
                 bookReelState.characterAnchor = scriptData.character_anchor || "";
@@ -9062,6 +9104,8 @@ function initBookReelStudio() {
                 bookReelState.scenes = formattedScenes;
                 bookReelState.currentIndex = 0;
                 bookReelState.wallStartMs = performance.now();
+
+                preloadBookReelImages();
 
                 renderBookReelScriptList();
                 renderBookReelWaveform();
