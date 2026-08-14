@@ -9023,8 +9023,13 @@ function initBookReelStudio() {
                 });
 
                 if (!scriptRes.ok) {
-                    const errData = await scriptRes.json();
-                    throw new Error(errData.error || 'Failed to generate script');
+                    const text = await scriptRes.text();
+                    let errMsg = `Server status ${scriptRes.status}`;
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (parsed.error) errMsg = parsed.error;
+                    } catch (_) {}
+                    throw new Error(errMsg);
                 }
 
                 const scriptJson = await scriptRes.json();
