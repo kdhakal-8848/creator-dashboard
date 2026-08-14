@@ -1534,10 +1534,35 @@ app.post('/generate-brief-sketch', async (req, res) => {
     }
 });
 
-// ============================================================
-// BOOK STORYTELLER REEL API (PHASE 2)
-// POST /api/reel/generate-script
-// ============================================================
+function safeParseJSON(str) {
+    if (!str) throw new Error("Empty JSON string");
+    let cleaned = str.replace(/```json/gi, '').replace(/```/g, '').trim();
+    try {
+        return JSON.parse(cleaned);
+    } catch (e1) {
+        try {
+            let sanitized = cleaned
+                .replace(/,\s*([\}\]])/g, '$1')
+                .replace(/[\u0000-\u001F\u007F-\u009F]/g, (match) => {
+                    if (match === '\n') return '\\n';
+                    if (match === '\r') return '\\r';
+                    if (match === '\t') return '\\t';
+                    return '';
+                });
+            return JSON.parse(sanitized);
+        } catch (e2) {
+            const firstBrace = cleaned.indexOf('{');
+            const lastBrace = cleaned.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+                const subStr = cleaned.slice(firstBrace, lastBrace + 1).replace(/,\s*([\}\]])/g, '$1');
+                return JSON.parse(subStr);
+            }
+            throw e1;
+        }
+    }
+}
+
+// POST /api/reel/generate-script — Generate LLM short-form script & scene prompts
 app.post('/api/reel/generate-script', async (req, res) => {
     try {
         const { book_title, topic, custom_notes, target_duration = 45, voice_style = "warm_storyteller" } = req.body;
@@ -1579,26 +1604,23 @@ Return JSON ONLY matching this EXACT schema:
     {
       "scene_index": 1,
       "script_segment": "Spoken sentence for this ~3s scene segment.",
-      "target_timestamp_start": 2.8,
-      "target_timestamp_end": ${parseFloat((2.8 + avgSceneDur).toFixed(1))},
-      "action_description": "Physical action or key concept visual in 3-5 words",
-      "image_prompt": "Artistic story scene illustration. [character_anchor] performing action..."
+      "action_description": "Visual scene description.",
+      "image_prompt": "Heavy impasto oil painting illustration for Scene 1...",
+      "target_duration": ${avgSceneDur}
     }
   ]
 }`;
 
         const aiResult = await generateAIContent(prompt, { jsonMode: true });
-        const rawJsonText = aiResult.response.text().trim();
-        const cleanJsonText = rawJsonText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+        const rawJsonText = aiResult.response.text();
         
         let resultData;
         try {
-            resultData = JSON.parse(cleanJsonText);
+            resultData = safeParseJSON(rawJsonText);
         } catch (jsonErr) {
-            console.warn("Retrying LLM script generation due to malformed JSON...");
-            const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object.", { jsonMode: true });
-            const retryText = retryResult.response.text().trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-            resultData = JSON.parse(retryText);
+            console.warn("Retrying LLM script generation due to malformed JSON:", jsonErr.message);
+            const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object without raw newlines in string values.", { jsonMode: true });
+            resultData = safeParseJSON(retryResult.response.text());
         }
 
         if (!resultData.full_narration_text && resultData.scenes) {
