@@ -43,7 +43,7 @@
             <h2 style="margin-bottom: 4px; font-size: 22px; color: white; font-weight: 700;">Creator's Den</h2>
             <p style="color: rgba(255,255,255,0.5); margin-bottom: 28px; font-size: 14px;">Content Engine</p>
             
-            <form id="signin-form" onsubmit="return false;">
+            <form id="signin-form" onsubmit="if(window.handleLoginAction) window.handleLoginAction(event); return false;">
                 <div style="text-align: left;">
                     <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; color: rgba(255,255,255,0.7);">Email address</label>
                     <input type="email" id="login-email" required style="width: 100%; padding: 10px 14px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.08); color: white; box-sizing: border-box;">
@@ -56,7 +56,7 @@
                 </div>
                 
                 <div style="margin-bottom: 10px;">
-                    <button type="submit" id="login-btn" style="width: 100%; padding: 12px 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(99,102,241,0.4);">Sign In</button>
+                    <button type="button" id="login-btn" onclick="if(window.handleLoginAction) window.handleLoginAction(event);" style="width: 100%; padding: 12px 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(99,102,241,0.4);">Sign In</button>
                 </div>
             
                 <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
