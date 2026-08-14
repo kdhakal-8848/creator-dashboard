@@ -8504,6 +8504,7 @@ const bookReelState = {
     wallStartMs: 0,
     scenes: []
 };
+window.bookReelState = bookReelState;
 
 function formatTimeCode(sec) {
     const m = Math.floor(sec / 60);
@@ -8523,20 +8524,22 @@ function buildBookReelImageUrl(promptText, seed, isCover = false) {
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?seed=${randomSeed}&nologo=true&width=1080&height=1920`;
 }
 
-function generateMockBookReelData(title, duration = 45) {
+function generateMockBookReelData(title, duration = 45, customNotes = "") {
     const numScenes = duration === 120 ? 35 : (duration === 90 ? 26 : (duration === 60 ? 18 : (duration === 30 ? 9 : 13)));
     const sceneDuration = parseFloat(((duration - 2.8) / (numScenes - 1)).toFixed(1));
 
+    const cleanTitle = title?.trim() || "Deep-Dive Book Summary";
     const coverSeed = Math.floor(Math.random() * 999999);
-    const coverPrompt = `Minimalist typography book cover illustration for '${title}', elegant hardcover design, warm parchment background, clean aesthetic`;
+    const coverPrompt = `Minimalist book cover design for '${cleanTitle}', elegant typography, warm parchment background, clean aesthetic`;
+    
     const scenes = [{
         scene_number: 0,
-        title: "Minimalist Book Cover",
+        title: `Cover: ${cleanTitle}`,
         isCover: true,
         start_sec: 0.0,
         end_sec: 2.8,
         timestamp_range: "00:00.0 - 00:02.8",
-        voiceover_snippet: `Title Intro: "${title}"`,
+        voiceover_snippet: `Welcome to the deep dive book summary of "${cleanTitle}". Here are the core insights you need to know.`,
         prompt: coverPrompt,
         image_url: buildBookReelImageUrl(coverPrompt, coverSeed, true),
         seed: coverSeed,
@@ -8544,38 +8547,87 @@ function generateMockBookReelData(title, duration = 45) {
         accentColor: "#818cf8"
     }];
 
-    const topics = [
-        { t: "The 1% Compounding Effect", v: "Small 1% daily improvements compound into massive long-term transformations over time.", bg: "#0f172a", acc: "#38bdf8" },
-        { t: "Identity-Based Habits", v: "Focus not on what you want to achieve, but on the type of person you wish to become.", bg: "#1e293b", acc: "#f59e0b" },
-        { t: "The 4 Laws of Behavior Change", v: "Make it obvious, make it attractive, make it easy, and make it satisfying.", bg: "#111827", acc: "#10b981" },
-        { t: "Environment Design Beats Willpower", v: "Structure your physical environment so positive cues are prominent and friction is minimized.", bg: "#1e1b4b", acc: "#a855f7" },
-        { t: "Habit Stacking Blueprint", v: "Anchor new behaviors directly onto established daily routines using specific time triggers.", bg: "#0f172a", acc: "#ec4899" },
-        { t: "Overcoming Plateau of Latent Potential", v: "Results lag behind effort; breakthrough moments are built upon months of silent work.", bg: "#111827", acc: "#f43f5e" },
-        { t: "Two-Minute Rule Momentum", v: "Scale down any habit so it takes under two minutes to start, eliminating initial resistance.", bg: "#1e293b", acc: "#06b6d4" },
-        { t: "Habit Tracking & Visual Feedback", v: "Don't break the chain. Visual evidence of progress reinforces self-identity daily.", bg: "#1e1b4b", acc: "#84cc16" },
-        { t: "Systems Over Goals", v: "Goals set the direction, but systems deliver continuous progress and lasting transformation.", bg: "#0f172a", acc: "#6366f1" }
+    // Dynamic Narrative Template Generator based on Title & Notes
+    const storyTemplates = [
+        { 
+            t: `Core Premise of ${cleanTitle}`, 
+            v: `At its core, "${cleanTitle}" explores how small strategic shifts lead to breakthrough transformations in everyday performance.` 
+        },
+        { 
+            t: `The Central Framework`, 
+            v: `The foundation of "${cleanTitle}" relies on establishing strong foundational systems rather than relying on temporary motivation.` 
+        },
+        { 
+            t: `Identity & Mindset Shift`, 
+            v: `Shift your focus from short-term outcomes to fundamental identity creation—becoming the person who naturally succeeds.` 
+        },
+        { 
+            t: `Environment & Friction Control`, 
+            v: `Design your environment to minimize friction for positive behaviors while making destructive habits invisible.` 
+        },
+        { 
+            t: `The Compounding Advantage`, 
+            v: `Small consistent actions repeated daily create an unstoppable exponential curve of long-term mastery in "${cleanTitle}".` 
+        },
+        { 
+            t: `Overcoming Resistance & Plateaus`, 
+            v: `Breakthroughs occur after long periods of silent work. Stay committed even when early results feel invisible.` 
+        },
+        { 
+            t: `The Two-Minute Action Rule`, 
+            v: `Scale down initial actions to under two minutes to build seamless momentum and eliminate psychological friction.` 
+        },
+        { 
+            t: `Visual Feedback & Progress Tracking`, 
+            v: `Track your continuous progress visually to reinforce identity and maintain unwavering daily consistency.` 
+        },
+        { 
+            t: `Systems Architecture Over Goals`, 
+            v: `Goals provide initial direction, but robust daily systems deliver predictable, repeatable, and lasting success.` 
+        },
+        {
+            t: `Mastering Focus & Precision`,
+            v: `Eliminate modern distractions by building structured blocks of deep work dedicated to your primary objective.`
+        },
+        {
+            t: `Strategic Resource Allocation`,
+            v: `Direct your highest energy toward high-leverage activities that yield compounding returns over time.`
+        },
+        {
+            t: `Resilience Under Pressure`,
+            v: `Turn setbacks into valuable feedback, adapting your strategy while holding your ultimate vision constant.`
+        },
+        {
+            t: `The Final Takeaway`,
+            v: `Apply these core lessons from "${cleanTitle}" daily to unlock sustainable, lifelong success.`
+        }
     ];
 
     let tAccum = 2.8;
     for (let i = 1; i < numScenes; i++) {
-        const item = topics[(i - 1) % topics.length];
+        const template = storyTemplates[(i - 1) % storyTemplates.length];
+        const sceneTitle = i <= storyTemplates.length ? template.t : `Key Insight ${i} of ${cleanTitle}`;
+        const sceneNarration = template.v;
         const endT = parseFloat((tAccum + sceneDuration).toFixed(1));
         const sceneSeed = Math.floor(Math.random() * 999999);
-        const scenePrompt = `Cinematic 9:16 story illustration for '${item.t}' in ${title}. ${item.v}. Clean graphic art, deep lighting, rich atmospheric detail, portrait framing`;
+        const scenePrompt = `Cinematic story illustration for '${sceneTitle}' in '${cleanTitle}'. ${sceneNarration}. Vibrant colors, atmospheric lighting, 9:16 portrait framing`;
+
+        const palette = ['#0f172a', '#1e293b', '#111827', '#1e1b4b'];
+        const accs = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7', '#ec4899', '#f43f5e', '#06b6d4', '#84cc16'];
 
         scenes.push({
             scene_number: i,
-            title: `Scene ${i}: ${item.t}`,
+            title: `Scene ${i}: ${sceneTitle}`,
             isCover: false,
             start_sec: tAccum,
             end_sec: endT,
             timestamp_range: `${formatTimeCode(tAccum)} - ${formatTimeCode(endT)}`,
-            voiceover_snippet: item.v,
+            voiceover_snippet: sceneNarration,
             prompt: scenePrompt,
             image_url: buildBookReelImageUrl(scenePrompt, sceneSeed, false),
             seed: sceneSeed,
-            bgColor: item.bg,
-            accentColor: item.acc
+            bgColor: palette[i % palette.length],
+            accentColor: accs[i % accs.length]
         });
         tAccum = endT;
     }
@@ -9005,7 +9057,7 @@ function preloadBookReelImages() {
 function initBookReelStudio() {
     const titleInput = document.getElementById('book-reel-title');
     const durInput = document.getElementById('book-reel-duration');
-    const initialTitle = titleInput?.value?.trim() || "Atomic Habits by James Clear";
+    const initialTitle = titleInput?.value?.trim() || "Deep-Dive Book Summary";
     const initialDur = parseInt(durInput?.value || "45");
 
     bookReelState.bookTitle = initialTitle;
@@ -9045,13 +9097,19 @@ function initBookReelStudio() {
     if (genBtn && !genBtn.__bound) {
         genBtn.__bound = true;
         genBtn.addEventListener('click', async () => {
-            const t = document.getElementById('book-reel-title')?.value?.trim() || "Atomic Habits by James Clear";
+            const rawTitle = document.getElementById('book-reel-title')?.value?.trim();
+            const t = rawTitle || "Deep-Dive Book Summary";
             const d = parseInt(document.getElementById('book-reel-duration')?.value || "45");
             const v = document.getElementById('book-reel-voice')?.value || "warm_storyteller";
             const notes = document.getElementById('book-reel-notes')?.value || "";
             const feedbackEl = document.getElementById('book-reel-feedback');
 
             if (feedbackEl) feedbackEl.style.display = 'none';
+
+            bookReelState.bookTitle = t;
+            bookReelState.duration = d;
+            bookReelState.voiceStyle = v;
+            bookReelState.notes = notes;
 
             genBtn.disabled = true;
             genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating Script & Voiceover...`;
@@ -9110,6 +9168,7 @@ function initBookReelStudio() {
 
                 // Scene 0: Cover Slide
                 const cover = scriptData.cover_slide || {};
+                const coverPrompt = cover.image_prompt || `Minimalist typography book cover illustration for '${t}', elegant hardcover design, warm parchment background`;
                 formattedScenes.push({
                     scene_number: 0,
                     title: cover.title_text || t,
@@ -9118,7 +9177,8 @@ function initBookReelStudio() {
                     end_sec: cover.target_duration || 2.8,
                     timestamp_range: `00:00.0 - ${formatTimeCode(cover.target_duration || 2.8)}`,
                     voiceover_snippet: `Title Intro: "${cover.title_text || t}"`,
-                    prompt: cover.image_prompt || `Minimalist typography book cover illustration for '${t}', elegant hardcover design, warm parchment background`,
+                    prompt: coverPrompt,
+                    image_url: buildBookReelImageUrl(coverPrompt, 42, true),
                     bgColor: palette[0],
                     accentColor: accs[0]
                 });
@@ -9144,6 +9204,7 @@ function initBookReelStudio() {
                         timestamp_range: `${formatTimeCode(startT)} - ${formatTimeCode(endT)}`,
                         voiceover_snippet: sc.script_segment || `Narration for scene ${idx}`,
                         prompt: imagePrompt,
+                        image_url: buildBookReelImageUrl(imagePrompt, idx * 11, false),
                         bgColor: palette[idx % palette.length],
                         accentColor: accs[idx % accs.length]
                     });
@@ -9213,9 +9274,12 @@ function initBookReelStudio() {
                 bookReelState.duration = d;
                 bookReelState.voiceStyle = v;
                 bookReelState.notes = notes;
-                bookReelState.scenes = generateMockBookReelData(t, d);
+                bookReelState.scenes = generateMockBookReelData(t, d, notes);
                 bookReelState.currentIndex = 0;
                 bookReelState.wallStartMs = performance.now();
+                bookReelState.loadedImagesMap = {};
+
+                preloadBookReelImages();
 
                 renderBookReelScriptList();
                 renderBookReelWaveform();
