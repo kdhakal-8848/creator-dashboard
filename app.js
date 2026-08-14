@@ -8512,19 +8512,34 @@ function formatTimeCode(sec) {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${ms}`;
 }
 
-function generateMockBookReelData(title, durationSec = 45) {
-    const numScenes = durationSec === 30 ? 9 : (durationSec === 60 ? 18 : (durationSec === 90 ? 26 : (durationSec === 120 ? 35 : 13)));
-    const sceneDuration = parseFloat((durationSec / (numScenes - 1)).toFixed(1));
+function buildBookReelImageUrl(promptText, seed, isCover = false) {
+    const randomSeed = seed !== undefined ? seed : Math.floor(Math.random() * 999999);
+    let fullPrompt = "";
+    if (isCover) {
+        fullPrompt = `Minimalist fine line pencil sketch illustration of ${promptText}, centered on full-bleed fibrous handmade art paper background, clean negative space, classic serif typography, 8k, vertical 9:16`;
+    } else {
+        fullPrompt = `Heavy impasto oil painting with visible palette knife texture, dramatic lighting, portrait of ${promptText}, washed soft pastel upper background safe zone, vibrant colors, 8k, vertical 9:16`;
+    }
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?seed=${randomSeed}&nologo=true&width=1080&height=1920`;
+}
 
+function generateMockBookReelData(title, duration = 45) {
+    const numScenes = duration === 120 ? 35 : (duration === 90 ? 26 : (duration === 60 ? 18 : (duration === 30 ? 9 : 13)));
+    const sceneDuration = parseFloat(((duration - 2.8) / (numScenes - 1)).toFixed(1));
+
+    const coverSeed = Math.floor(Math.random() * 999999);
+    const coverPrompt = `Minimalist typography book cover illustration for '${title}', elegant hardcover design, warm parchment background, clean aesthetic`;
     const scenes = [{
         scene_number: 0,
         title: "Minimalist Book Cover",
         isCover: true,
         start_sec: 0.0,
-        end_sec: 2.5,
-        timestamp_range: "00:00.0 - 00:02.5",
+        end_sec: 2.8,
+        timestamp_range: "00:00.0 - 00:02.8",
         voiceover_snippet: `Title Intro: "${title}"`,
-        prompt: `Minimalist typography book cover illustration for '${title}', elegant hardcover design, warm parchment background, clean aesthetic`,
+        prompt: coverPrompt,
+        image_url: buildBookReelImageUrl(coverPrompt, coverSeed, true),
+        seed: coverSeed,
         bgColor: "#1e1b4b",
         accentColor: "#818cf8"
     }];
@@ -8541,10 +8556,13 @@ function generateMockBookReelData(title, durationSec = 45) {
         { t: "Systems Over Goals", v: "Goals set the direction, but systems deliver continuous progress and lasting transformation.", bg: "#0f172a", acc: "#6366f1" }
     ];
 
-    let tAccum = 2.5;
+    let tAccum = 2.8;
     for (let i = 1; i < numScenes; i++) {
         const item = topics[(i - 1) % topics.length];
         const endT = parseFloat((tAccum + sceneDuration).toFixed(1));
+        const sceneSeed = Math.floor(Math.random() * 999999);
+        const scenePrompt = `Cinematic 9:16 story illustration for '${item.t}' in ${title}. ${item.v}. Clean graphic art, deep lighting, rich atmospheric detail, portrait framing`;
+
         scenes.push({
             scene_number: i,
             title: `Scene ${i}: ${item.t}`,
@@ -8553,7 +8571,9 @@ function generateMockBookReelData(title, durationSec = 45) {
             end_sec: endT,
             timestamp_range: `${formatTimeCode(tAccum)} - ${formatTimeCode(endT)}`,
             voiceover_snippet: item.v,
-            prompt: `Cinematic 9:16 story illustration for '${item.t}' in ${title}. ${item.v}. Clean graphic art, deep lighting, rich atmospheric detail, portrait framing`,
+            prompt: scenePrompt,
+            image_url: buildBookReelImageUrl(scenePrompt, sceneSeed, false),
+            seed: sceneSeed,
             bgColor: item.bg,
             accentColor: item.acc
         });
@@ -8579,36 +8599,74 @@ function drawBookReelCanvas() {
         accentColor: "#818cf8"
     };
 
-    // Dark Background Gradient
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-    bgGrad.addColorStop(0, scene.bgColor || '#0f172a');
-    bgGrad.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, w, h);
+    // Ensure image cache map exists
+    if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
 
-    // Decorative Geometric Backdrop Circles
+    const currIdx = bookReelState.currentIndex;
+    let imgObj = bookReelState.loadedImagesMap[currIdx];
+
+    // Preload image if not already cached
+    if (!imgObj && scene.image_url) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            bookReelState.loadedImagesMap[currIdx] = img;
+            drawBookReelCanvas();
+        };
+        img.src = scene.image_url;
+    }
+
+    // Ken Burns Gentle Smooth Zoom Motion
+    const elapsed = performance.now() - (bookReelState.wallStartMs || performance.now());
+    const zoom = 1.0 + Math.sin(elapsed / 2500) * 0.04;
+    const panY = Math.cos(elapsed / 3000) * 15;
+
     ctx.save();
-    ctx.globalAlpha = 0.12;
-    ctx.strokeStyle = scene.accentColor || '#6366f1';
-    ctx.lineWidth = 4;
-    for (let r = 200; r < 900; r += 180) {
+    ctx.translate(w / 2, h / 2 + panY);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-w / 2, -h / 2);
+
+    if (imgObj && imgObj.complete && imgObj.naturalWidth > 0) {
+        // Draw Full-Bleed 9:16 AI Artwork Image
+        ctx.drawImage(imgObj, 0, 0, w, h);
+    } else {
+        // High-Quality Fallback Background Gradient while AI image loads
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+        bgGrad.addColorStop(0, scene.bgColor || '#0f172a');
+        bgGrad.addColorStop(1, '#020617');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Subtle geometric loading indicator
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.strokeStyle = scene.accentColor || '#6366f1';
+        ctx.lineWidth = 6;
         ctx.beginPath();
-        ctx.arc(w / 2, h / 2 - 100, r, 0, Math.PI * 2);
+        ctx.arc(w / 2, h / 2, 220, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
     }
     ctx.restore();
 
     if (scene.isCover) {
-        // Minimalist Book Cover Card (Scene 0)
-        const frameX = 120, frameY = 320, frameW = 840, frameH = 1200;
+        // Cover Frame Text & Title Card Overlay
+        const overlayGrad = ctx.createLinearGradient(0, 0, 0, h);
+        overlayGrad.addColorStop(0, 'rgba(15, 23, 42, 0.4)');
+        overlayGrad.addColorStop(0.5, 'rgba(15, 23, 42, 0.75)');
+        overlayGrad.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
+        ctx.fillStyle = overlayGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        const frameX = 100, frameY = 360, frameW = 880, frameH = 1100;
         ctx.save();
-        ctx.shadowColor = scene.accentColor || '#6366f1';
-        ctx.shadowBlur = 50;
-        ctx.fillStyle = '#0f172a';
-        ctx.strokeStyle = scene.accentColor || '#6366f1';
-        ctx.lineWidth = 8;
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 40;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = scene.accentColor || '#818cf8';
+        ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.roundRect(frameX, frameY, frameW, frameH, 32);
+        ctx.roundRect(frameX, frameY, frameW, frameH, 28);
         ctx.fill();
         ctx.stroke();
         ctx.restore();
@@ -8617,15 +8675,15 @@ function drawBookReelCanvas() {
         ctx.save();
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 64px Inter, sans-serif';
-        const words = (bookReelState.bookTitle || 'Book Storyteller').split(' ');
-        let line = '', y = frameY + 360;
+        ctx.font = '700 60px "Cinzel", "Playfair Display", Georgia, serif';
+        const words = (bookReelState.bookTitle || 'Book Summary').split(' ');
+        let line = '', y = frameY + 340;
         for (let word of words) {
             let testLine = line + word + ' ';
             if (ctx.measureText(testLine).width > frameW - 120 && line !== '') {
                 ctx.fillText(line, w / 2, y);
                 line = word + ' ';
-                y += 80;
+                y += 75;
             } else {
                 line = testLine;
             }
@@ -8633,96 +8691,64 @@ function drawBookReelCanvas() {
         ctx.fillText(line, w / 2, y);
 
         // Subtitle Badge
-        ctx.font = '600 36px Inter, sans-serif';
+        ctx.font = '600 32px Inter, sans-serif';
         ctx.fillStyle = scene.accentColor || '#818cf8';
-        ctx.fillText('BOOK SUMMARY REEL', w / 2, y + 100);
+        ctx.fillText('DEEP DIVE BOOK SUMMARY REEL', w / 2, y + 90);
 
-        // Minimalist Emblem Icon
-        ctx.beginPath();
-        ctx.arc(w / 2, frameY + frameH - 220, 70, 0, Math.PI * 2);
-        ctx.fillStyle = scene.accentColor || '#6366f1';
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 44px Inter, sans-serif';
-        ctx.fillText('📖', w / 2, frameY + frameH - 205);
+        ctx.font = '500 28px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillText(`By ${bookReelState.author || 'James Clear'}`, w / 2, y + 150);
         ctx.restore();
 
     } else {
-        // Scene Card Illustration Preview Frame (9:16 Aspect)
-        const frameX = 80, frameY = 160, frameW = 920, frameH = 1380;
+        // Story Frame Subtitle & Narration Overlay (Bottom 9:16 Video Frame)
+        const subBoxY = h - 420;
         ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 40;
-        ctx.fillStyle = 'rgba(255,255,255,0.05)';
-        ctx.strokeStyle = scene.accentColor || '#38bdf8';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.roundRect(frameX, frameY, frameW, frameH, 28);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-
-        // Ken Burns Gentle Zoom Simulation
-        const elapsed = performance.now() - (bookReelState.wallStartMs || performance.now());
-        const zoom = 1 + Math.sin(elapsed / 1500) * 0.03;
-
-        ctx.save();
-        ctx.translate(w / 2, frameY + frameH / 2);
-        ctx.scale(zoom, zoom);
-        ctx.translate(-w / 2, -(frameY + frameH / 2));
-
-        // Animated Scene Graphic Primitives
-        ctx.fillStyle = scene.accentColor || '#6366f1';
-        ctx.globalAlpha = 0.25;
-        ctx.beginPath();
-        ctx.arc(w / 2, frameY + 450, 260, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.9;
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 54px Inter, sans-serif';
-        ctx.fillText(scene.title || `Scene ${bookReelState.currentIndex}`, w / 2, frameY + 460);
-        ctx.restore();
-
-        // Subtitle Overlay Box (Bottom 9:16 Video Frame)
-        ctx.save();
-        const subBoxY = frameY + frameH - 320;
         ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
         ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = 30;
         ctx.beginPath();
-        ctx.roundRect(frameX + 40, subBoxY, frameW - 80, 240, 20);
+        ctx.roundRect(80, subBoxY, w - 160, 300, 24);
         ctx.fill();
         ctx.stroke();
+        ctx.restore();
 
-        ctx.font = '600 38px Inter, sans-serif';
+        // Scene Number Badge
+        ctx.save();
+        ctx.fillStyle = scene.accentColor || '#38bdf8';
+        ctx.font = 'bold 28px Inter, sans-serif';
+        ctx.fillText(`SCENE ${scene.scene_number}`, 120, subBoxY + 55);
+
+        // Scene Narration Text
+        ctx.font = '600 36px Inter, sans-serif';
         ctx.fillStyle = '#f8fafc';
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'left';
         
         const subWords = (scene.voiceover_snippet || '').split(' ');
-        let subLine = '', subY = subBoxY + 75;
+        let subLine = '', subY = subBoxY + 115;
         for (let word of subWords) {
             let testLine = subLine + word + ' ';
-            if (ctx.measureText(testLine).width > frameW - 140 && subLine !== '') {
-                ctx.fillText(subLine, w / 2, subY);
+            if (ctx.measureText(testLine).width > w - 320 && subLine !== '') {
+                ctx.fillText(subLine, 120, subY);
                 subLine = word + ' ';
-                subY += 54;
+                subY += 52;
             } else {
                 subLine = testLine;
             }
         }
-        ctx.fillText(subLine, w / 2, subY);
+        ctx.fillText(subLine, 120, subY);
         ctx.restore();
     }
 
-    // Top Header Badge
+    // Top Header Bar
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, w, 100);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(0, 0, w, 110);
     ctx.fillStyle = '#818cf8';
     ctx.font = 'bold 36px Inter, sans-serif';
-    ctx.fillText(`📚 ${bookReelState.bookTitle || 'Book Reel'}`, 50, 64);
+    ctx.fillText(`📚 ${bookReelState.bookTitle || 'Book Reel'}`, 50, 68);
     ctx.restore();
 }
 
@@ -8955,17 +8981,25 @@ function startBookReelSequence() {
     }, intervalMs);
 }
 
-function stopBookReelSequence() {
-    bookReelState.isPlaying = false;
-    if (bookReelState.animFrameId) {
-        cancelAnimationFrame(bookReelState.animFrameId);
-        bookReelState.animFrameId = null;
-    }
-    if (bookReelState.intervalId) {
-        clearInterval(bookReelState.intervalId);
-        bookReelState.intervalId = null;
-    }
-    drawBookReelCanvas();
+function preloadBookReelImages() {
+    if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
+    if (!bookReelState.scenes) return;
+
+    bookReelState.scenes.forEach((sc, idx) => {
+        if (!sc.image_url) {
+            const seed = sc.seed || Math.floor(Math.random() * 999999);
+            sc.image_url = buildBookReelImageUrl(sc.prompt || sc.title, seed, sc.isCover);
+        }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            bookReelState.loadedImagesMap[idx] = img;
+            if (idx === bookReelState.currentIndex) {
+                drawBookReelCanvas();
+            }
+        };
+        img.src = sc.image_url;
+    });
 }
 
 function initBookReelStudio() {
@@ -8979,6 +9013,8 @@ function initBookReelStudio() {
     bookReelState.scenes = generateMockBookReelData(initialTitle, initialDur);
     bookReelState.currentIndex = 0;
     bookReelState.wallStartMs = performance.now();
+
+    preloadBookReelImages();
 
     renderBookReelScriptList();
     renderBookReelWaveform();
@@ -9333,6 +9369,36 @@ function initBookReelStudio() {
         });
     }
 
+async function preloadBookReelImagesAsync() {
+    if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
+    if (!bookReelState.scenes) return;
+
+    const promises = bookReelState.scenes.map((sc, idx) => {
+        return new Promise((resolve) => {
+            if (!sc.image_url) {
+                const seed = sc.seed || Math.floor(Math.random() * 999999);
+                sc.image_url = buildBookReelImageUrl(sc.prompt || sc.title, seed, sc.isCover);
+            }
+            if (bookReelState.loadedImagesMap[idx] && bookReelState.loadedImagesMap[idx].complete && bookReelState.loadedImagesMap[idx].naturalWidth > 0) {
+                resolve();
+                return;
+            }
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                bookReelState.loadedImagesMap[idx] = img;
+                resolve();
+            };
+            img.onerror = () => {
+                resolve();
+            };
+            img.src = sc.image_url;
+        });
+    });
+
+    await Promise.all(promises);
+}
+
 async function renderCanvasVideoClientSide() {
     const canvas = document.getElementById('book-reel-canvas');
     const statusLabel = document.getElementById('book-reel-render-status');
@@ -9343,11 +9409,36 @@ async function renderCanvasVideoClientSide() {
 
     if (!canvas) throw new Error("Canvas element not found");
 
-    if (statusLabel) statusLabel.innerText = "Initializing Client-Side MediaRecorder...";
+    if (statusLabel) statusLabel.innerText = "Preloading 9:16 AI Artwork & Voice Track...";
     if (pctLabel) pctLabel.innerText = "5%";
     if (progressBar) progressBar.style.width = "5%";
 
-    const stream = canvas.captureStream(30);
+    // 1. Preload ALL 9:16 AI images before recording
+    await preloadBookReelImagesAsync();
+
+    // 2. Prepare canvas & audio media stream
+    let stream = canvas.captureStream(30);
+
+    if (bookReelState.audioUrl) {
+        try {
+            const audioEl = new Audio(bookReelState.audioUrl);
+            audioEl.crossOrigin = 'anonymous';
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaElementSource(audioEl);
+            const dest = audioCtx.createMediaStreamDestination();
+            source.connect(dest);
+            source.connect(audioCtx.destination);
+
+            const audioTrack = dest.stream.getAudioTracks()[0];
+            if (audioTrack) {
+                stream.addTrack(audioTrack);
+            }
+            audioEl.play().catch(() => {});
+        } catch (e) {
+            console.warn("Audio stream capture warning:", e);
+        }
+    }
+
     const mimeType = MediaRecorder.isTypeSupported('video/mp4;codecs=h264') 
         ? 'video/mp4;codecs=h264' 
         : (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm');
@@ -9373,6 +9464,10 @@ async function renderCanvasVideoClientSide() {
     const durSec = bookReelState.duration || 45;
     const intervalMs = (durSec * 1000) / totalScenes;
     let stepCount = 0;
+
+    bookReelState.currentIndex = 0;
+    bookReelState.wallStartMs = performance.now();
+    drawBookReelCanvas();
 
     const recordTimer = setInterval(() => {
         stepCount++;
