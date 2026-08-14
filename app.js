@@ -9179,21 +9179,93 @@ function initBookReelStudio() {
     const renderBtn = document.getElementById('book-reel-render-btn');
     if (renderBtn && !renderBtn.__bound) {
         renderBtn.__bound = true;
-        renderBtn.addEventListener('click', () => {
+        renderBtn.addEventListener('click', async () => {
             renderBtn.disabled = true;
-            renderBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Rendering Final Video...`;
+            renderBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Submitting Render Job...`;
+            if (window.feather) window.feather.replace();
+
+            const progressBox = document.getElementById('book-reel-progress-box');
+            const statusLabel = document.getElementById('book-reel-render-status');
+            const pctLabel = document.getElementById('book-reel-render-pct');
+            const progressBar = document.getElementById('book-reel-render-bar');
             const overlay = document.getElementById('book-reel-player-overlay');
+
+            if (progressBox) progressBox.style.display = 'block';
             if (overlay) overlay.style.display = 'flex';
 
-            setTimeout(() => {
+            try {
+                const coverFrame = bookReelState.scenes[0] ? {
+                    imageUrl: bookReelState.scenes[0].image_url || '',
+                    duration: bookReelState.scenes[0].end_sec || 2.8
+                } : null;
+
+                const storyFrames = bookReelState.scenes.slice(1).map(s => ({
+                    sceneIndex: s.scene_number,
+                    imageUrl: s.image_url || '',
+                    startTime: s.start_sec || 0,
+                    endTime: s.end_sec || 3.0,
+                    duration: (s.end_sec || 3.0) - (s.start_sec || 0)
+                }));
+
+                const renderRes = await fetch('/api/reel/render-video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reelId: `reel_${Date.now()}`,
+                        audioUrl: bookReelState.audioUrl || '',
+                        coverFrame,
+                        storyFrames
+                    })
+                });
+
+                if (!renderRes.ok) {
+                    throw new Error('Failed to start video rendering job');
+                }
+
+                const renderJson = await renderRes.json();
+                const jobId = renderJson.jobId;
+
+                // Poll job status every 500ms
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/reel/status/${jobId}`);
+                        if (statusRes.ok) {
+                            const job = await statusRes.json();
+                            const pct = job.progress || 0;
+
+                            if (pctLabel) pctLabel.innerText = `${pct}%`;
+                            if (progressBar) progressBar.style.width = `${pct}%`;
+                            if (statusLabel) statusLabel.innerText = job.statusMessage || `Rendering MP4... ${pct}%`;
+
+                            if (job.status === 'completed') {
+                                clearInterval(pollInterval);
+                                bookReelState.finalVideoUrl = job.videoUrl;
+
+                                renderBtn.disabled = false;
+                                renderBtn.innerHTML = `✅ Render Complete!`;
+                                if (overlay) overlay.style.display = 'none';
+
+                                setTimeout(() => {
+                                    renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
+                                    if (window.feather) window.feather.replace();
+                                }, 3000);
+                            } else if (job.status === 'failed') {
+                                clearInterval(pollInterval);
+                                throw new Error(job.error || 'Video rendering failed');
+                            }
+                        }
+                    } catch (pollErr) {
+                        console.warn("Status polling error:", pollErr);
+                    }
+                }, 500);
+
+            } catch (err) {
+                console.error("Render trigger failed:", err);
+                if (statusLabel) statusLabel.innerText = `Error: ${err.message}`;
                 renderBtn.disabled = false;
-                renderBtn.innerHTML = `✅ Render Complete!`;
+                renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
                 if (overlay) overlay.style.display = 'none';
-                setTimeout(() => {
-                    renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
-                    if (window.feather) window.feather.replace();
-                }, 2500);
-            }, 1200);
+            }
         });
     }
 
@@ -9201,13 +9273,21 @@ function initBookReelStudio() {
     if (downloadBtn && !downloadBtn.__bound) {
         downloadBtn.__bound = true;
         downloadBtn.addEventListener('click', () => {
+            const url = bookReelState.finalVideoUrl || '/renders/sample_reel.mp4';
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(bookReelState.bookTitle || 'storyteller_reel').toLowerCase().replace(/[^a-z0-9]/g, '_')}_916.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
             downloadBtn.innerHTML = `📥 Downloading Reel MP4...`;
             setTimeout(() => {
-                downloadBtn.innerHTML = `✅ Downloaded!`;
+                downloadBtn.innerHTML = `✅ Download Triggered!`;
                 setTimeout(() => {
                     downloadBtn.innerHTML = `<i data-feather="download"></i> Download MP4 Video`;
                     if (window.feather) window.feather.replace();
-                }, 2000);
+                }, 2500);
             }, 800);
         });
     }
