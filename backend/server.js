@@ -133,9 +133,7 @@ async function generateAIContent(prompt, options = {}) {
     }
 
     const models = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash"
+        "gemini-2.5-flash"
     ];
     let lastError = null;
 
@@ -1371,7 +1369,7 @@ Return JSON ONLY matching this schema:
 }`;
 
         const apiKeys = getGeminiApiKeys();
-        const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
+        const modelsToTry = ['gemini-1.5-flash'];
         let briefResult = null;
         let lastErrorMsg = '';
 
@@ -1529,7 +1527,296 @@ app.post('/generate-brief-sketch', async (req, res) => {
     }
 });
 
+// ============================================================
+// BOOK STORYTELLER REEL API (PHASE 2)
+// POST /api/reel/generate-script
+// ============================================================
+app.post('/api/reel/generate-script', async (req, res) => {
+    try {
+        const { book_title, topic, custom_notes, target_duration = 45, voice_style = "warm_storyteller" } = req.body;
+        const titleToUse = (book_title || topic || "").trim();
+        if (!titleToUse) {
+            return res.status(400).json({ error: "book_title or topic is required" });
+        }
+
+        const dur = parseInt(target_duration) || 45;
+        const targetSceneCount = dur === 30 ? 9 : (dur === 60 ? 18 : 14);
+        const avgSceneDur = parseFloat(((dur - 2.8) / targetSceneCount).toFixed(1));
+
+        const prompt = `You are an expert short-form video reel scriptwriter and literary editor.
+Create a captivating short-form video summary script for the book/topic: "${titleToUse}".
+${custom_notes ? `Additional Context/Notes: ${custom_notes}` : ''}
+
+Strict Output Requirements:
+1. TARGET DURATION: Exactly ${dur} seconds total narration.
+2. COVER SLIDE: Scene 0 cover slide lasting ~2.8 seconds.
+3. SCENES: Exactly ${targetSceneCount} visual scene segments. Each segment narration must take approx ${avgSceneDur} seconds to speak (spaced 2.5 to 3.5 seconds apart).
+4. CHARACTER ANCHOR: Define a central protagonist visual profile string (e.g. 'A young man with messy dark brown hair wearing an olive green casual jacket') that will be consistent across all scene prompts.
+5. PROMPT STYLE: High-quality artistic prompts (minimalist ink/watercolor for cover, rich expressive sketch/art style for scenes). Prepend character_anchor to scene image_prompts.
+6. FULL NARRATION TEXT: Combine the cover intro and all scene script segments into one continuous uninterrupted string for TTS audio synthesis.
+
+Return JSON ONLY matching this EXACT schema:
+{
+  "book_title": "${titleToUse}",
+  "author": "Author Name (or 'Classic' if unknown)",
+  "character_anchor": "Visual description of protagonist for prompt consistency",
+  "estimated_total_duration": ${dur},
+  "cover_slide": {
+    "title_text": "${titleToUse}",
+    "author_text": "Author Name",
+    "image_prompt": "Minimalist ink and watercolor sketch on fibrous paper illustration for ${titleToUse}, elegant book cover art",
+    "target_duration": 2.8
+  },
+  "full_narration_text": "Full uninterrupted continuous narrative script for TTS voiceover synthesis...",
+  "scenes": [
+    {
+      "scene_index": 1,
+      "script_segment": "Spoken sentence for this ~3s scene segment.",
+      "target_timestamp_start": 2.8,
+      "target_timestamp_end": ${parseFloat((2.8 + avgSceneDur).toFixed(1))},
+      "action_description": "Physical action or key concept visual in 3-5 words",
+      "image_prompt": "Artistic story scene illustration. [character_anchor] performing action..."
+    }
+  ]
+}`;
+
+        const aiResult = await generateAIContent(prompt, { jsonMode: true });
+        const rawJsonText = aiResult.response.text().trim();
+        const cleanJsonText = rawJsonText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+        
+        let resultData;
+        try {
+            resultData = JSON.parse(cleanJsonText);
+        } catch (jsonErr) {
+            console.warn("Retrying LLM script generation due to malformed JSON...");
+            const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object.", { jsonMode: true });
+            const retryText = retryResult.response.text().trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+            resultData = JSON.parse(retryText);
+        }
+
+        if (!resultData.full_narration_text && resultData.scenes) {
+            const coverIntro = resultData.cover_slide ? `${resultData.cover_slide.title_text}. ` : '';
+            resultData.full_narration_text = coverIntro + resultData.scenes.map(s => s.script_segment).join(' ');
+        }
+
+        return res.json({ success: true, script_data: resultData });
+
+    } catch (err) {
+        console.error("/api/reel/generate-script error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================================
+// POST /api/reel/synthesize-tts
+// Timestamped TTS Voiceover Synthesis & Dynamic Cut Alignment
+// ============================================================
+app.post('/api/reel/synthesize-tts', async (req, res) => {
+    try {
+        const { full_narration_text, scenes = [], voice_style = "warm_storyteller" } = req.body;
+        const textToSpeak = (full_narration_text || "").trim();
+
+        if (!textToSpeak) {
+            return res.status(400).json({ error: "full_narration_text is required for TTS synthesis" });
+        }
+
+        let audioUrl = null;
+        let provider = 'gemini_ai_tts';
+        let audioBuffer = null;
+
+        // 1. ElevenLabs TTS check
+        if (process.env.ELEVENLABS_API_KEY) {
+            try {
+                const voiceId = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
+                const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'xi-api-key': process.env.ELEVENLABS_API_KEY
+                    },
+                    body: JSON.stringify({
+                        text: textToSpeak,
+                        model_id: 'eleven_multilingual_v2'
+                    })
+                });
+
+                if (elRes.ok) {
+                    const elData = await elRes.json();
+                    if (elData.audio_base64) {
+                        audioBuffer = Buffer.from(elData.audio_base64, 'base64');
+                        audioUrl = `data:audio/mp3;base64,${elData.audio_base64}`;
+                        provider = 'elevenlabs';
+                    }
+                }
+            } catch (ele) {
+                console.warn("[/api/reel/synthesize-tts] ElevenLabs call failed, falling back:", ele.message);
+            }
+        }
+
+        // 2. OpenAI TTS check
+        if (!audioUrl && process.env.OPENAI_API_KEY) {
+            try {
+                const oaiRes = await fetch('https://api.openai.com/v1/audio/speech', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'tts-1',
+                        input: textToSpeak,
+                        voice: 'alloy'
+                    })
+                });
+                if (oaiRes.ok) {
+                    const arrayBuf = await oaiRes.arrayBuffer();
+                    audioBuffer = Buffer.from(arrayBuf);
+                    audioUrl = `data:audio/mp3;base64,${audioBuffer.toString('base64')}`;
+                    provider = 'openai_tts';
+                }
+            } catch (oaie) {
+                console.warn("[/api/reel/synthesize-tts] OpenAI TTS failed, falling back:", oaie.message);
+            }
+        }
+
+        // 3. Gemini TTS / Google TTS Fallback
+        if (!audioUrl) {
+            const apiKeys = getGeminiApiKeys();
+            for (const geminiApiKey of apiKeys) {
+                try {
+                    const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiApiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: `Read this narrative summary clearly: "${textToSpeak.substring(0, 800)}"` }] }],
+                            generationConfig: {
+                                responseModalities: ['AUDIO'],
+                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } } }
+                            }
+                        })
+                    });
+                    if (gRes.ok) {
+                        const gData = await gRes.json();
+                        const audioPart = gData.candidates?.[0]?.content?.parts?.find(p => p.inlineData && p.inlineData.data);
+                        if (audioPart) {
+                            const pcmBuf = Buffer.from(audioPart.inlineData.data, 'base64');
+                            const wavBuf = pcmToWav(pcmBuf, 24000);
+                            audioBuffer = wavBuf;
+                            audioUrl = `data:audio/wav;base64,${wavBuf.toString('base64')}`;
+                            provider = 'gemini_ai_tts';
+                            break;
+                        }
+                    }
+                } catch (ge) {}
+            }
+        }
+
+        // Fallback Google Translate TTS if all above failed
+        if (!audioUrl) {
+            const cleanText = textToSpeak.substring(0, 280);
+            const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=en&client=tw-ob`;
+            const fbRes = await fetch(fallbackUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Referer': 'https://translate.google.com/'
+                }
+            });
+            if (fbRes.ok) {
+                const buf = await fbRes.arrayBuffer();
+                audioBuffer = Buffer.from(buf);
+                audioUrl = `data:audio/mp3;base64,${audioBuffer.toString('base64')}`;
+                provider = 'google_translate_tts';
+            }
+        }
+
+        if (!audioUrl) {
+            return res.status(500).json({ error: "Failed to synthesize voiceover audio" });
+        }
+
+        // Calculate Total Audio Duration (in seconds)
+        let totalAudioSec = 45.0;
+        if (audioBuffer) {
+            if (provider === 'gemini_ai_tts') {
+                totalAudioSec = Math.max(5.0, parseFloat(((audioBuffer.length - 44) / 48000).toFixed(1)));
+            } else {
+                totalAudioSec = Math.max(5.0, parseFloat((audioBuffer.length / 16000).toFixed(1)));
+            }
+        }
+
+        // Generate Word-Level Timestamp Alignment Array
+        const rawWords = textToSpeak.split(/\s+/).filter(w => w.length > 0);
+        const totalChars = rawWords.reduce((acc, w) => acc + w.length, 0) || 1;
+        
+        let currentTime = 0.0;
+        const words = rawWords.map(w => {
+            const wordWeight = (w.length / totalChars) * totalAudioSec;
+            const startTime = parseFloat(currentTime.toFixed(2));
+            const endTime = parseFloat((currentTime + wordWeight).toFixed(2));
+            currentTime = endTime;
+            return {
+                word: w,
+                start_time: startTime,
+                end_time: endTime
+            };
+        });
+
+        // Dynamic Cut Alignment: Map scene script_segment to spoken word boundaries & normalize gaps
+        let runningTimestamp = 0.0;
+        const alignedScenes = scenes.map((sc, sIdx) => {
+            const scText = (sc.script_segment || "").toLowerCase();
+            const scWords = scText.split(/\s+/).filter(w => w.length > 0);
+
+            let firstMatch = words.find(w => scWords.includes(w.word.toLowerCase().replace(/[^a-z0-9]/g, '')));
+            let lastMatch = [...words].reverse().find(w => scWords.includes(w.word.toLowerCase().replace(/[^a-z0-9]/g, '')));
+
+            let actualStart = sIdx === 0 ? 0.0 : runningTimestamp;
+            let actualEnd = lastMatch ? lastMatch.end_time : (sc.target_timestamp_end || (actualStart + 3.2));
+
+            if (actualEnd <= actualStart + 1.0) {
+                actualEnd = parseFloat((actualStart + (totalAudioSec / Math.max(1, scenes.length))).toFixed(1));
+            }
+
+            actualStart = parseFloat(actualStart.toFixed(1));
+            actualEnd = parseFloat(actualEnd.toFixed(1));
+            runningTimestamp = actualEnd;
+
+            return {
+                ...sc,
+                actual_timestamp_start: actualStart,
+                actual_timestamp_end: actualEnd,
+                actual_duration: parseFloat((actualEnd - actualStart).toFixed(1))
+            };
+        });
+
+        // Ensure final scene extends cleanly to totalAudioSec to eliminate dead frames
+        if (alignedScenes.length > 0) {
+            alignedScenes[alignedScenes.length - 1].actual_timestamp_end = totalAudioSec;
+            alignedScenes[alignedScenes.length - 1].actual_duration = parseFloat((totalAudioSec - alignedScenes[alignedScenes.length - 1].actual_timestamp_start).toFixed(1));
+        }
+
+        return res.json({
+            success: true,
+            provider,
+            audio_url: audioUrl,
+            audio_duration: totalAudioSec,
+            words,
+            scenes: alignedScenes
+        });
+
+    } catch (err) {
+        console.error("/api/reel/synthesize-tts error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Alias for POST /api/reel/generate-audio
+app.post('/api/reel/generate-audio', async (req, res) => {
+    req.url = '/api/reel/synthesize-tts';
+    app._router.handle(req, res);
+});
+
 app.listen(port, () => {
     console.log(`Creator's Den Backend v2.0 running on port ${port}`);
 });
+
 

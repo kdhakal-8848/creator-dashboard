@@ -8951,16 +8951,130 @@ function initBookReelStudio() {
     const genBtn = document.getElementById('trigger-book-reel-generate');
     if (genBtn && !genBtn.__bound) {
         genBtn.__bound = true;
-        genBtn.addEventListener('click', () => {
+        genBtn.addEventListener('click', async () => {
             const t = document.getElementById('book-reel-title')?.value?.trim() || "Atomic Habits by James Clear";
             const d = parseInt(document.getElementById('book-reel-duration')?.value || "45");
             const v = document.getElementById('book-reel-voice')?.value || "warm_storyteller";
             const notes = document.getElementById('book-reel-notes')?.value || "";
+            const feedbackEl = document.getElementById('book-reel-feedback');
+
+            if (feedbackEl) feedbackEl.style.display = 'none';
 
             genBtn.disabled = true;
-            genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating Story & Assets...`;
+            genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating Script & Voiceover...`;
+            if (window.feather) window.feather.replace();
 
-            setTimeout(() => {
+            try {
+                // 1. Call LLM Script Generator Endpoint
+                const scriptRes = await fetch('/api/reel/generate-script', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        book_title: t,
+                        custom_notes: notes,
+                        target_duration: d,
+                        voice_style: v
+                    })
+                });
+
+                if (!scriptRes.ok) {
+                    const errData = await scriptRes.json();
+                    throw new Error(errData.error || 'Failed to generate script');
+                }
+
+                const scriptJson = await scriptRes.json();
+                const scriptData = scriptJson.script_data;
+
+                genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Synthesizing Voiceover & Timestamps...`;
+                if (window.feather) window.feather.replace();
+
+                // 2. Call Timestamped TTS Synthesis Endpoint
+                const ttsRes = await fetch('/api/reel/synthesize-tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_narration_text: scriptData.full_narration_text,
+                        scenes: scriptData.scenes || [],
+                        voice_style: v
+                    })
+                });
+
+                let ttsJson = null;
+                if (ttsRes.ok) {
+                    ttsJson = await ttsRes.json();
+                }
+
+                // Formulate final scene objects for UI
+                const palette = ['#1e1b4b', '#0f172a', '#1e293b', '#111827'];
+                const accs = ['#818cf8', '#38bdf8', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
+
+                const formattedScenes = [];
+
+                // Scene 0: Cover Slide
+                const cover = scriptData.cover_slide || {};
+                formattedScenes.push({
+                    scene_number: 0,
+                    title: cover.title_text || t,
+                    isCover: true,
+                    start_sec: 0.0,
+                    end_sec: cover.target_duration || 2.8,
+                    timestamp_range: `00:00.0 - ${formatTimeCode(cover.target_duration || 2.8)}`,
+                    voiceover_snippet: `Title Intro: "${cover.title_text || t}"`,
+                    prompt: cover.image_prompt || `Minimalist typography book cover illustration for '${t}', elegant hardcover design, warm parchment background`,
+                    bgColor: palette[0],
+                    accentColor: accs[0]
+                });
+
+                // Scenes 1..N: Visual Scenes with Timestamp Alignment
+                const rawScenes = (ttsJson && ttsJson.scenes) ? ttsJson.scenes : (scriptData.scenes || []);
+                rawScenes.forEach((sc, i) => {
+                    const idx = i + 1;
+                    const startT = sc.actual_timestamp_start !== undefined ? sc.actual_timestamp_start : (sc.target_timestamp_start || (2.8 + i * 3.0));
+                    const endT = sc.actual_timestamp_end !== undefined ? sc.actual_timestamp_end : (sc.target_timestamp_end || (startT + 3.0));
+                    
+                    let imagePrompt = sc.image_prompt || `Artistic short story illustration for '${sc.action_description || t}'`;
+                    if (scriptData.character_anchor && !imagePrompt.includes(scriptData.character_anchor)) {
+                        imagePrompt = `[${scriptData.character_anchor}]. ${imagePrompt}`;
+                    }
+
+                    formattedScenes.push({
+                        scene_number: idx,
+                        title: `Scene ${idx}: ${sc.action_description || ('Beat ' + idx)}`,
+                        isCover: false,
+                        start_sec: startT,
+                        end_sec: endT,
+                        timestamp_range: `${formatTimeCode(startT)} - ${formatTimeCode(endT)}`,
+                        voiceover_snippet: sc.script_segment || `Narration for scene ${idx}`,
+                        prompt: imagePrompt,
+                        bgColor: palette[idx % palette.length],
+                        accentColor: accs[idx % accs.length]
+                    });
+                });
+
+                bookReelState.bookTitle = scriptData.book_title || t;
+                bookReelState.author = scriptData.author || "Author";
+                bookReelState.characterAnchor = scriptData.character_anchor || "";
+                bookReelState.duration = ttsJson?.audio_duration || scriptData.estimated_total_duration || d;
+                bookReelState.voiceStyle = v;
+                bookReelState.notes = notes;
+                bookReelState.audioUrl = ttsJson?.audio_url || null;
+                bookReelState.audioWords = ttsJson?.words || [];
+                bookReelState.scenes = formattedScenes;
+                bookReelState.currentIndex = 0;
+                bookReelState.wallStartMs = performance.now();
+
+                renderBookReelScriptList();
+                renderBookReelWaveform();
+                renderBookStoryboardGrid();
+                drawBookReelCanvas();
+                updateBookReelUI();
+
+            } catch (err) {
+                console.warn("Real API generation failed, using mock generator fallback:", err.message);
+                if (feedbackEl) {
+                    feedbackEl.style.display = 'block';
+                    feedbackEl.innerText = `Note: AI API call adjusted (${err.message}). Loaded interactive storyboard studio.`;
+                }
                 bookReelState.bookTitle = t;
                 bookReelState.duration = d;
                 bookReelState.voiceStyle = v;
@@ -8974,11 +9088,11 @@ function initBookReelStudio() {
                 renderBookStoryboardGrid();
                 drawBookReelCanvas();
                 updateBookReelUI();
-
+            } finally {
                 genBtn.disabled = false;
                 genBtn.innerHTML = `<i data-feather="sparkles"></i> Generate Story & Assets`;
                 if (window.feather) window.feather.replace();
-            }, 800);
+            }
         });
     }
 
