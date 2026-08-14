@@ -9238,6 +9238,9 @@ function initBookReelStudio() {
             try {
                 const burnSubtitles = document.getElementById('book-reel-burn-subtitles')?.checked || false;
 
+            try {
+                const burnSubtitles = document.getElementById('book-reel-burn-subtitles')?.checked || false;
+
                 const coverFrame = bookReelState.scenes[0] ? {
                     imageUrl: bookReelState.scenes[0].image_url || '',
                     duration: bookReelState.scenes[0].end_sec || 2.8
@@ -9251,58 +9254,65 @@ function initBookReelStudio() {
                     duration: (s.end_sec || 3.0) - (s.start_sec || 0)
                 }));
 
-                const renderRes = await fetch('/api/reel/render-video', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        reelId: `reel_${Date.now()}`,
-                        audioUrl: bookReelState.audioUrl || '',
-                        burnSubtitles,
-                        coverFrame,
-                        storyFrames
-                    })
-                });
-
-                if (!renderRes.ok) {
-                    throw new Error('Failed to start video rendering job');
+                let renderRes = null;
+                try {
+                    renderRes = await fetch('/api/reel/render-video', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            reelId: `reel_${Date.now()}`,
+                            audioUrl: bookReelState.audioUrl || '',
+                            burnSubtitles,
+                            coverFrame,
+                            storyFrames
+                        })
+                    });
+                } catch (fetchErr) {
+                    console.warn("Backend render fetch failed, switching to Client-Side Canvas MediaRecorder fallback:", fetchErr);
                 }
 
-                const renderJson = await renderRes.json();
-                const jobId = renderJson.jobId;
+                if (renderRes && renderRes.ok) {
+                    const renderJson = await renderRes.json();
+                    const jobId = renderJson.jobId;
 
-                // Poll job status every 500ms
-                const pollInterval = setInterval(async () => {
-                    try {
-                        const statusRes = await fetch(`/api/reel/status/${jobId}`);
-                        if (statusRes.ok) {
-                            const job = await statusRes.json();
-                            const pct = job.progress || 0;
+                    // Poll job status every 500ms
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusRes = await fetch(`/api/reel/status/${jobId}`);
+                            if (statusRes.ok) {
+                                const job = await statusRes.json();
+                                const pct = job.progress || 0;
 
-                            if (pctLabel) pctLabel.innerText = `${pct}%`;
-                            if (progressBar) progressBar.style.width = `${pct}%`;
-                            if (statusLabel) statusLabel.innerText = job.statusMessage || `Rendering MP4... ${pct}%`;
+                                if (pctLabel) pctLabel.innerText = `${pct}%`;
+                                if (progressBar) progressBar.style.width = `${pct}%`;
+                                if (statusLabel) statusLabel.innerText = job.statusMessage || `Rendering MP4... ${pct}%`;
 
-                            if (job.status === 'completed') {
-                                clearInterval(pollInterval);
-                                bookReelState.finalVideoUrl = job.videoUrl;
+                                if (job.status === 'completed') {
+                                    clearInterval(pollInterval);
+                                    bookReelState.finalVideoUrl = job.videoUrl;
 
-                                renderBtn.disabled = false;
-                                renderBtn.innerHTML = `✅ Render Complete!`;
-                                if (overlay) overlay.style.display = 'none';
+                                    renderBtn.disabled = false;
+                                    renderBtn.innerHTML = `✅ Render Complete!`;
+                                    if (overlay) overlay.style.display = 'none';
 
-                                setTimeout(() => {
-                                    renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
-                                    if (window.feather) window.feather.replace();
-                                }, 3000);
-                            } else if (job.status === 'failed') {
-                                clearInterval(pollInterval);
-                                throw new Error(job.error || 'Video rendering failed');
+                                    setTimeout(() => {
+                                        renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
+                                        if (window.feather) window.feather.replace();
+                                    }, 3000);
+                                } else if (job.status === 'failed') {
+                                    clearInterval(pollInterval);
+                                    throw new Error(job.error || 'Video rendering failed');
+                                }
                             }
+                        } catch (pollErr) {
+                            console.warn("Status polling error:", pollErr);
                         }
-                    } catch (pollErr) {
-                        console.warn("Status polling error:", pollErr);
-                    }
-                }, 500);
+                    }, 500);
+                } else {
+                    // Fallback to Browser Canvas MediaRecorder stream rendering for static hosting
+                    console.log("Using Client-Side Canvas MediaRecorder fallback for static hosting...");
+                    await renderCanvasVideoClientSide();
+                }
 
             } catch (err) {
                 console.error("Render trigger failed:", err);
@@ -9313,6 +9323,84 @@ function initBookReelStudio() {
             }
         });
     }
+
+async function renderCanvasVideoClientSide() {
+    const canvas = document.getElementById('book-reel-canvas');
+    const statusLabel = document.getElementById('book-reel-render-status');
+    const pctLabel = document.getElementById('book-reel-render-pct');
+    const progressBar = document.getElementById('book-reel-render-bar');
+    const renderBtn = document.getElementById('book-reel-render-btn');
+    const overlay = document.getElementById('book-reel-player-overlay');
+
+    if (!canvas) throw new Error("Canvas element not found");
+
+    if (statusLabel) statusLabel.innerText = "Initializing Client-Side MediaRecorder...";
+    if (pctLabel) pctLabel.innerText = "5%";
+    if (progressBar) progressBar.style.width = "5%";
+
+    const stream = canvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4;codecs=h264') 
+        ? 'video/mp4;codecs=h264' 
+        : (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm');
+
+    const mediaRecorder = new MediaRecorder(stream, { mimeType });
+    const chunks = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    const recordPromise = new Promise((resolve) => {
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: mimeType });
+            const videoBlobUrl = URL.createObjectURL(blob);
+            resolve(videoBlobUrl);
+        };
+    });
+
+    mediaRecorder.start();
+
+    const totalScenes = bookReelState.scenes.length || 1;
+    const durSec = bookReelState.duration || 45;
+    const intervalMs = (durSec * 1000) / totalScenes;
+    let stepCount = 0;
+
+    const recordTimer = setInterval(() => {
+        stepCount++;
+        const pct = Math.min(98, Math.round((stepCount / totalScenes) * 100));
+        if (pctLabel) pctLabel.innerText = `${pct}%`;
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (statusLabel) statusLabel.innerText = `Recording 9:16 Canvas Stream... ${pct}%`;
+
+        bookReelState.currentIndex = (bookReelState.currentIndex + 1) % totalScenes;
+        bookReelState.wallStartMs = performance.now();
+        drawBookReelCanvas();
+        updateBookReelUI();
+
+        if (stepCount >= totalScenes) {
+            clearInterval(recordTimer);
+            setTimeout(() => {
+                mediaRecorder.stop();
+            }, 300);
+        }
+    }, intervalMs);
+
+    const videoUrl = await recordPromise;
+    bookReelState.finalVideoUrl = videoUrl;
+
+    if (pctLabel) pctLabel.innerText = "100%";
+    if (progressBar) progressBar.style.width = "100%";
+    if (statusLabel) statusLabel.innerText = "Render Complete! Video ready for download.";
+
+    renderBtn.disabled = false;
+    renderBtn.innerHTML = `✅ Render Complete!`;
+    if (overlay) overlay.style.display = 'none';
+
+    setTimeout(() => {
+        renderBtn.innerHTML = `<i data-feather="cpu"></i> Render Final Video`;
+        if (window.feather) window.feather.replace();
+    }, 3000);
+}
 
     const downloadBtn = document.getElementById('book-reel-download-btn');
     if (downloadBtn && !downloadBtn.__bound) {
