@@ -144,6 +144,7 @@ async function generateAIContent(prompt, options = {}) {
     let lastError = null;
 
     const generationConfig = options.generationConfig || {};
+    generationConfig.maxOutputTokens = options.maxOutputTokens || 8192;
     if (options.jsonMode) {
         generationConfig.responseMimeType = "application/json";
     }
@@ -1546,7 +1547,7 @@ app.post('/api/reel/generate-script', async (req, res) => {
         }
 
         const dur = parseInt(target_duration) || 45;
-        const targetSceneCount = dur === 30 ? 9 : (dur === 60 ? 18 : 14);
+        const targetSceneCount = dur === 30 ? 9 : (dur === 60 ? 18 : (dur === 90 ? 26 : (dur === 120 ? 35 : 13)));
         const avgSceneDur = parseFloat(((dur - 2.8) / targetSceneCount).toFixed(1));
 
         const prompt = `You are an expert short-form video reel scriptwriter and literary editor.

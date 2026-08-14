@@ -8501,7 +8501,7 @@ function formatTimeCode(sec) {
 }
 
 function generateMockBookReelData(title, durationSec = 45) {
-    const numScenes = durationSec === 30 ? 9 : (durationSec === 60 ? 18 : 14);
+    const numScenes = durationSec === 30 ? 9 : (durationSec === 60 ? 18 : (durationSec === 90 ? 26 : (durationSec === 120 ? 35 : 13)));
     const sceneDuration = parseFloat((durationSec / (numScenes - 1)).toFixed(1));
 
     const scenes = [{
