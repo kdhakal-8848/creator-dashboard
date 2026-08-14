@@ -8853,26 +8853,57 @@ function renderBookStoryboardGrid() {
             e.stopPropagation();
             const idx = parseInt(btn.getAttribute('data-idx'));
             const input = grid.querySelector(`.frame-prompt-override[data-idx="${idx}"]`);
-            
-            btn.innerHTML = `<i data-feather="loader" class="spin"></i> Regenerating...`;
-            btn.disabled = true;
+            const editedPrompt = input ? input.value : '';
 
-            setTimeout(() => {
-                if (bookReelState.scenes[idx]) {
-                    bookReelState.scenes[idx].prompt = newPrompt || bookReelState.scenes[idx].prompt;
-                    const palette = ['#0f172a', '#1e293b', '#1e1b4b', '#111827'];
-                    const accs = ['#f59e0b', '#38bdf8', '#10b981', '#a855f7', '#ec4899'];
-                    bookReelState.scenes[idx].bgColor = palette[(idx + Math.floor(Math.random()*3)) % palette.length];
-                    bookReelState.scenes[idx].accentColor = accs[Math.floor(Math.random()*accs.length)];
+            btn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating AI Sketch...`;
+            btn.disabled = true;
+            if (window.feather) window.feather.replace();
+
+            try {
+                const newSeed = Math.floor(Math.random() * 999999);
+                const imgRes = await fetch('/api/reel/generate-scene-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: editedPrompt || bookReelState.scenes[idx]?.prompt,
+                        character_anchor: bookReelState.characterAnchor,
+                        scene_index: idx,
+                        seed: newSeed,
+                        is_cover: bookReelState.scenes[idx]?.isCover || idx === 0
+                    })
+                });
+
+                if (imgRes.ok) {
+                    const imgJson = await imgRes.json();
+                    if (bookReelState.scenes[idx]) {
+                        bookReelState.scenes[idx].prompt = editedPrompt || bookReelState.scenes[idx].prompt;
+                        // Append cache-buster query parameter to prevent browser cache stale images
+                        const cacheBustedUrl = `${imgJson.image_url}&v=${Date.now()}`;
+                        bookReelState.scenes[idx].image_url = cacheBustedUrl;
+                        bookReelState.scenes[idx].seed = newSeed;
+
+                        // Preload into images map
+                        const freshImg = new Image();
+                        freshImg.crossOrigin = 'anonymous';
+                        freshImg.onload = () => {
+                            if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
+                            bookReelState.loadedImagesMap[idx] = freshImg;
+                            if (idx === bookReelState.currentIndex) drawBookReelCanvas();
+                        };
+                        freshImg.src = cacheBustedUrl;
+                    }
                 }
+            } catch (regeErr) {
+                console.warn("Single frame regeneration failed:", regeErr);
+            } finally {
                 btn.innerHTML = `✅ Regenerated!`;
                 btn.disabled = false;
-                if (idx === bookReelState.currentIndex) drawBookReelCanvas();
                 renderBookStoryboardGrid();
                 setTimeout(() => {
                     btn.innerHTML = `⚡ Regenerate Frame`;
+                    if (window.feather) window.feather.replace();
                 }, 2000);
-            }, 600);
+            }
         });
     });
 }
@@ -9194,6 +9225,8 @@ function initBookReelStudio() {
             if (overlay) overlay.style.display = 'flex';
 
             try {
+                const burnSubtitles = document.getElementById('book-reel-burn-subtitles')?.checked || false;
+
                 const coverFrame = bookReelState.scenes[0] ? {
                     imageUrl: bookReelState.scenes[0].image_url || '',
                     duration: bookReelState.scenes[0].end_sec || 2.8
@@ -9213,6 +9246,7 @@ function initBookReelStudio() {
                     body: JSON.stringify({
                         reelId: `reel_${Date.now()}`,
                         audioUrl: bookReelState.audioUrl || '',
+                        burnSubtitles,
                         coverFrame,
                         storyFrames
                     })

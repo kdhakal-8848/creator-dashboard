@@ -1794,7 +1794,10 @@ app.post('/api/reel/synthesize-tts', async (req, res) => {
             };
         });
 
-        // Ensure final scene extends cleanly to totalAudioSec to eliminate dead frames
+        // Append 0.6s audio tail buffer to prevent abrupt vocal syllable clipping
+        totalAudioSec = parseFloat((totalAudioSec + 0.6).toFixed(1));
+
+        // Ensure final scene extends cleanly to totalAudioSec to eliminate dead frames & allow smooth fade
         if (alignedScenes.length > 0) {
             alignedScenes[alignedScenes.length - 1].actual_timestamp_end = totalAudioSec;
             alignedScenes[alignedScenes.length - 1].actual_duration = parseFloat((totalAudioSec - alignedScenes[alignedScenes.length - 1].actual_timestamp_start).toFixed(1));
@@ -1822,19 +1825,21 @@ app.post('/api/reel/generate-audio', async (req, res) => {
 });
 
 /**
- * Generate 9:16 vertical comic book sketch art URL for Book Summary Reel scenes
+ * Generate 9:16 vertical image URL with strict aesthetic presets:
+ * - Cover Frame (isCover / Scene 0): Minimalist hand-drawn sketch centered on full-bleed fibrous handmade art paper background with clean negative space.
+ * - Story Frames (Scenes 1..N): Heavy impasto oil painting with visible palette knife texture, deep contrast protagonist in foreground, washed-out high-key soft pastel upper background safe zone.
  */
-function buildBookReelImageUrl(prompt, characterAnchor = '', seed = undefined, artStyle = 'comic_sketch') {
-    let basePrompt = prompt || "Expressive story scene illustration";
-    if (characterAnchor && !basePrompt.toLowerCase().includes(characterAnchor.toLowerCase().substring(0, 15))) {
-        basePrompt = `[${characterAnchor}]. ${basePrompt}`;
-    }
+function buildBookReelImageUrl(prompt, characterAnchor = '', seed = undefined, isCover = false) {
+    let basePrompt = prompt || "Expressive narrative scene illustration";
+    let styleModifier = "";
 
-    let styleModifier = "comic book sketch art, detailed ink drawing, charcoal shading, dramatic comic novel illustration, vertical 9:16 aspect ratio";
-    if (artStyle === 'pencil_noir') {
-        styleModifier = "black and white pencil sketch, noir graphic novel style, high contrast ink lines, vertical 9:16 aspect ratio";
-    } else if (artStyle === 'charcoal_watercolor') {
-        styleModifier = "charcoal sketch with subtle muted watercolor washes, artistic narrative illustration, vertical 9:16 aspect ratio";
+    if (isCover) {
+        styleModifier = "minimalist hand-drawn fine line pencil sketch centered, full-bleed fibrous handmade parchment art paper texture background, elegant clean negative space, editorial book cover illustration, vertical 9:16 aspect ratio";
+    } else {
+        if (characterAnchor && !basePrompt.toLowerCase().includes(characterAnchor.toLowerCase().substring(0, 15))) {
+            basePrompt = `[Character Anchor: ${characterAnchor}]. ${basePrompt}`;
+        }
+        styleModifier = "heavy impasto oil painting with dramatic visible palette knife texture, rich vivid color palette, deep contrast foreground character portrait, washed-out high-key soft pastel upper background safe zone for text overlays, editorial book illustration, vertical 9:16 aspect ratio";
     }
 
     const fullPrompt = `${basePrompt}, ${styleModifier}`;
@@ -1845,13 +1850,14 @@ function buildBookReelImageUrl(prompt, characterAnchor = '', seed = undefined, a
 // POST /api/reel/generate-images — Batch image generation for all scenes
 app.post('/api/reel/generate-images', async (req, res) => {
     try {
-        const { scenes = [], character_anchor = '', art_style = 'comic_sketch', base_seed } = req.body;
+        const { scenes = [], character_anchor = '', base_seed } = req.body;
         const rootSeed = base_seed || Math.floor(Math.random() * 80000) + 10000;
 
         const updatedScenes = scenes.map((sc, i) => {
             const seed = rootSeed + (i * 137);
-            const prompt = sc.prompt || sc.image_prompt || sc.action_description || `Scene ${i} narrative sketch`;
-            const imageUrl = buildBookReelImageUrl(prompt, character_anchor, seed, art_style);
+            const isCover = sc.isCover === true || sc.scene_number === 0 || i === 0;
+            const prompt = sc.prompt || sc.image_prompt || sc.action_description || `Scene ${i} narrative illustration`;
+            const imageUrl = buildBookReelImageUrl(prompt, character_anchor, seed, isCover);
             return {
                 ...sc,
                 image_url: imageUrl,
@@ -1872,12 +1878,13 @@ app.post('/api/reel/generate-images', async (req, res) => {
 // POST /api/reel/generate-scene-image — Single frame regeneration / prompt override
 app.post('/api/reel/generate-scene-image', async (req, res) => {
     try {
-        const { prompt, character_anchor = '', scene_index = 0, seed, art_style = 'comic_sketch' } = req.body;
+        const { prompt, character_anchor = '', scene_index = 0, seed, is_cover } = req.body;
         if (!prompt) {
             return res.status(400).json({ error: "Missing image prompt" });
         }
         const activeSeed = seed !== undefined ? seed : Math.floor(Math.random() * 999999);
-        const imageUrl = buildBookReelImageUrl(prompt, character_anchor, activeSeed, art_style);
+        const isCoverFrame = is_cover || scene_index === 0;
+        const imageUrl = buildBookReelImageUrl(prompt, character_anchor, activeSeed, isCoverFrame);
 
         return res.json({
             success: true,
@@ -1896,12 +1903,32 @@ app.post('/api/reel/generate-scene-image', async (req, res) => {
 // ============================================================
 const renderJobs = new Map();
 
-// Serve static renders directory
+// Serve static renders directory & run periodic stale file cleanup
 const rendersDir = path.join(__dirname, '../frontend/renders');
 if (!fs.existsSync(rendersDir)) {
     fs.mkdirSync(rendersDir, { recursive: true });
 }
 app.use('/renders', express.static(rendersDir));
+
+function cleanStaleRenders() {
+    try {
+        if (!fs.existsSync(rendersDir)) return;
+        const now = Date.now();
+        const maxAgeMs = 24 * 60 * 60 * 1000; // 24 hours
+        fs.readdirSync(rendersDir).forEach(file => {
+            const filePath = path.join(rendersDir, file);
+            const stats = fs.statSync(filePath);
+            if (now - stats.mtimeMs > maxAgeMs) {
+                fs.unlinkSync(filePath);
+                console.log(`[CLEANUP] Purged stale render file: ${file}`);
+            }
+        });
+    } catch (e) {
+        console.warn("[CLEANUP] Stale render cleanup error:", e.message);
+    }
+}
+cleanStaleRenders();
+setInterval(cleanStaleRenders, 6 * 60 * 60 * 1000);
 
 // POST /api/reel/render-video — Initiate async video composition job
 app.post('/api/reel/render-video', async (req, res) => {
