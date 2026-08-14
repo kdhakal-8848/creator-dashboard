@@ -747,7 +747,7 @@ function parseImageUrls(image_url) {
         const parsed = JSON.parse(image_url);
         if (Array.isArray(parsed)) return parsed;
         return [image_url]; // old format: single URL
-    } catch {
+    } catch (err) {
         return [image_url]; // old format: single URL string
     }
 }
@@ -798,7 +798,7 @@ function parsePostText(text) {
             brand_snapshot: parsed.brand_snapshot || null,
             brand_id: parsed.brand_id || null
         };
-    } catch {
+    } catch (err) {
         return { slides: [{ title: "Content", content: String(text) }], caption: text };
     }
 }
@@ -1390,7 +1390,7 @@ function fabricColorToHex(color) {
     try {
         const c = new fabric.Color(color);
         return '#' + c.toHex();
-    } catch { return '#ffffff'; }
+    } catch (err) { return '#ffffff'; }
 }
 
 const BRAND_TOKENS = {
@@ -3719,7 +3719,7 @@ document.getElementById('save-post')?.addEventListener('click', async () => {
 async function executePublish(platformUrl) {
     await downloadSlidesAsFabric();
     const text = getCaptionText();
-    try { await navigator.clipboard.writeText(text); } catch {}
+    try { await navigator.clipboard.writeText(text); } catch (e) {}
     if (currentEditingId) {
         document.getElementById('editor-status').value = 'Published';
         const updatedText = JSON.stringify({ slides: currentSlides, caption: text });
@@ -3996,7 +3996,7 @@ document.getElementById('trigger-facts')?.addEventListener('click', async () => 
 // 7. TEMPLATE STUDIO
 // ============================================================
 function initTemplateStudio() {
-    if (studioCanvas) { try { studioCanvas.dispose(); } catch {} studioCanvas = null; }
+    if (studioCanvas) { try { studioCanvas.dispose(); } catch (e) {} studioCanvas = null; }
     const studioEl = document.getElementById('studio-canvas');
     if (!studioEl) return;
     studioCanvas = new fabric.Canvas('studio-canvas', {
@@ -4454,7 +4454,7 @@ window.openVideoEditor = async (id) => {
         const caption = parsed.caption;
         if (caption) niceText += typeof caption === 'object' ? `Caption Hook: ${caption.hook}\nBody: ${caption.body}` : `Caption: ${caption}`;
         document.getElementById('video-original-content').innerText = niceText || post.text;
-    } catch { document.getElementById('video-original-content').innerText = post.text; }
+    } catch (err) { document.getElementById('video-original-content').innerText = post.text; }
     document.getElementById('video-prompts-result').style.display = 'none';
     document.getElementById('video-prompts-text').value = '';
     document.getElementById('video-feedback').innerText = '';
@@ -9246,9 +9246,6 @@ function initBookReelStudio() {
 
             if (progressBox) progressBox.style.display = 'block';
             if (overlay) overlay.style.display = 'flex';
-
-            try {
-                const burnSubtitles = document.getElementById('book-reel-burn-subtitles')?.checked || false;
 
             try {
                 const burnSubtitles = document.getElementById('book-reel-burn-subtitles')?.checked || false;

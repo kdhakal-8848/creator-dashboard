@@ -22,7 +22,7 @@ const port = process.env.PORT || 5680;
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static('../frontend'));
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL || "https://tbgkhbmsmdfpdcjnztvz.supabase.co";
@@ -249,7 +249,7 @@ function setExistingGeneration(dedupKey, result, promise = null) {
 }
 
 // Health check
-app.get('/', (req, res) => {
+app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Loksewa Backend is running', version: '2.0.0' });
 });
 
