@@ -289,7 +289,10 @@ function setLoginLoading(on) {
 let isSigningIn = false;
 
 async function handleLoginAction(e) {
-    if (e) e.preventDefault();
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     if (isSigningIn) return;
     isSigningIn = true;
 
@@ -308,7 +311,7 @@ async function handleLoginAction(e) {
 
     const client = getSupabaseClient();
     if (!client) {
-        showLoginError('Authentication service unavailable. <br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⚡ Continue as Guest Demo</button>');
+        showLoginError('Authentication service failed to initialize. Please check network connection.');
         setLoginLoading(false);
         isSigningIn = false;
         return;
@@ -319,11 +322,12 @@ async function handleLoginAction(e) {
         isGuest = false;
         window.isGuest = false;
 
+        console.log(`[Supabase Auth] Attempting sign-in for: ${email}`);
         const { data, error } = await client.auth.signInWithPassword({ email, password });
 
         if (error) {
             console.error("Supabase Auth Error:", error.message);
-            showLoginError(`${error.message || 'Invalid email or password.'}<br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">⚡ Enter as Guest Demo User</button>`);
+            showLoginError(error.message || 'Invalid email or password.');
             return;
         }
 
@@ -334,12 +338,12 @@ async function handleLoginAction(e) {
             }, 100);
             return;
         } else {
-            showLoginError('Sign in failed: No active session returned.<br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">⚡ Enter as Guest Demo User</button>');
+            showLoginError('Sign in failed: No active session returned.');
         }
 
     } catch (err) {
         console.error("Sign-in exception:", err);
-        showLoginError('Sign in error: ' + (err.message || err) + '<br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">⚡ Enter as Guest Demo User</button>');
+        showLoginError('Sign in error: ' + (err.message || err));
     } finally {
         setLoginLoading(false);
         isSigningIn = false;
@@ -366,10 +370,18 @@ window.handleGuestLogin = handleGuestLogin;
 
 // Failproof Auth Listener Initialization
 function setupAuthListeners() {
-    document.getElementById('login-btn')?.addEventListener('click', handleLoginAction);
-    document.getElementById('signin-form')?.addEventListener('submit', handleLoginAction);
-    document.getElementById('guest-btn')?.addEventListener('click', handleGuestLogin);
-    document.getElementById('guest-login-btn')?.addEventListener('click', handleGuestLogin);
+    const signinForm = document.getElementById('signin-form');
+    if (signinForm) {
+        signinForm.onsubmit = (e) => {
+            e.preventDefault();
+            handleLoginAction(e);
+            return false;
+        };
+    }
+    const guestBtn = document.getElementById('guest-login-btn');
+    if (guestBtn) {
+        guestBtn.onclick = handleGuestLogin;
+    }
 }
 
 if (document.readyState === 'loading') {
