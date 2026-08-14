@@ -308,7 +308,7 @@ async function handleLoginAction(e) {
 
     const client = getSupabaseClient();
     if (!client) {
-        showLoginError('Authentication service failed to initialize. Please refresh.');
+        showLoginError('Authentication service unavailable. <br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">⚡ Continue as Guest Demo</button>');
         setLoginLoading(false);
         isSigningIn = false;
         return;
@@ -323,7 +323,7 @@ async function handleLoginAction(e) {
 
         if (error) {
             console.error("Supabase Auth Error:", error.message);
-            showLoginError(error.message || 'Invalid email or password.');
+            showLoginError(`${error.message || 'Invalid email or password.'}<br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">⚡ Enter as Guest Demo User</button>`);
             return;
         }
 
@@ -334,12 +334,12 @@ async function handleLoginAction(e) {
             }, 100);
             return;
         } else {
-            showLoginError('Sign in failed: No active session returned.');
+            showLoginError('Sign in failed: No active session returned.<br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">⚡ Enter as Guest Demo User</button>');
         }
 
     } catch (err) {
         console.error("Sign-in exception:", err);
-        showLoginError('Sign in error: ' + (err.message || err));
+        showLoginError('Sign in error: ' + (err.message || err) + '<br><button onclick="window.handleGuestLogin(event)" style="margin-top:8px;padding:8px 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">⚡ Enter as Guest Demo User</button>');
     } finally {
         setLoginLoading(false);
         isSigningIn = false;
