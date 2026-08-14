@@ -1554,8 +1554,14 @@ function safeParseJSON(str) {
             const firstBrace = cleaned.indexOf('{');
             const lastBrace = cleaned.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace > firstBrace) {
-                const subStr = cleaned.slice(firstBrace, lastBrace + 1).replace(/,\s*([\}\]])/g, '$1');
-                return JSON.parse(subStr);
+                try {
+                    const subStr = cleaned.slice(firstBrace, lastBrace + 1)
+                        .replace(/,\s*([\}\]])/g, '$1')
+                        .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ');
+                    return JSON.parse(subStr);
+                } catch (e3) {
+                    console.warn("JSON repair attempt 3 failed.");
+                }
             }
             throw e1;
         }
@@ -1611,19 +1617,41 @@ Return JSON ONLY matching this EXACT schema:
   ]
 }`;
 
-        const aiResult = await generateAIContent(prompt, { jsonMode: true });
-        const rawJsonText = aiResult.response.text();
-        
-        let resultData;
+        let resultData = null;
         try {
-            resultData = safeParseJSON(rawJsonText);
+            const aiResult = await generateAIContent(prompt, { jsonMode: true });
+            resultData = safeParseJSON(aiResult.response.text());
         } catch (jsonErr) {
             console.warn("Retrying LLM script generation due to malformed JSON:", jsonErr.message);
-            const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object without raw newlines in string values.", { jsonMode: true });
-            resultData = safeParseJSON(retryResult.response.text());
+            try {
+                const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object without raw newlines in string values.", { jsonMode: true });
+                resultData = safeParseJSON(retryResult.response.text());
+            } catch (retryErr) {
+                console.warn("Retry LLM script generation failed, applying structured script fallback:", retryErr.message);
+                resultData = {
+                    book_title: titleToUse,
+                    author: "Classic",
+                    character_anchor: "A focused student exploring ideas",
+                    estimated_total_duration: dur,
+                    cover_slide: {
+                        title_text: titleToUse,
+                        author_text: "Classic",
+                        image_prompt: `Minimalist ink and watercolor sketch for ${titleToUse}, book cover art`,
+                        target_duration: 2.8
+                    },
+                    full_narration_text: `An engaging summary of ${titleToUse}. Discover key principles and actionable ideas.`,
+                    scenes: Array.from({ length: targetSceneCount }, (_, i) => ({
+                        scene_index: i + 1,
+                        script_segment: `Key insight ${i + 1} from ${titleToUse}.`,
+                        action_description: `Visual scene ${i + 1}`,
+                        image_prompt: `Heavy impasto oil painting illustration for Scene ${i + 1} of ${titleToUse}`,
+                        target_duration: avgSceneDur
+                    }))
+                };
+            }
         }
 
-        if (!resultData.full_narration_text && resultData.scenes) {
+        if (resultData && !resultData.full_narration_text && resultData.scenes) {
             const coverIntro = resultData.cover_slide ? `${resultData.cover_slide.title_text}. ` : '';
             resultData.full_narration_text = coverIntro + resultData.scenes.map(s => s.script_segment).join(' ');
         }
