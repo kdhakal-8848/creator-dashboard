@@ -8874,7 +8874,7 @@ function renderBookReelWaveform() {
 }
 
 function renderBookStoryboardGrid() {
-    const grid = document.getElementById('book-reel-storyboard-grid');
+    const grid = document.getElementById('book-storyboard-grid') || document.getElementById('book-reel-storyboard-grid');
     if (!grid) return;
     grid.innerHTML = '';
 
@@ -8903,13 +8903,14 @@ function renderBookStoryboardGrid() {
             <!-- 9:16 Aspect Frame Container -->
             <div class="aspect-[9/16]" style="position:relative;width:100%;aspect-ratio:9/16;background:${sc.bgColor || '#0f172a'};border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;">
                 ${sc.image_url ? `
-                    <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy">
-                ` : `
+                    <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+                ` : ''}
+                <div style="display:${sc.image_url ? 'none' : 'flex'};flex-direction:column;align-items:center;justify-content:center;padding:12px;text-align:center;">
                     <div style="width:40px;height:40px;border-radius:50%;background:${sc.accentColor || '#6366f1'};display:flex;align-items:center;justify-content:center;margin-bottom:8px;box-shadow:0 4px 12px ${sc.accentColor || '#6366f1'}66;">
                         <span style="font-size:18px;">${sc.isCover ? '📖' : '🎨'}</span>
                     </div>
                     <div style="font-size:11px;font-weight:700;color:#fff;text-align:center;line-height:1.3;max-height:48px;overflow:hidden;padding:0 8px;">${sc.title}</div>
-                `}
+                </div>
             </div>
 
             <div style="font-size:11px;color:var(--color-fg-muted);line-height:1.3;max-height:34px;overflow:hidden;">
@@ -9090,6 +9091,13 @@ function initBookReelStudio() {
             document.querySelectorAll('.book-tab-content').forEach(c => c.style.display = 'none');
             const targetEl = document.getElementById(target);
             if (targetEl) targetEl.style.display = 'block';
+
+            if (target === 'tab-audio') {
+                renderBookReelWaveform();
+            } else if (target === 'tab-storyboard') {
+                renderBookStoryboardGrid();
+            }
+            if (window.feather) window.feather.replace();
         });
     });
 
@@ -9314,6 +9322,13 @@ function initBookReelStudio() {
         stopBookReelSequence();
         bookReelState.currentIndex = 0;
         updateBookReelUI();
+    });
+
+    document.getElementById('book-audio-play-btn')?.addEventListener('click', () => {
+        startBookReelSequence();
+    });
+    document.getElementById('book-audio-pause-btn')?.addEventListener('click', () => {
+        stopBookReelSequence();
     });
 
     const slider = document.getElementById('book-reel-slider');
