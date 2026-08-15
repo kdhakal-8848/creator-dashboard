@@ -389,19 +389,26 @@ if (document.readyState === 'loading') {
         setupAuthListeners();
         initPsychLab();
         initDesignStudio();
+        try { initBookReelStudio(); } catch(e) {}
     });
 } else {
     setupAuthListeners();
     initPsychLab();
     initDesignStudio();
+    try { initBookReelStudio(); } catch(e) {}
 }
 
-// Global Event Delegation so sign-in click NEVER fails
+// Global Event Delegation so sign-in and generation clicks NEVER fail
 document.addEventListener('click', (e) => {
     const target = e.target;
     if (!target) return;
     if (target.id === 'guest-login-btn' || target.id === 'guest-btn' || target.closest('#guest-login-btn') || target.closest('#guest-btn')) {
         handleGuestLogin(e);
+    }
+    if (target.id === 'trigger-book-reel-generate' || target.closest('#trigger-book-reel-generate')) {
+        if (window.triggerBookReelGeneration) {
+            window.triggerBookReelGeneration();
+        }
     }
 });
 
@@ -9220,247 +9227,7 @@ function initBookReelStudio() {
     const genBtn = document.getElementById('trigger-book-reel-generate');
     if (genBtn && !genBtn.__bound) {
         genBtn.__bound = true;
-        genBtn.addEventListener('click', async () => {
-            if (bookReelState.isGenerating) return;
-
-            const rawTitle = document.getElementById('book-reel-title')?.value?.trim();
-            const t = rawTitle || "Deep-Dive Book Summary";
-            const d = parseInt(document.getElementById('book-reel-duration')?.value || "45");
-            const v = document.getElementById('book-reel-voice')?.value || "warm_storyteller";
-            const notes = document.getElementById('book-reel-notes')?.value || "";
-            const feedbackEl = document.getElementById('book-reel-feedback');
-            const gridEl = document.getElementById('book-storyboard-grid') || document.getElementById('book-reel-storyboard-grid');
-
-            if (feedbackEl) feedbackEl.style.display = 'none';
-
-            bookReelState.isGenerating = true;
-            bookReelState.bookTitle = t;
-            bookReelState.duration = d;
-            bookReelState.voiceStyle = v;
-            bookReelState.notes = notes;
-
-            // Lock Action Buttons
-            genBtn.disabled = true;
-            genBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Generating Story & Assets...`;
-            const playBtn = document.getElementById('book-reel-play-btn');
-            const exportBtn = document.getElementById('book-reel-export-btn');
-            if (playBtn) playBtn.disabled = true;
-            if (exportBtn) exportBtn.disabled = true;
-            if (window.feather) window.feather.replace();
-
-            // Render Storyboard Loading Skeleton
-            if (gridEl) {
-                gridEl.innerHTML = `
-                    <div style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed rgba(99,102,241,0.3);">
-                        <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; box-shadow: 0 0 20px rgba(99,102,241,0.3);">
-                            <i data-feather="loader" class="spin" style="width: 24px; height: 24px; color: #818cf8;"></i>
-                        </div>
-                        <div style="font-size: 14px; font-weight: 700; color: #fff;">Generating 9:16 Storyboard Artwork...</div>
-                        <div style="font-size: 11px; color: var(--color-fg-muted); margin-top: 4px;">Analyzing book content & compiling FLUX AI image prompts for "${t}".</div>
-                    </div>
-                `;
-                if (window.feather) window.feather.replace();
-            }
-
-            // Stage 1: LLM Script Analysis
-            updateBookReelProgress(10, `🤖 Stage 1/4: Analyzing "${t}" with Gemini 2.5 Flash LLM...`);
-
-            try {
-                // 1. Call LLM Script Generator Endpoint
-                const scriptRes = await fetch('/api/reel/generate-script', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        book_title: t,
-                        custom_notes: notes,
-                        target_duration: d,
-                        voice_style: v
-                    })
-                });
-
-                if (!scriptRes.ok) {
-                    const text = await scriptRes.text();
-                    let errMsg = `Server status ${scriptRes.status}`;
-                    try {
-                        const parsed = JSON.parse(text);
-                        if (parsed.error) errMsg = parsed.error;
-                    } catch (_) {}
-                    throw new Error(errMsg);
-                }
-
-                const scriptJson = await scriptRes.json();
-                const scriptData = scriptJson.script_data;
-
-                // Stage 2: Neural Voice Synthesis
-                updateBookReelProgress(35, `🎙️ Stage 2/4: Synthesizing Neural Voiceover & Word Timestamps...`);
-
-                // 2. Call Timestamped TTS Synthesis Endpoint
-                const ttsRes = await fetch('/api/reel/synthesize-tts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        full_narration_text: scriptData.full_narration_text,
-                        scenes: scriptData.scenes || [],
-                        voice_style: v
-                    })
-                });
-
-                let ttsJson = null;
-                if (ttsRes.ok) {
-                    ttsJson = await ttsRes.json();
-                }
-
-                // Formulate final scene objects for UI
-                const palette = ['#1e1b4b', '#0f172a', '#1e293b', '#111827'];
-                const accs = ['#818cf8', '#38bdf8', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
-
-                const formattedScenes = [];
-
-                // Scene 0: Cover Slide
-                const cover = scriptData.cover_slide || {};
-                const coverPrompt = cover.image_prompt || `Minimalist typography book cover illustration for '${t}', elegant hardcover design, warm parchment background`;
-                formattedScenes.push({
-                    scene_number: 0,
-                    title: cover.title_text || t,
-                    isCover: true,
-                    start_sec: 0.0,
-                    end_sec: cover.target_duration || 2.8,
-                    timestamp_range: `00:00.0 - ${formatTimeCode(cover.target_duration || 2.8)}`,
-                    voiceover_snippet: `Title Intro: "${cover.title_text || t}"`,
-                    prompt: coverPrompt,
-                    image_url: buildBookReelImageUrl(coverPrompt, 42, true, scriptData.character_anchor),
-                    bgColor: palette[0],
-                    accentColor: accs[0]
-                });
-
-                // Scenes 1..N: Visual Scenes with Timestamp Alignment
-                const rawScenes = (ttsJson && ttsJson.scenes) ? ttsJson.scenes : (scriptData.scenes || []);
-                rawScenes.forEach((sc, i) => {
-                    const idx = i + 1;
-                    const startT = sc.actual_timestamp_start !== undefined ? sc.actual_timestamp_start : (sc.target_timestamp_start || (2.8 + i * 3.0));
-                    const endT = sc.actual_timestamp_end !== undefined ? sc.actual_timestamp_end : (sc.target_timestamp_end || (startT + 3.0));
-                    
-                    let imagePrompt = sc.image_prompt || `Artistic short story illustration for '${sc.action_description || t}'`;
-                    if (scriptData.character_anchor && !imagePrompt.includes(scriptData.character_anchor)) {
-                        imagePrompt = `[${scriptData.character_anchor}]. ${imagePrompt}`;
-                    }
-
-                    formattedScenes.push({
-                        scene_number: idx,
-                        title: `Scene ${idx}: ${sc.action_description || ('Beat ' + idx)}`,
-                        isCover: false,
-                        start_sec: startT,
-                        end_sec: endT,
-                        timestamp_range: `${formatTimeCode(startT)} - ${formatTimeCode(endT)}`,
-                        voiceover_snippet: sc.script_segment || `Narration for scene ${idx}`,
-                        prompt: imagePrompt,
-                        image_url: buildBookReelImageUrl(imagePrompt, idx * 11, false, scriptData.character_anchor),
-                        bgColor: palette[idx % palette.length],
-                        accentColor: accs[idx % accs.length]
-                    });
-                });
-
-                // Stage 3: Batch AI Artwork Generation
-                updateBookReelProgress(55, `🎨 Stage 3/4: Generating 9:16 FLUX AI Artwork (${formattedScenes.length} scenes)...`);
-
-                try {
-                    const imgRes = await fetch('/api/reel/generate-images', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            scenes: formattedScenes,
-                            character_anchor: scriptData.character_anchor || "",
-                            art_style: "comic_sketch"
-                        })
-                    });
-                    if (imgRes.ok) {
-                        const imgJson = await imgRes.json();
-                        if (imgJson.scenes) {
-                            imgJson.scenes.forEach((imgSc, idx) => {
-                                if (formattedScenes[idx]) {
-                                    formattedScenes[idx].image_url = imgSc.image_url;
-                                }
-                            });
-                        }
-                    }
-                } catch (imgErr) {
-                    console.warn("Batch image generation fallback:", imgErr.message);
-                }
-
-                bookReelState.bookTitle = scriptData.book_title || t;
-                bookReelState.author = scriptData.author || "Author";
-                bookReelState.characterAnchor = scriptData.character_anchor || "";
-                bookReelState.duration = ttsJson?.audio_duration || scriptData.estimated_total_duration || d;
-                bookReelState.voiceStyle = v;
-                bookReelState.notes = notes;
-                bookReelState.audioUrl = ttsJson?.audio_url || null;
-                bookReelState.audioWords = ttsJson?.words || [];
-                bookReelState.scenes = formattedScenes;
-                bookReelState.currentIndex = 0;
-                bookReelState.wallStartMs = performance.now();
-
-                // Stage 4: Preloading High-Res Images & Rendering UI
-                await preloadBookReelImagesAsync();
-
-                renderBookReelScriptList();
-                renderBookReelWaveform();
-                renderBookStoryboardGrid();
-                drawBookReelCanvas();
-                updateBookReelUI();
-
-            } catch (err) {
-                console.warn("Backend endpoint unavailable, generating via Gemini 2.5 Flash LLM client-side:", err.message);
-                updateBookReelProgress(20, `✨ Generating deep literary script via Gemini 2.5 Flash for "${t}"...`);
-
-                try {
-                    const clientScript = await generateClientSideGeminiScript(t, d, notes);
-                    if (clientScript && clientScript.scenes) {
-                        bookReelState.bookTitle = clientScript.book_title || t;
-                        bookReelState.author = clientScript.author || "Author";
-                        bookReelState.characterAnchor = clientScript.character_anchor || "";
-                        bookReelState.duration = d;
-                        bookReelState.voiceStyle = v;
-                        bookReelState.notes = notes;
-                        bookReelState.scenes = clientScript.scenes;
-                        bookReelState.currentIndex = 0;
-                        bookReelState.wallStartMs = performance.now();
-                        bookReelState.loadedImagesMap = {};
-
-                        updateBookReelProgress(60, `✨ Gemini 2.5 Flash script ready. Preloading FLUX artwork...`);
-                    }
-                } catch (llmErr) {
-                    console.error("Client-side Gemini 2.5 Flash LLM error:", llmErr);
-                    if (feedbackEl) {
-                        feedbackEl.style.display = 'block';
-                        feedbackEl.innerText = `LLM generation notice: ${llmErr.message}`;
-                        feedbackEl.style.color = '#f87171';
-                    }
-                    bookReelState.bookTitle = t;
-                    bookReelState.duration = d;
-                    bookReelState.voiceStyle = v;
-                    bookReelState.notes = notes;
-                    bookReelState.scenes = generateMockBookReelData(t, d, notes);
-                    bookReelState.currentIndex = 0;
-                    bookReelState.wallStartMs = performance.now();
-                    bookReelState.loadedImagesMap = {};
-                }
-
-                await preloadBookReelImagesAsync();
-
-                renderBookReelScriptList();
-                renderBookReelWaveform();
-                renderBookStoryboardGrid();
-                drawBookReelCanvas();
-                updateBookReelUI();
-            } finally {
-                bookReelState.isGenerating = false;
-                genBtn.disabled = false;
-                genBtn.innerHTML = `<i data-feather="sparkles"></i> Generate Story & Assets`;
-                if (playBtn) playBtn.disabled = false;
-                if (exportBtn) exportBtn.disabled = false;
-                if (window.feather) window.feather.replace();
-            }
-        });
+        genBtn.addEventListener('click', triggerBookReelGeneration);
     }
 
     document.querySelectorAll('.book-demo-pill').forEach(pill => {
@@ -9860,4 +9627,5 @@ window.startBookReelSequence = startBookReelSequence;
 window.stopBookReelSequence = stopBookReelSequence;
 window.generateClientSideGeminiScript = generateClientSideGeminiScript;
 window.exportBookReelMP4 = exportBookReelMP4;
+window.triggerBookReelGeneration = triggerBookReelGeneration;
 
