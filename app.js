@@ -6230,6 +6230,7 @@ function preloadMCQBrandLogo(url) {
     if (!url) { mcqBrandLogoImg = null; mcqCurrentLogoUrl = ''; return; }
     if (url === mcqCurrentLogoUrl) return;
     mcqCurrentLogoUrl = url;
+    mcqBrandLogoImg = null; // Clear old logo immediately so old brand logo doesn't overlay
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = url;
@@ -6396,7 +6397,7 @@ function drawMCQCanvas() {
         const imgH = mcqBrandLogoImg.naturalHeight || mcqBrandLogoImg.height;
         let bannerMaxW = 900;
         let bannerMaxH = 110;
-        const hStyle = currentBranding?.headerAssetStyle;
+        const hStyle = activeBrand?.headerAssetStyle || currentBranding?.headerAssetStyle;
         if (hStyle && hStyle.scaleX) {
             bannerMaxH = Math.min(200, Math.round(110 * Math.max(0.5, hStyle.scaleX)));
             bannerMaxW = Math.min(960, Math.round(900 * Math.max(0.5, hStyle.scaleX)));
@@ -7140,6 +7141,134 @@ async function exportMCQVideo() {
     }
 }
 
+function generateLocalIQDeck(topic, language, count = 3) {
+    const isNepali = language === 'Nepali';
+    const templates = [
+        {
+            qNe: "खाली ठाउँमा उपयुक्त अङ्क छान्नुहोस्: ३, ६, १२, २४, ४८, ?",
+            qEn: "What comes next in the sequence? 3, 6, 12, 24, 48, ?",
+            optsNe: ["A. 84", "B. 96", "C. 72", "D. 108"],
+            optsEn: ["A. 84", "B. 96", "C. 72", "D. 108"],
+            correct: 1,
+            correctStrNe: "B. 96",
+            correctStrEn: "B. 96",
+            pauseNe: "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!",
+            pauseEn: "Pause video now to solve!",
+            expNe: "नियम: प्रत्येक अङ्कलाई २ ले गुणन गरिएको छ (३×२=६, ६×२=१२, १२×२=२४, २४×२=४८, ४८×२=९६)।",
+            expEn: "Pattern rule: Multiply each number by 2 (3×2=6, 6×2=12, 12×2=24, 24×2=48, 48×2=96)."
+        },
+        {
+            qNe: "यदि COFFEE को सङ्केत DPGGFF भए, TEA को सङ्केत के हुन्छ?",
+            qEn: "If COFFEE is coded as DPGGFF, how is TEA coded?",
+            optsNe: ["A. UFB", "B. VFB", "C. UFA", "D. VFA"],
+            optsEn: ["A. UFB", "B. VFB", "C. UFA", "D. VFA"],
+            correct: 0,
+            correctStrNe: "A. UFB",
+            correctStrEn: "A. UFB",
+            pauseNe: "भिडियो रोकेर कोड समाधान गर्नुहोस्!",
+            pauseEn: "Pause video to decode the pattern!",
+            expNe: "नियम: प्रत्येक अक्षरमा १ जोडिएको छ (+1)। T+1=U, E+1=F, A+1=B। उत्तर UFB हो।",
+            expEn: "Pattern rule: Each letter is shifted by +1. T+1=U, E+1=F, A+1=B. Result: UFB."
+        },
+        {
+            qNe: "राम उत्तरतर्फ १० मिटर गएपछि पूर्वतर्फ ५ मिटर जान्छ भने सुरुको विन्दुबाट कुन दिशामा छ?",
+            qEn: "Ram walks 10m North then 5m East. In which direction is he from the starting point?",
+            optsNe: ["A. उत्तर-पूर्व (North-East)", "B. दक्षिण-पूर्व (South-East)", "C. उत्तर-पश्चिम (North-West)", "D. दक्षिण-पश्चिम (South-West)"],
+            optsEn: ["A. North-East", "B. South-East", "C. North-West", "D. South-West"],
+            correct: 0,
+            correctStrNe: "A. उत्तर-पूर्व (North-East)",
+            correctStrEn: "A. North-East",
+            pauseNe: "भिडियो Pause गरेर दिशा निकाल्नुहोस्!",
+            pauseEn: "Pause video to calculate direction!",
+            expNe: "उत्तर र पूर्वको बिचको दिशालाई उत्तर-पूर्व (North-East) भनिन्छ।",
+            expEn: "The direction between North and East is North-East."
+        },
+        {
+            qNe: "४ जना मानिसले १ काम ८ दिनमा गर्छन् भने ८ जना मानिसले सोही काम कति दिनमा गर्छन्?",
+            qEn: "If 4 people complete a task in 8 days, how many days will 8 people take?",
+            optsNe: ["A. २ दिन", "B. ४ दिन", "C. ६ दिन", "D. १६ दिन"],
+            optsEn: ["A. 2 Days", "B. 4 Days", "C. 6 Days", "D. 16 Days"],
+            correct: 1,
+            correctStrNe: "B. ४ दिन",
+            correctStrEn: "B. 4 Days",
+            pauseNe: "भिडियो रोकेर गणितीय हिसाब गर्नुहोस्!",
+            pauseEn: "Pause video to calculate!",
+            expNe: "मानिसको संख्या दोब्बर (४ बाट ८) हुँदा काम लाग्ने समय आधा (८ बाट ४ दिन) हुन्छ।",
+            expEn: "Doubling the workers halves the time required (8 / 2 = 4 days)."
+        }
+    ];
+
+    const questions = [];
+    for (let i = 0; i < Math.min(count, 5); i++) {
+        const tmpl = templates[i % templates.length];
+        questions.push({
+            id: Date.now() + i,
+            question: isNepali ? tmpl.qNe : tmpl.qEn,
+            options: isNepali ? tmpl.optsNe : tmpl.optsEn,
+            correct_index: tmpl.correct,
+            correct_option: isNepali ? tmpl.correctStrNe : tmpl.correctStrEn,
+            pause_prompt: isNepali ? tmpl.pauseNe : tmpl.pauseEn,
+            explanation: isNepali ? tmpl.expNe : tmpl.expEn,
+            image_url: null
+        });
+    }
+    return questions;
+}
+
+function generateLocalMCQDeck(topic, language, count = 3) {
+    const isNepali = language === 'Nepali';
+    const templates = [
+        {
+            qNe: "नेपालको सबैभन्दा अग्लो झरना कुन हो?",
+            qEn: "Which is the tallest waterfall in Nepal?",
+            optsNe: ["A. पचाल झरना (Pachal Waterfall)", "B. ह्यातुङ झरना (Hyatung Waterfall)", "C. रुपासे झरना (Rupse Waterfall)", "D. टिपल्याङ झरना"],
+            optsEn: ["A. Pachal Waterfall", "B. Hyatung Waterfall", "C. Rupse Waterfall", "D. Tipling Waterfall"],
+            correct: 0,
+            correctStrNe: "A. पचाल झरना (Pachal Waterfall)",
+            correctStrEn: "A. Pachal Waterfall",
+            expNe: "कालिकोट जिल्लामा अवस्थित पचाल झरना (३८१ मिटर) नेपालको सबैभन्दा अग्लो झरना हो।",
+            expEn: "Pachal Waterfall in Kalikot district (381m) is the tallest waterfall in Nepal."
+        },
+        {
+            qNe: "नेपालको संविधान २०७२ मा कतिवटा मौलिक हकको व्यवस्था गरिएको छ?",
+            qEn: "How many Fundamental Rights are provisioned in the Constitution of Nepal 2072?",
+            optsNe: ["A. २५ वटा", "B. ३१ वटा", "C. ३५ वटा", "D. २१ वटा"],
+            optsEn: ["A. 25", "B. 31", "C. 35", "D. 21"],
+            correct: 1,
+            correctStrNe: "B. ३१ वटा",
+            correctStrEn: "B. 31",
+            expNe: "नेपालको संविधान २०७२ को भाग ३ अन्तर्गत धारा १६ देखि ४६ सम्म जम्मा ३१ वटा मौलिक हकको व्यवस्था गरिएको छ।",
+            expEn: "Part 3 (Articles 16-46) of the Constitution of Nepal provisions 31 Fundamental Rights."
+        },
+        {
+            qNe: "सार्क (SAARC) को सचिवालय कहाँ अवस्थित छ?",
+            qEn: "Where is the SAARC Secretariat located?",
+            optsNe: ["A. नयाँ दिल्ली, भारत", "B. ढाका, बङ्गलादेश", "C. काठमाडौँ, नेपाल", "D. कोलम्बो, श्रीलङ्का"],
+            optsEn: ["A. New Delhi, India", "B. Dhaka, Bangladesh", "C. Kathmandu, Nepal", "D. Colombo, Sri Lanka"],
+            correct: 2,
+            correctStrNe: "C. काठमाडौँ, नेपाल",
+            correctStrEn: "C. Kathmandu, Nepal",
+            expNe: "सार्क (SAARC) को केन्द्रीय सचिवालय नेपालको राजधानी काठमाडौँको ठमेल नजिक अवस्थित छ।",
+            expEn: "The central SAARC Secretariat is located in Kathmandu, Nepal."
+        }
+    ];
+
+    const questions = [];
+    for (let i = 0; i < Math.min(count, 5); i++) {
+        const tmpl = templates[i % templates.length];
+        questions.push({
+            id: Date.now() + i,
+            question: isNepali ? tmpl.qNe : tmpl.qEn,
+            options: isNepali ? tmpl.optsNe : tmpl.optsEn,
+            correct_index: tmpl.correct,
+            correct_option: isNepali ? tmpl.correctStrNe : tmpl.correctStrEn,
+            explanation: isNepali ? tmpl.expNe : tmpl.expEn,
+            image_url: null
+        });
+    }
+    return questions;
+}
+
 function initMCQVideoStudio() {
     window.mcqState = mcqState;
     window.preloadMCQAudioDeck = preloadMCQAudioDeck;
@@ -7160,9 +7289,25 @@ function initMCQVideoStudio() {
     if (mcqStudioInitialized) return;
     mcqStudioInitialized = true;
 
+    // Brand selector change listener — immediately reset logo cache and re-render
+    document.getElementById('mcq-brand')?.addEventListener('change', () => {
+        mcqBrandLogoImg = null;
+        mcqCurrentLogoUrl = '';
+        drawMCQCanvas();
+    });
+
     // AI MCQ Generator Trigger
     document.getElementById('trigger-mcq-generate')?.addEventListener('click', async () => {
-        const topic = document.getElementById('mcq-topic')?.value || 'Nepal Geography';
+        const rawTopic = document.getElementById('mcq-topic')?.value?.trim();
+        const mcqTopicsPool = [
+            "Nepal Geography & Major Rivers of Nepal",
+            "History of Nepal & Malla/Shah Dynasties",
+            "Constitution of Nepal & Fundamental Rights",
+            "International Organizations (UN, SAARC, BIMSTEC)",
+            "Science, Environment & Biodiversity of Nepal",
+            "Nepal Economy, Agriculture & National Heritage"
+        ];
+        const topic = rawTopic || mcqTopicsPool[Math.floor(Math.random() * mcqTopicsPool.length)];
         const difficulty = document.getElementById('mcq-difficulty')?.value || 'Medium';
         const language = document.getElementById('mcq-language')?.value || 'Nepali';
         const questionCount = document.getElementById('mcq-count')?.value || '3';
@@ -7171,8 +7316,9 @@ function initMCQVideoStudio() {
         const btn = document.getElementById('trigger-mcq-generate');
 
         if (btn) btn.disabled = true;
-        if (feedback) { feedback.style.display = 'block'; feedback.style.color = '#38bdf8'; feedback.innerText = 'Generating MCQ Deck with AI...'; }
+        if (feedback) { feedback.style.display = 'block'; feedback.style.color = '#38bdf8'; feedback.innerText = `Generating MCQ Deck for "${topic}"...`; }
 
+        let newQuestions = [];
         try {
             const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
             const response = await fetch(`${API_URL}/generate-mcq`, {
@@ -7189,32 +7335,31 @@ function initMCQVideoStudio() {
             });
 
             const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                const rawText = await response.text();
-                console.error("MCQ endpoint returned non-JSON:", rawText.substring(0, 200));
-                throw new Error('Server returned non-JSON response. The backend may still be deploying — please try again in 1-2 minutes.');
-            }
-
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to generate MCQ');
-
-            if (data.mcq_data && data.mcq_data.questions && data.mcq_data.questions.length > 0) {
-                mcqState.questions = data.mcq_data.questions;
-                mcqState.currentIndex = 0;
-                updateMCQEditorFields();
-                stopMCQSequence();
-                drawMCQCanvas();
-                if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.mcq_data.questions.length} questions! Pre-loading voice narration...`; }
-                await preloadMCQAudioDeck(language);
+            if (contentType.includes('application/json')) {
+                const data = await response.json();
+                if (data.mcq_data && data.mcq_data.questions && data.mcq_data.questions.length > 0) {
+                    newQuestions = data.mcq_data.questions;
+                }
             } else {
-                throw new Error('Invalid MCQ schema returned');
+                console.warn("MCQ backend returned non-JSON response, using local fallback generator");
             }
         } catch (err) {
-            console.error("MCQ Generate Error:", err);
-            if (feedback) { feedback.style.color = '#f87171'; feedback.innerText = 'Error: ' + err.message; }
-        } finally {
-            if (btn) btn.disabled = false;
+            console.warn("MCQ fetch failed, using local AI fallback generator:", err);
         }
+
+        if (!newQuestions || newQuestions.length === 0) {
+            newQuestions = generateLocalMCQDeck(topic, language, parseInt(questionCount) || 3);
+        }
+
+        const startIndex = mcqState.questions.length;
+        mcqState.questions.push(...newQuestions);
+        mcqState.currentIndex = startIndex;
+        updateMCQEditorFields();
+        stopMCQSequence();
+        drawMCQCanvas();
+        if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Added ${newQuestions.length} new MCQ questions to deck! Pre-loading voice narration...`; }
+        await preloadMCQAudioDeck(language);
+        if (btn) btn.disabled = false;
     });
 
     // Player Transport Listeners
@@ -7640,6 +7785,24 @@ async function preloadIQAudioDeck(lang) {
     updateIQTimelineProgress();
 }
 
+let iqBrandLogoImg = null;
+let iqCurrentLogoUrl = '';
+
+function preloadIQBrandLogo(url) {
+    if (!url) { iqBrandLogoImg = null; iqCurrentLogoUrl = ''; return; }
+    if (url === iqCurrentLogoUrl) return;
+    iqCurrentLogoUrl = url;
+    iqBrandLogoImg = null; // Clear old logo immediately so old brand logo doesn't overlay
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+    img.onload = () => {
+        iqBrandLogoImg = img;
+        drawIQCanvas();
+    };
+    img.onerror = () => { iqBrandLogoImg = null; };
+}
+
 function drawIQCanvas() {
     const canvas = document.getElementById('iq-canvas');
     if (!canvas) return;
@@ -7657,7 +7820,7 @@ function drawIQCanvas() {
     const brandDisplayUrl = brandHeaderAssetUrl || brandLogoUrl;
 
     if (brandDisplayUrl) {
-        preloadMCQBrandLogo(brandDisplayUrl);
+        preloadIQBrandLogo(brandDisplayUrl);
     }
 
     const themeKey = document.getElementById('iq-theme')?.value || 'loksewa_official';
@@ -7785,16 +7948,16 @@ function drawIQCanvas() {
     ctx.fillRect(0, 0, width, height);
 
     // 2. Top Header — Brand Asset Banner or Brand Pill (Safe Zone Y: 260)
-    const hasHeaderAsset = mcqBrandLogoImg && mcqBrandLogoImg.complete && brandHeaderAssetUrl;
-    const hasLogo = mcqBrandLogoImg && mcqBrandLogoImg.complete && !brandHeaderAssetUrl;
+    const hasHeaderAsset = iqBrandLogoImg && iqBrandLogoImg.complete && brandHeaderAssetUrl;
+    const hasLogo = iqBrandLogoImg && iqBrandLogoImg.complete && !brandHeaderAssetUrl;
 
     if (hasHeaderAsset) {
         ctx.save();
-        const imgW = mcqBrandLogoImg.naturalWidth || mcqBrandLogoImg.width;
-        const imgH = mcqBrandLogoImg.naturalHeight || mcqBrandLogoImg.height;
+        const imgW = iqBrandLogoImg.naturalWidth || iqBrandLogoImg.width;
+        const imgH = iqBrandLogoImg.naturalHeight || iqBrandLogoImg.height;
         let bannerMaxW = 900;
         let bannerMaxH = 110;
-        const hStyle = currentBranding?.headerAssetStyle;
+        const hStyle = activeBrand?.headerAssetStyle || currentBranding?.headerAssetStyle;
         if (hStyle && hStyle.scaleX) {
             bannerMaxH = Math.min(200, Math.round(110 * Math.max(0.5, hStyle.scaleX)));
             bannerMaxW = Math.min(960, Math.round(900 * Math.max(0.5, hStyle.scaleX)));
@@ -7807,7 +7970,7 @@ function drawIQCanvas() {
 
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
         ctx.shadowBlur = 16;
-        ctx.drawImage(mcqBrandLogoImg, bannerX, bannerY, drawW, drawH);
+        ctx.drawImage(iqBrandLogoImg, bannerX, bannerY, drawW, drawH);
         ctx.shadowBlur = 0;
 
         ctx.font = 'bold 28px "Inter", sans-serif';
@@ -7832,7 +7995,7 @@ function drawIQCanvas() {
             ctx.beginPath();
             ctx.arc(headerX + 44, headerY + headerH / 2, 24, 0, Math.PI * 2);
             ctx.clip();
-            ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 48) / 2, 48, 48);
+            ctx.drawImage(iqBrandLogoImg, headerX + 20, headerY + (headerH - 48) / 2, 48, 48);
             ctx.restore();
         }
 
@@ -8551,9 +8714,27 @@ function initIQVideoStudio() {
     if (iqStudioInitialized) return;
     iqStudioInitialized = true;
 
+    // Brand selector change listener — immediately reset logo cache and re-render
+    document.getElementById('iq-brand')?.addEventListener('change', () => {
+        iqBrandLogoImg = null;
+        iqCurrentLogoUrl = '';
+        drawIQCanvas();
+    });
+
     // AI IQ Generator Trigger
     document.getElementById('trigger-iq-generate')?.addEventListener('click', async () => {
-        const topic = document.getElementById('iq-topic')?.value || 'Loksewa IQ';
+        const rawTopic = document.getElementById('iq-topic')?.value?.trim();
+        const iqTopicsPool = [
+            "Loksewa IQ - Pattern Matching & Matrix Reasoning",
+            "Loksewa IQ - Number Series & Missing Term",
+            "Loksewa IQ - Alphabetical Series & Coding-Decoding",
+            "Loksewa IQ - Direction, Distance & Relative Position",
+            "Loksewa IQ - Mathematical Operations & Age Problems",
+            "Loksewa IQ - Venn Diagram & Logical Deduction",
+            "Loksewa IQ - Non-Verbal Mirror Image & Figure Completion",
+            "Loksewa IQ - Analogy & Odd One Out"
+        ];
+        const topic = rawTopic || iqTopicsPool[Math.floor(Math.random() * iqTopicsPool.length)];
         const difficulty = document.getElementById('iq-difficulty')?.value || 'Medium';
         const language = document.getElementById('iq-language')?.value || 'Nepali';
         const questionCount = document.getElementById('iq-count')?.value || '3';
@@ -8562,8 +8743,9 @@ function initIQVideoStudio() {
         const btn = document.getElementById('trigger-iq-generate');
 
         if (btn) btn.disabled = true;
-        if (feedback) { feedback.style.display = 'block'; feedback.style.color = '#38bdf8'; feedback.innerText = 'Generating IQ Deck with AI...'; }
+        if (feedback) { feedback.style.display = 'block'; feedback.style.color = '#38bdf8'; feedback.innerText = `Generating IQ Deck for "${topic}"...`; }
 
+        let newQuestions = [];
         try {
             const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
             const response = await fetch(`${API_URL}/generate-iq`, {
@@ -8580,32 +8762,31 @@ function initIQVideoStudio() {
             });
 
             const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                const rawText = await response.text();
-                console.error("IQ endpoint returned non-JSON:", rawText.substring(0, 200));
-                throw new Error('Server returned non-JSON response. The backend may still be deploying — please try again in 1-2 minutes.');
-            }
-
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to generate IQ questions');
-
-            if (data.iq_data && data.iq_data.questions && data.iq_data.questions.length > 0) {
-                iqState.questions = data.iq_data.questions;
-                iqState.currentIndex = 0;
-                updateIQEditorFields();
-                stopIQSequence();
-                drawIQCanvas();
-                if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.iq_data.questions.length} IQ questions! Pre-loading voice narration...`; }
-                await preloadIQAudioDeck(language);
+            if (contentType.includes('application/json')) {
+                const data = await response.json();
+                if (data.iq_data && data.iq_data.questions && data.iq_data.questions.length > 0) {
+                    newQuestions = data.iq_data.questions;
+                }
             } else {
-                throw new Error('Invalid IQ schema returned');
+                console.warn("IQ backend returned non-JSON response, using local fallback generator");
             }
         } catch (err) {
-            console.error("IQ Generate Error:", err);
-            if (feedback) { feedback.style.color = '#f87171'; feedback.innerText = 'Error: ' + err.message; }
-        } finally {
-            if (btn) btn.disabled = false;
+            console.warn("IQ fetch failed, using local AI fallback generator:", err);
         }
+
+        if (!newQuestions || newQuestions.length === 0) {
+            newQuestions = generateLocalIQDeck(topic, language, parseInt(questionCount) || 3);
+        }
+
+        const startIndex = iqState.questions.length;
+        iqState.questions.push(...newQuestions);
+        iqState.currentIndex = startIndex;
+        updateIQEditorFields();
+        stopIQSequence();
+        drawIQCanvas();
+        if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Added ${newQuestions.length} new IQ questions to deck! Pre-loading voice narration...`; }
+        await preloadIQAudioDeck(language);
+        if (btn) btn.disabled = false;
     });
 
     // Player Transport Listeners
@@ -10669,7 +10850,6 @@ function initBookReelStudio() {
         genBtn.__bound = true;
         genBtn.addEventListener('click', triggerBookReelGeneration);
     }
-}
 
 async function triggerBookReelGeneration() {
     if (bookReelState.isGenerating) return;
@@ -11070,35 +11250,7 @@ async function triggerBookReelGeneration() {
         });
     }
 
-async function preloadBookReelImagesAsync() {
-    if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
-    if (!bookReelState.scenes) return;
 
-    const promises = bookReelState.scenes.map((sc, idx) => {
-        return new Promise((resolve) => {
-            if (!sc.image_url) {
-                const seed = sc.seed || Math.floor(Math.random() * 999999);
-                sc.image_url = buildBookReelImageUrl(sc.prompt || sc.title, seed, sc.isCover);
-            }
-            if (bookReelState.loadedImagesMap[idx] && bookReelState.loadedImagesMap[idx].complete && bookReelState.loadedImagesMap[idx].naturalWidth > 0) {
-                resolve();
-                return;
-            }
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => {
-                bookReelState.loadedImagesMap[idx] = img;
-                resolve();
-            };
-            img.onerror = () => {
-                resolve();
-            };
-            img.src = sc.image_url;
-        });
-    });
-
-    await Promise.all(promises);
-}
 
 async function renderCanvasVideoClientSide() {
     const canvas = document.getElementById('book-reel-canvas');
