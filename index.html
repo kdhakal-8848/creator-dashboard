@@ -1480,6 +1480,17 @@
                             </button>
                         </div>
 
+                        <!-- Subtitle Burn-In Toggle & MP4 Export Controls -->
+                        <div style="margin-top: 14px; width: 100%; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--color-fg-muted); cursor: pointer; user-select: none;">
+                                <input type="checkbox" id="book-reel-burn-subtitles-toggle" checked style="accent-color: #6366f1; width: 14px; height: 14px; cursor: pointer;">
+                                <span>Burn Subtitles into Video (Uncheck for Clean Export)</span>
+                            </label>
+                            <button id="book-reel-export-btn" onclick="window.exportBookReelMP4()" style="width: 100%; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-weight: 700; font-size: 12px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);">
+                                <i data-feather="download" style="width: 15px; height: 15px;"></i> Export MP4 Video (1080x1920)
+                            </button>
+                        </div>
+
                         <!-- Timeline Scrubber -->
                         <div style="margin-top: 12px; width: 100%; background: rgba(0,0,0,0.4); padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box;">
                             <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--color-fg-muted); margin-bottom: 6px;">

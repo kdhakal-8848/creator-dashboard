@@ -8513,238 +8513,20 @@ function formatTimeCode(sec) {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${ms}`;
 }
 
-function buildBookReelImageUrl(promptText, seed, isCover = false) {
+function buildBookReelCoverPrompt(subject) {
+    return `Minimalist fine line pencil and delicate watercolor vignette sketch of ${subject}, centered composition, ample clean negative space, set on an authentic fibrous warm-cream handmade deckled edge art paper background, visible organic paper fibers, high-end editorial book cover aesthetic, no digital gloss, no frames, no borders, 9:16 vertical composition`;
+}
+
+function buildBookReelNarrativePrompt(characterAnchor, sceneAction) {
+    const anchor = characterAnchor || "A reflective protagonist embodying quiet determination";
+    return `${anchor}, ${sceneAction}, fine art oil painting on textured linen canvas, visible thick impasto palette knife strokes, rich muted earth tones, soft high-key washed-out atmospheric background in upper half, light creamy beige diffused lighting, safe zone upper composition, editorial storybook illustration, no borders, no frames, no digital gloss, 9:16 vertical composition`;
+}
+
+function buildBookReelImageUrl(promptText, seed, isCover = false, characterAnchor = "") {
     const randomSeed = seed !== undefined ? seed : Math.floor(Math.random() * 999999);
-    let fullPrompt = "";
-    if (isCover) {
-        fullPrompt = `Minimalist fine line pencil sketch illustration of ${promptText}, centered on full-bleed fibrous handmade art paper background, clean negative space, classic serif typography, 8k, vertical 9:16`;
-    } else {
-        fullPrompt = `Heavy impasto oil painting with visible palette knife texture, dramatic lighting, portrait of ${promptText}, washed soft pastel upper background safe zone, vibrant colors, 8k, vertical 9:16`;
-    }
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?seed=${randomSeed}&nologo=true&width=1080&height=1920`;
+    let fullPrompt = isCover ? buildBookReelCoverPrompt(promptText) : buildBookReelNarrativePrompt(characterAnchor, promptText);
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?seed=${randomSeed}&width=1080&height=1920&nologo=true&model=flux`;
 }
-
-function generateMockBookReelData(title, duration = 45, customNotes = "") {
-    const numScenes = duration === 120 ? 35 : (duration === 90 ? 26 : (duration === 60 ? 18 : (duration === 30 ? 9 : 13)));
-    const sceneDuration = parseFloat(((duration - 2.8) / (numScenes - 1)).toFixed(1));
-
-    const cleanTitle = title?.trim() || "Deep-Dive Book Summary";
-    const coverSeed = Math.floor(Math.random() * 999999);
-    const coverPrompt = `Minimalist book cover design for '${cleanTitle}', elegant typography, warm parchment background, clean aesthetic`;
-    
-    const scenes = [{
-        scene_number: 0,
-        title: `Cover: ${cleanTitle}`,
-        isCover: true,
-        start_sec: 0.0,
-        end_sec: 2.8,
-        timestamp_range: "00:00.0 - 00:02.8",
-        voiceover_snippet: `Welcome to the deep dive book summary of "${cleanTitle}". Here are the core insights you need to know.`,
-        prompt: coverPrompt,
-        image_url: buildBookReelImageUrl(coverPrompt, coverSeed, true),
-        seed: coverSeed,
-        bgColor: "#1e1b4b",
-        accentColor: "#818cf8"
-    }];
-
-    // Dynamic Narrative Template Generator based on Title & Notes
-    const storyTemplates = [
-        { 
-            t: `Core Premise of ${cleanTitle}`, 
-            v: `At its core, "${cleanTitle}" explores how small strategic shifts lead to breakthrough transformations in everyday performance.` 
-        },
-        { 
-            t: `The Central Framework`, 
-            v: `The foundation of "${cleanTitle}" relies on establishing strong foundational systems rather than relying on temporary motivation.` 
-        },
-        { 
-            t: `Identity & Mindset Shift`, 
-            v: `Shift your focus from short-term outcomes to fundamental identity creation—becoming the person who naturally succeeds.` 
-        },
-        { 
-            t: `Environment & Friction Control`, 
-            v: `Design your environment to minimize friction for positive behaviors while making destructive habits invisible.` 
-        },
-        { 
-            t: `The Compounding Advantage`, 
-            v: `Small consistent actions repeated daily create an unstoppable exponential curve of long-term mastery in "${cleanTitle}".` 
-        },
-        { 
-            t: `Overcoming Resistance & Plateaus`, 
-            v: `Breakthroughs occur after long periods of silent work. Stay committed even when early results feel invisible.` 
-        },
-        { 
-            t: `The Two-Minute Action Rule`, 
-            v: `Scale down initial actions to under two minutes to build seamless momentum and eliminate psychological friction.` 
-        },
-        { 
-            t: `Visual Feedback & Progress Tracking`, 
-            v: `Track your continuous progress visually to reinforce identity and maintain unwavering daily consistency.` 
-        },
-        { 
-            t: `Systems Architecture Over Goals`, 
-            v: `Goals provide initial direction, but robust daily systems deliver predictable, repeatable, and lasting success.` 
-        },
-        {
-            t: `Mastering Focus & Precision`,
-            v: `Eliminate modern distractions by building structured blocks of deep work dedicated to your primary objective.`
-        },
-        {
-            t: `Strategic Resource Allocation`,
-            v: `Direct your highest energy toward high-leverage activities that yield compounding returns over time.`
-        },
-        {
-            t: `Resilience Under Pressure`,
-            v: `Turn setbacks into valuable feedback, adapting your strategy while holding your ultimate vision constant.`
-        },
-        {
-            t: `The Final Takeaway`,
-            v: `Apply these core lessons from "${cleanTitle}" daily to unlock sustainable, lifelong success.`
-        }
-    ];
-
-    let tAccum = 2.8;
-    for (let i = 1; i < numScenes; i++) {
-        const template = storyTemplates[(i - 1) % storyTemplates.length];
-        const sceneTitle = i <= storyTemplates.length ? template.t : `Key Insight ${i} of ${cleanTitle}`;
-        const sceneNarration = template.v;
-        const endT = parseFloat((tAccum + sceneDuration).toFixed(1));
-        const sceneSeed = Math.floor(Math.random() * 999999);
-        const scenePrompt = `Cinematic story illustration for '${sceneTitle}' in '${cleanTitle}'. ${sceneNarration}. Vibrant colors, atmospheric lighting, 9:16 portrait framing`;
-
-        const palette = ['#0f172a', '#1e293b', '#111827', '#1e1b4b'];
-        const accs = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7', '#ec4899', '#f43f5e', '#06b6d4', '#84cc16'];
-
-        scenes.push({
-            scene_number: i,
-            title: `Scene ${i}: ${sceneTitle}`,
-            isCover: false,
-            start_sec: tAccum,
-            end_sec: endT,
-            timestamp_range: `${formatTimeCode(tAccum)} - ${formatTimeCode(endT)}`,
-            voiceover_snippet: sceneNarration,
-            prompt: scenePrompt,
-            image_url: buildBookReelImageUrl(scenePrompt, sceneSeed, false),
-            seed: sceneSeed,
-            bgColor: palette[i % palette.length],
-            accentColor: accs[i % accs.length]
-        });
-        tAccum = endT;
-    }
-
-    return scenes;
-}
-
-function generateProceduralBookArt(scene, width = 1080, height = 1920) {
-    if (!scene) scene = {};
-    const cvs = document.createElement('canvas');
-    cvs.width = width;
-    cvs.height = height;
-    const ctx = cvs.getContext('2d');
-
-    const seed = scene.seed || (scene.title ? scene.title.length * 997 : 12345);
-    const isCover = scene.isCover || scene.scene_number === 0;
-    const accentColor = scene.accentColor || '#818cf8';
-    const bgColor = scene.bgColor || '#0f172a';
-
-    const rng = (offset) => {
-        let x = Math.sin(seed + offset) * 10000;
-        return x - Math.floor(x);
-    };
-
-    // 1. Deep Atmospheric Gradient Background
-    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, bgColor);
-    bgGrad.addColorStop(0.5, '#090d16');
-    bgGrad.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // 2. Impasto Brushstroke & Palette Knife Color Blobs
-    const strokeColors = [accentColor, '#818cf8', '#38bdf8', '#f59e0b', '#ec4899', '#10b981', '#a855f7'];
-    for (let i = 0; i < 30; i++) {
-        const cx = rng(i * 3) * width;
-        const cy = rng(i * 3 + 1) * height;
-        const rad = 150 + rng(i * 3 + 2) * 350;
-        const col = strokeColors[Math.floor(rng(i * 7) * strokeColors.length)];
-
-        ctx.save();
-        ctx.globalAlpha = 0.12 + rng(i * 9) * 0.18;
-        const blobGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, rad);
-        blobGrad.addColorStop(0, col);
-        blobGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = blobGrad;
-        ctx.beginPath();
-        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // 3. Central Focal Motif with Glowing Halo
-    const cenX = width / 2;
-    const cenY = height / 2 - (isCover ? 100 : 60);
-
-    ctx.save();
-    const haloGrad = ctx.createRadialGradient(cenX, cenY, 40, cenX, cenY, 380);
-    haloGrad.addColorStop(0, accentColor);
-    haloGrad.addColorStop(0.5, 'rgba(99, 102, 241, 0.2)');
-    haloGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = haloGrad;
-    ctx.beginPath();
-    ctx.arc(cenX, cenY, 380, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Concentric Geometric Rings
-    ctx.save();
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 4;
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.arc(cenX, cenY, 260, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.2;
-    ctx.beginPath();
-    ctx.arc(cenX, cenY, 300, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // Central Icon Motif
-    ctx.save();
-    ctx.shadowColor = accentColor;
-    ctx.shadowBlur = 30;
-    const symbols = ['📖', '✨', '💡', '⚖️', '🧠', '⚙️', '🌟', '🚀', '🔮', '🎯', '🏛️', '🔥'];
-    const symbol = isCover ? '📖' : symbols[(scene.scene_number || 1) % symbols.length];
-    
-    ctx.font = `bold ${Math.round(width * 0.12)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(symbol, cenX, cenY);
-    ctx.restore();
-
-    // 4. Fine Art Border Frame & Corner Accents
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(40, 40, width - 80, height - 80);
-
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 5;
-    const clen = 40;
-    ctx.beginPath(); ctx.moveTo(40, 40 + clen); ctx.lineTo(40, 40); ctx.lineTo(40 + clen, 40); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(width - 40 - clen, 40); ctx.lineTo(width - 40, 40); ctx.lineTo(width - 40, 40 + clen); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(40, height - 40 - clen); ctx.lineTo(40, height - 40); ctx.lineTo(40 + clen, height - 40); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(width - 40 - clen, height - 40); ctx.lineTo(width - 40, height - 40); ctx.lineTo(width - 40, height - 40 - clen); ctx.stroke();
-    ctx.restore();
-
-    return cvs.toDataURL('image/png');
-}
-
-window.generateProceduralBookArt = generateProceduralBookArt;
 
 function drawBookReelCanvas() {
     const canvas = document.getElementById('book-reel-canvas');
@@ -8762,7 +8544,6 @@ function drawBookReelCanvas() {
         accentColor: "#818cf8"
     };
 
-    // Ensure image cache map exists
     if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
 
     const currIdx = bookReelState.currentIndex;
@@ -8777,21 +8558,25 @@ function drawBookReelCanvas() {
             drawBookReelCanvas();
         };
         img.onerror = () => {
-            // Fallback to procedural artwork if network/429 fails
-            const procImg = new Image();
-            procImg.onload = () => {
-                bookReelState.loadedImagesMap[currIdx] = procImg;
-                drawBookReelCanvas();
-            };
-            procImg.src = generateProceduralBookArt(scene, w, h);
+            console.warn(`Image load failed for scene ${currIdx}, using carry-over fallback.`);
         };
         img.src = scene.image_url;
     }
 
-    // Ken Burns Gentle Smooth Zoom Motion
+    // Image Carry-Over Fallback: If current scene image isn't loaded, find latest available image from previous scenes
+    if (!imgObj || !imgObj.complete || imgObj.naturalWidth === 0) {
+        for (let i = currIdx - 1; i >= 0; i--) {
+            if (bookReelState.loadedImagesMap[i] && bookReelState.loadedImagesMap[i].complete && bookReelState.loadedImagesMap[i].naturalWidth > 0) {
+                imgObj = bookReelState.loadedImagesMap[i];
+                break;
+            }
+        }
+    }
+
+    // Ken Burns Gentle Smooth Zoom Motion across scene transitions
     const elapsed = performance.now() - (bookReelState.wallStartMs || performance.now());
-    const zoom = 1.0 + Math.sin(elapsed / 2500) * 0.04;
-    const panY = Math.cos(elapsed / 3000) * 15;
+    const zoom = 1.0 + Math.sin(elapsed / 3000) * 0.05;
+    const panY = Math.cos(elapsed / 3500) * 15;
 
     ctx.save();
     ctx.translate(w / 2, h / 2 + panY);
@@ -8799,15 +8584,14 @@ function drawBookReelCanvas() {
     ctx.translate(-w / 2, -h / 2);
 
     if (imgObj && imgObj.complete && imgObj.naturalWidth > 0) {
-        // Draw Full-Bleed 9:16 AI Artwork Image
         ctx.drawImage(imgObj, 0, 0, w, h);
     } else {
-        // Instant Guaranteed Procedural Fine Art Masterpiece
-        const procDataUrl = generateProceduralBookArt(scene, w, h);
-        const procImg = new Image();
-        procImg.src = procDataUrl;
-        bookReelState.loadedImagesMap[currIdx] = procImg;
-        ctx.drawImage(procImg, 0, 0, w, h);
+        // Soft Linen Texture Backdrop while initial cover image finishes loading
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+        bgGrad.addColorStop(0, scene.bgColor || '#0f172a');
+        bgGrad.addColorStop(1, '#020617');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
     }
     ctx.restore();
 
@@ -9012,7 +8796,7 @@ function renderBookStoryboardGrid() {
 
             <!-- 9:16 Aspect Frame Container -->
             <div class="aspect-[9/16]" style="position:relative;width:100%;aspect-ratio:9/16;background:${sc.bgColor || '#0f172a'};border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;">
-                <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy" onerror="this.onerror=null; this.src=generateProceduralBookArt(bookReelState.scenes[${idx}], 540, 960);">
+                <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy" onerror="this.onerror=null; this.style.opacity='0.4';">
             </div>
 
             <div style="font-size:11px;color:var(--color-fg-muted);line-height:1.3;max-height:34px;overflow:hidden;">
@@ -9885,10 +9669,92 @@ async function renderCanvasVideoClientSide() {
     if (window.feather) window.feather.replace();
 }
 
+async function exportBookReelMP4() {
+    const canvas = document.getElementById('book-reel-canvas');
+    if (!canvas) return;
+
+    const exportBtn = document.getElementById('book-reel-export-btn');
+    const toggle = document.getElementById('book-reel-burn-subtitles-toggle');
+    if (toggle) bookReelState.burnSubtitles = toggle.checked;
+
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Exporting MP4 Video...`;
+        if (window.feather) window.feather.replace();
+    }
+
+    try {
+        const stream = canvas.captureStream(60);
+        const mediaRecorderOptions = [
+            { mimeType: 'video/mp4;codecs=avc1' },
+            { mimeType: 'video/webm;codecs=vp9' },
+            { mimeType: 'video/webm' }
+        ];
+
+        let selectedMime = '';
+        for (let opt of mediaRecorderOptions) {
+            if (MediaRecorder.isTypeSupported(opt.mimeType)) {
+                selectedMime = opt.mimeType;
+                break;
+            }
+        }
+
+        const recorder = new MediaRecorder(stream, { mimeType: selectedMime || 'video/webm' });
+        const chunks = [];
+
+        recorder.ondataavailable = e => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: selectedMime || 'video/mp4' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const filename = (bookReelState.bookTitle || 'Book_Summary_Reel').replace(/[^a-zA-Z0-9]/g, '_');
+            const cleanSuffix = bookReelState.burnSubtitles ? 'Subtitled' : 'Clean';
+            a.download = `${filename}_${cleanSuffix}_1080x1920.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = `✅ MP4 Export Complete!`;
+                setTimeout(() => {
+                    exportBtn.innerHTML = `<i data-feather="download"></i> Export MP4 Video (1080x1920)`;
+                    if (window.feather) window.feather.replace();
+                }, 3000);
+            }
+        };
+
+        bookReelState.currentIndex = 0;
+        bookReelState.wallStartMs = performance.now();
+        startBookReelSequence();
+        recorder.start();
+
+        const totalMs = (bookReelState.duration || 30) * 1000;
+        setTimeout(() => {
+            stopBookReelSequence();
+            if (recorder.state !== 'inactive') recorder.stop();
+        }, totalMs + 500);
+
+    } catch(err) {
+        console.error("MP4 export failed:", err);
+        alert("Video export failed: " + err.message);
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<i data-feather="download"></i> Export MP4 Video (1080x1920)`;
+        }
+    }
+}
+
 window.bookReelState = bookReelState;
 window.initBookReelStudio = initBookReelStudio;
 window.drawBookReelCanvas = drawBookReelCanvas;
 window.startBookReelSequence = startBookReelSequence;
 window.stopBookReelSequence = stopBookReelSequence;
 window.generateClientSideGeminiScript = generateClientSideGeminiScript;
+window.exportBookReelMP4 = exportBookReelMP4;
 

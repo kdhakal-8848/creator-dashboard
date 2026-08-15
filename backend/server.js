@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import Parser from 'rss-parser';
@@ -1533,6 +1534,56 @@ app.post('/generate-brief-sketch', async (req, res) => {
 
     } catch (err) {
         console.error("Brief sketch error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Neural Audio Synthesis Endpoint (msedge-tts)
+app.post('/api/reel/generate-audio', async (req, res) => {
+    try {
+        const { text, voice } = req.body;
+        if (!text || typeof text !== 'string') {
+            return res.status(400).json({ error: "Missing or invalid text parameter" });
+        }
+
+        const selectedVoice = voice || "en-US-ChristopherNeural";
+        const tts = new MsEdgeTTS();
+        await tts.setMetadata(selectedVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_STEREO);
+
+        const result = await tts.toStream(text);
+        const chunks = [];
+
+        result.audioStream.on('data', chunk => chunks.push(chunk));
+        result.audioStream.on('end', () => {
+            const buffer = Buffer.concat(chunks);
+            const base64Audio = buffer.toString('base64');
+
+            // Word-level boundary estimation +0.6s tail padding
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+            const durationSec = (words.length * 0.35) + 0.6;
+            const wordDuration = (durationSec - 0.6) / (words.length || 1);
+
+            const timestamps = words.map((w, idx) => ({
+                word: w,
+                start: parseFloat((idx * wordDuration).toFixed(2)),
+                end: parseFloat(((idx + 1) * wordDuration).toFixed(2))
+            }));
+
+            return res.json({
+                success: true,
+                audio_url: `data:audio/mp3;base64,${base64Audio}`,
+                duration_sec: durationSec,
+                timestamps: timestamps
+            });
+        });
+
+        result.audioStream.on('error', (streamErr) => {
+            console.error("msedge-tts stream error:", streamErr);
+            return res.status(500).json({ error: "Audio synthesis stream failed" });
+        });
+
+    } catch (err) {
+        console.error("Audio TTS error:", err);
         res.status(500).json({ error: err.message });
     }
 });
