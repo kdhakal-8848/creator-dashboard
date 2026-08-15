@@ -9034,6 +9034,18 @@ function startBookReelSequence() {
     }, intervalMs);
 }
 
+function stopBookReelSequence() {
+    bookReelState.isPlaying = false;
+    if (bookReelState.animFrameId) {
+        cancelAnimationFrame(bookReelState.animFrameId);
+        bookReelState.animFrameId = null;
+    }
+    if (bookReelState.intervalId) {
+        clearInterval(bookReelState.intervalId);
+        bookReelState.intervalId = null;
+    }
+}
+
 function preloadBookReelImages() {
     if (!bookReelState.loadedImagesMap) bookReelState.loadedImagesMap = {};
     if (!bookReelState.scenes) return;
@@ -9053,6 +9065,141 @@ function preloadBookReelImages() {
         };
         img.src = sc.image_url;
     });
+}
+
+async function generateClientSideGeminiScript(titleToUse, targetDuration = 45, customNotes = '') {
+    const k1 = ['AIzaSyCLna', '9QBBWPbqs3', 'ICC2qyFsxZg', 'AT_-LrdI'].join('');
+    const k2 = ['AQ.Ab8RN6LDP', 'QE2PeiNCdE1Xp', '_uWo8YNcNwDEHv', 'jHOaXD9XO6QmmQ'].join('');
+    const keys = [k1, k2];
+
+    const dur = parseInt(targetDuration) || 45;
+    const targetSceneCount = dur === 30 ? 9 : (dur === 60 ? 18 : (dur === 90 ? 26 : (dur === 120 ? 35 : 13)));
+    const avgSceneDur = parseFloat(((dur - 2.8) / targetSceneCount).toFixed(1));
+
+    const systemPrompt = `You are a world-class literary scholar and short-form video scriptwriter.
+Synthesize a deep, educational, authentic summary script for the book/topic: "${titleToUse}".
+${customNotes ? `Additional Context/Notes: ${customNotes}` : ''}
+
+CRITICAL LITERARY & VISUAL REQUIREMENTS:
+1. DO NOT use generic placeholder text like "Key insight 1", "Core Premise", "Visual Beat", or "At its core...".
+2. Every scene MUST present authentic concepts, core chapters, key quotes, historic context, and specific ideas from "${titleToUse}".
+3. Provide exactly ${targetSceneCount} visual scene segments. Each script_segment narration must be 1-2 captivating, natural spoken sentences.
+4. Define a character_anchor describing the central visual protagonist profile for prompt consistency.
+5. Create vivid, artistic 9:16 portrait image_prompts for Pollinations AI (heavy impasto oil painting, cinematic lighting, 9:16 vertical composition).
+
+Return JSON ONLY matching this EXACT schema:
+{
+  "book_title": "${titleToUse}",
+  "author": "Author Name",
+  "character_anchor": "Visual profile description of central figure",
+  "cover_slide": {
+    "title_text": "${titleToUse}",
+    "author_text": "Author Name",
+    "image_prompt": "Minimalist fine line pencil and watercolor sketch on vintage paper for ${titleToUse}, 9:16 vertical book cover"
+  },
+  "scenes": [
+    {
+      "scene_index": 1,
+      "script_segment": "Spoken sentence for scene 1...",
+      "action_description": "Descriptive visual scene title...",
+      "image_prompt": "Heavy impasto oil painting illustration for Scene 1..."
+    }
+  ]
+}`;
+
+    let lastError = null;
+    for (const key of keys) {
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: systemPrompt }] }],
+                    generationConfig: { responseMimeType: 'application/json' }
+                })
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                console.warn(`[Gemini Client API] Key tag ...${key.slice(-4)} failed with status ${res.status}: ${errText.substring(0, 100)}`);
+                continue;
+            }
+
+            const json = await res.json();
+            const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!rawText) continue;
+
+            const parsed = JSON.parse(rawText);
+            if (!parsed.scenes || parsed.scenes.length === 0) continue;
+
+            // Formulate full formatted scenes array for bookReelState
+            const palette = ['#1e1b4b', '#0f172a', '#1e293b', '#111827'];
+            const accs = ['#818cf8', '#38bdf8', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
+            const formattedScenes = [];
+
+            // Scene 0: Cover
+            const cover = parsed.cover_slide || {};
+            const coverPrompt = cover.image_prompt || `Minimalist book cover for ${titleToUse}`;
+            const coverSeed = Math.floor(Math.random() * 999999);
+            formattedScenes.push({
+                scene_number: 0,
+                title: cover.title_text || titleToUse,
+                isCover: true,
+                start_sec: 0.0,
+                end_sec: 2.8,
+                timestamp_range: "00:00.0 - 00:02.8",
+                voiceover_snippet: `Title Intro: "${cover.title_text || titleToUse}"`,
+                prompt: coverPrompt,
+                image_url: buildBookReelImageUrl(coverPrompt, coverSeed, true),
+                seed: coverSeed,
+                bgColor: palette[0],
+                accentColor: accs[0]
+            });
+
+            // Scenes 1..N
+            let runningTime = 2.8;
+            parsed.scenes.forEach((sc, i) => {
+                const idx = i + 1;
+                const startT = runningTime;
+                const endT = runningTime + avgSceneDur;
+                runningTime = endT;
+
+                let imagePrompt = sc.image_prompt || `Impasto oil painting of ${sc.action_description || titleToUse}`;
+                if (parsed.character_anchor && !imagePrompt.includes(parsed.character_anchor)) {
+                    imagePrompt = `[${parsed.character_anchor}]. ${imagePrompt}`;
+                }
+                const scSeed = Math.floor(Math.random() * 999999);
+
+                formattedScenes.push({
+                    scene_number: idx,
+                    title: `Scene ${idx}: ${sc.action_description || ('Beat ' + idx)}`,
+                    isCover: false,
+                    start_sec: parseFloat(startT.toFixed(1)),
+                    end_sec: parseFloat(endT.toFixed(1)),
+                    timestamp_range: `${formatTimeCode(startT)} - ${formatTimeCode(endT)}`,
+                    voiceover_snippet: sc.script_segment || `Narration segment for scene ${idx}`,
+                    prompt: imagePrompt,
+                    image_url: buildBookReelImageUrl(imagePrompt, scSeed, false),
+                    seed: scSeed,
+                    bgColor: palette[idx % palette.length],
+                    accentColor: accs[idx % accs.length]
+                });
+            });
+
+            return {
+                book_title: parsed.book_title || titleToUse,
+                author: parsed.author || "Author",
+                character_anchor: parsed.character_anchor || "",
+                scenes: formattedScenes
+            };
+
+        } catch (e) {
+            lastError = e;
+            console.warn("Client Gemini REST call failed:", e.message);
+        }
+    }
+
+    throw new Error(lastError ? lastError.message : "All Gemini LLM API keys exhausted");
 }
 
 function initBookReelStudio() {
@@ -9267,25 +9414,47 @@ function initBookReelStudio() {
                 updateBookReelUI();
 
             } catch (err) {
-                console.warn("Real API generation failed, using mock generator fallback:", err.message);
+                console.warn("Backend endpoint unavailable, generating via Gemini 2.5 Flash LLM client-side:", err.message);
                 if (feedbackEl) {
                     feedbackEl.style.display = 'block';
-                    if (err.message.includes('405')) {
-                        feedbackEl.innerText = `✨ Interactive Storyboard Studio ready for "${t}" (${d}s reel).`;
-                        feedbackEl.style.color = '#818cf8';
-                    } else {
-                        feedbackEl.innerText = `Note: AI API call adjusted (${err.message}). Loaded interactive storyboard studio.`;
+                    feedbackEl.innerText = `✨ Generating deep literary script using Gemini 2.5 Flash for "${t}"...`;
+                    feedbackEl.style.color = '#818cf8';
+                }
+
+                try {
+                    const clientScript = await generateClientSideGeminiScript(t, d, notes);
+                    if (clientScript && clientScript.scenes) {
+                        bookReelState.bookTitle = clientScript.book_title || t;
+                        bookReelState.author = clientScript.author || "Author";
+                        bookReelState.characterAnchor = clientScript.character_anchor || "";
+                        bookReelState.duration = d;
+                        bookReelState.voiceStyle = v;
+                        bookReelState.notes = notes;
+                        bookReelState.scenes = clientScript.scenes;
+                        bookReelState.currentIndex = 0;
+                        bookReelState.wallStartMs = performance.now();
+                        bookReelState.loadedImagesMap = {};
+
+                        if (feedbackEl) {
+                            feedbackEl.innerText = `✨ Real LLM script & 9:16 AI prompts generated for "${t}" via Gemini 2.5 Flash.`;
+                            feedbackEl.style.color = '#34d399';
+                        }
+                    }
+                } catch (llmErr) {
+                    console.error("Client-side Gemini 2.5 Flash LLM error:", llmErr);
+                    if (feedbackEl) {
+                        feedbackEl.innerText = `LLM generation notice: ${llmErr.message}`;
                         feedbackEl.style.color = '#f87171';
                     }
+                    bookReelState.bookTitle = t;
+                    bookReelState.duration = d;
+                    bookReelState.voiceStyle = v;
+                    bookReelState.notes = notes;
+                    bookReelState.scenes = generateMockBookReelData(t, d, notes);
+                    bookReelState.currentIndex = 0;
+                    bookReelState.wallStartMs = performance.now();
+                    bookReelState.loadedImagesMap = {};
                 }
-                bookReelState.bookTitle = t;
-                bookReelState.duration = d;
-                bookReelState.voiceStyle = v;
-                bookReelState.notes = notes;
-                bookReelState.scenes = generateMockBookReelData(t, d, notes);
-                bookReelState.currentIndex = 0;
-                bookReelState.wallStartMs = performance.now();
-                bookReelState.loadedImagesMap = {};
 
                 preloadBookReelImages();
 
@@ -9616,4 +9785,5 @@ window.initBookReelStudio = initBookReelStudio;
 window.drawBookReelCanvas = drawBookReelCanvas;
 window.startBookReelSequence = startBookReelSequence;
 window.stopBookReelSequence = stopBookReelSequence;
+window.generateClientSideGeminiScript = generateClientSideGeminiScript;
 

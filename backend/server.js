@@ -139,7 +139,10 @@ async function generateAIContent(prompt, options = {}) {
     }
 
     const models = [
-        "gemini-2.5-flash"
+        "gemini-2.5-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash"
     ];
     let lastError = null;
 
@@ -1581,36 +1584,36 @@ app.post('/api/reel/generate-script', async (req, res) => {
         const targetSceneCount = dur === 30 ? 9 : (dur === 60 ? 18 : (dur === 90 ? 26 : (dur === 120 ? 35 : 13)));
         const avgSceneDur = parseFloat(((dur - 2.8) / targetSceneCount).toFixed(1));
 
-        const prompt = `You are an expert short-form video reel scriptwriter and literary editor.
-Create a captivating short-form video summary script for the book/topic: "${titleToUse}".
+        const prompt = `You are a world-class literary scholar and short-form video scriptwriter.
+Synthesize a deep, educational, authentic summary script for the book: "${titleToUse}".
 ${custom_notes ? `Additional Context/Notes: ${custom_notes}` : ''}
 
-Strict Output Requirements:
-1. TARGET DURATION: Exactly ${dur} seconds total narration.
-2. COVER SLIDE: Scene 0 cover slide lasting ~2.8 seconds.
-3. SCENES: Exactly ${targetSceneCount} visual scene segments. Each segment narration must take approx ${avgSceneDur} seconds to speak (spaced 2.5 to 3.5 seconds apart).
-4. CHARACTER ANCHOR: Define a central protagonist visual profile string (e.g. 'A young man with messy dark brown hair wearing an olive green casual jacket') that will be consistent across all scene prompts.
-5. PROMPT STYLE: High-quality artistic prompts (minimalist ink/watercolor for cover, rich expressive sketch/art style for scenes). Prepend character_anchor to scene image_prompts.
-6. FULL NARRATION TEXT: Combine the cover intro and all scene script segments into one continuous uninterrupted string for TTS audio synthesis.
+CRITICAL LITERARY & VISUAL REQUIREMENTS:
+1. DO NOT use generic placeholder text like "Key insight 1", "Core Premise", "Visual Beat", or "At its core...".
+2. Every scene MUST present authentic concepts, core chapters, key quotes, historic context, and specific ideas from "${titleToUse}".
+3. Provide exactly ${targetSceneCount} visual scene segments. Each script_segment narration must be 1-2 captivating, natural spoken sentences.
+4. Define a character_anchor describing the central visual protagonist profile for prompt consistency.
+5. Create vivid, artistic 9:16 portrait image_prompts for Pollinations AI (heavy impasto oil painting, cinematic lighting, 9:16 vertical composition).
+6. Provide a continuous full_narration_text combining intro and all scene segments for TTS synthesis.
 
 Return JSON ONLY matching this EXACT schema:
 {
   "book_title": "${titleToUse}",
-  "author": "Author Name (or 'Classic' if unknown)",
-  "character_anchor": "Visual description of protagonist for prompt consistency",
+  "author": "Author Name",
+  "character_anchor": "Visual profile description of central figure",
   "estimated_total_duration": ${dur},
   "cover_slide": {
     "title_text": "${titleToUse}",
     "author_text": "Author Name",
-    "image_prompt": "Minimalist ink and watercolor sketch on fibrous paper illustration for ${titleToUse}, elegant book cover art",
+    "image_prompt": "Minimalist fine line pencil and watercolor sketch on vintage paper for ${titleToUse}, 9:16 vertical book cover",
     "target_duration": 2.8
   },
-  "full_narration_text": "Full uninterrupted continuous narrative script for TTS voiceover synthesis...",
+  "full_narration_text": "Full uninterrupted continuous narrative script...",
   "scenes": [
     {
       "scene_index": 1,
-      "script_segment": "Spoken sentence for this ~3s scene segment.",
-      "action_description": "Visual scene description.",
+      "script_segment": "Spoken sentence for scene 1...",
+      "action_description": "Descriptive visual scene title...",
       "image_prompt": "Heavy impasto oil painting illustration for Scene 1...",
       "target_duration": ${avgSceneDur}
     }
@@ -1622,36 +1625,16 @@ Return JSON ONLY matching this EXACT schema:
             const aiResult = await generateAIContent(prompt, { jsonMode: true });
             resultData = safeParseJSON(aiResult.response.text());
         } catch (jsonErr) {
-            console.warn("Retrying LLM script generation due to malformed JSON:", jsonErr.message);
-            try {
-                const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object without raw newlines in string values.", { jsonMode: true });
-                resultData = safeParseJSON(retryResult.response.text());
-            } catch (retryErr) {
-                console.warn("Retry LLM script generation failed, applying structured script fallback:", retryErr.message);
-                resultData = {
-                    book_title: titleToUse,
-                    author: "Classic",
-                    character_anchor: "A focused student exploring ideas",
-                    estimated_total_duration: dur,
-                    cover_slide: {
-                        title_text: titleToUse,
-                        author_text: "Classic",
-                        image_prompt: `Minimalist ink and watercolor sketch for ${titleToUse}, book cover art`,
-                        target_duration: 2.8
-                    },
-                    full_narration_text: `An engaging summary of ${titleToUse}. Discover key principles and actionable ideas.`,
-                    scenes: Array.from({ length: targetSceneCount }, (_, i) => ({
-                        scene_index: i + 1,
-                        script_segment: `Key insight ${i + 1} from ${titleToUse}.`,
-                        action_description: `Visual scene ${i + 1}`,
-                        image_prompt: `Heavy impasto oil painting illustration for Scene ${i + 1} of ${titleToUse}`,
-                        target_duration: avgSceneDur
-                    }))
-                };
-            }
+            console.warn("Retrying LLM script generation with explicit JSON repair:", jsonErr.message);
+            const retryResult = await generateAIContent(prompt + "\n\nCRITICAL: Return strictly valid JSON object without raw newlines inside string values.", { jsonMode: true });
+            resultData = safeParseJSON(retryResult.response.text());
         }
 
-        if (resultData && !resultData.full_narration_text && resultData.scenes) {
+        if (!resultData || !resultData.scenes || resultData.scenes.length === 0) {
+            throw new Error("Gemini LLM returned empty script data");
+        }
+
+        if (!resultData.full_narration_text) {
             const coverIntro = resultData.cover_slide ? `${resultData.cover_slide.title_text}. ` : '';
             resultData.full_narration_text = coverIntro + resultData.scenes.map(s => s.script_segment).join(' ');
         }
