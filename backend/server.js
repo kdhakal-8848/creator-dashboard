@@ -1059,14 +1059,26 @@ OUTPUT FORMAT: Valid JSON only. No markdown formatting wrappers.
 // ============================================================
 app.post('/generate-mcq', async (req, res) => {
     try {
+        res.setHeader('Content-Type', 'application/json');
         const { topic, question_count, difficulty, language, brand_id, brand_context } = req.body;
-        const mcqTopic = topic || "Loksewa General Knowledge & Geography of Nepal";
+        const isAutoTopic = !topic || !topic.trim();
+        const mcqTopicsPool = [
+            "Nepal Geography & Major Rivers of Nepal",
+            "History of Nepal & Malla/Shah Dynasties",
+            "Constitution of Nepal & Fundamental Rights",
+            "International Organizations (UN, SAARC, BIMSTEC)",
+            "Science, Environment & Biodiversity of Nepal",
+            "Nepal Economy, Agriculture & National Heritage"
+        ];
+        const mcqTopic = isAutoTopic
+            ? mcqTopicsPool[Math.floor(Math.random() * mcqTopicsPool.length)]
+            : topic.trim();
         const count = parseInt(question_count) || 3;
         const level = difficulty || "Medium";
         const targetLanguage = language || "Nepali";
         const brandCtx = getBrandContextBlock(brand_context);
 
-        const dedupKey = getDedupKey(req, `mcq_${mcqTopic}_${count}_${level}_${targetLanguage}`);
+        const dedupKey = getDedupKey(req, `mcq_${mcqTopic}_${count}_${level}_${targetLanguage}${isAutoTopic ? '_' + Date.now() : ''}`);
         const existing = await getExistingGeneration(dedupKey);
         if (existing) return res.json(existing);
 
@@ -1220,14 +1232,28 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
 // ============================================================
 app.post('/generate-iq', async (req, res) => {
     try {
+        res.setHeader('Content-Type', 'application/json');
         const { topic, question_count, difficulty, language, brand_id, brand_context } = req.body;
-        const iqTopic = topic || "Loksewa IQ - Pattern Matching, Series & Matrix Reasoning";
+        const isAutoTopic = !topic || !topic.trim();
+        const iqTopicsPool = [
+            "Loksewa IQ - Pattern Matching & Matrix Reasoning",
+            "Loksewa IQ - Number Series & Missing Term",
+            "Loksewa IQ - Alphabetical Series & Coding-Decoding",
+            "Loksewa IQ - Direction, Distance & Relative Position",
+            "Loksewa IQ - Mathematical Operations & Age Problems",
+            "Loksewa IQ - Venn Diagram & Logical Deduction",
+            "Loksewa IQ - Non-Verbal Mirror Image & Figure Completion",
+            "Loksewa IQ - Analogy & Odd One Out"
+        ];
+        const iqTopic = isAutoTopic
+            ? iqTopicsPool[Math.floor(Math.random() * iqTopicsPool.length)]
+            : topic.trim();
         const count = parseInt(question_count) || 3;
         const level = difficulty || "Medium";
         const targetLanguage = language || "Nepali";
         const brandCtx = getBrandContextBlock(brand_context);
 
-        const dedupKey = getDedupKey(req, `iq_${iqTopic}_${count}_${level}_${targetLanguage}`);
+        const dedupKey = getDedupKey(req, `iq_${iqTopic}_${count}_${level}_${targetLanguage}${isAutoTopic ? '_' + Date.now() : ''}`);
         const existing = await getExistingGeneration(dedupKey);
         if (existing) return res.json(existing);
 
