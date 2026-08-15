@@ -8635,6 +8635,117 @@ function generateMockBookReelData(title, duration = 45, customNotes = "") {
     return scenes;
 }
 
+function generateProceduralBookArt(scene, width = 1080, height = 1920) {
+    if (!scene) scene = {};
+    const cvs = document.createElement('canvas');
+    cvs.width = width;
+    cvs.height = height;
+    const ctx = cvs.getContext('2d');
+
+    const seed = scene.seed || (scene.title ? scene.title.length * 997 : 12345);
+    const isCover = scene.isCover || scene.scene_number === 0;
+    const accentColor = scene.accentColor || '#818cf8';
+    const bgColor = scene.bgColor || '#0f172a';
+
+    const rng = (offset) => {
+        let x = Math.sin(seed + offset) * 10000;
+        return x - Math.floor(x);
+    };
+
+    // 1. Deep Atmospheric Gradient Background
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, bgColor);
+    bgGrad.addColorStop(0.5, '#090d16');
+    bgGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Impasto Brushstroke & Palette Knife Color Blobs
+    const strokeColors = [accentColor, '#818cf8', '#38bdf8', '#f59e0b', '#ec4899', '#10b981', '#a855f7'];
+    for (let i = 0; i < 30; i++) {
+        const cx = rng(i * 3) * width;
+        const cy = rng(i * 3 + 1) * height;
+        const rad = 150 + rng(i * 3 + 2) * 350;
+        const col = strokeColors[Math.floor(rng(i * 7) * strokeColors.length)];
+
+        ctx.save();
+        ctx.globalAlpha = 0.12 + rng(i * 9) * 0.18;
+        const blobGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, rad);
+        blobGrad.addColorStop(0, col);
+        blobGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = blobGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // 3. Central Focal Motif with Glowing Halo
+    const cenX = width / 2;
+    const cenY = height / 2 - (isCover ? 100 : 60);
+
+    ctx.save();
+    const haloGrad = ctx.createRadialGradient(cenX, cenY, 40, cenX, cenY, 380);
+    haloGrad.addColorStop(0, accentColor);
+    haloGrad.addColorStop(0.5, 'rgba(99, 102, 241, 0.2)');
+    haloGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = haloGrad;
+    ctx.beginPath();
+    ctx.arc(cenX, cenY, 380, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Concentric Geometric Rings
+    ctx.save();
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 4;
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.arc(cenX, cenY, 260, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    ctx.arc(cenX, cenY, 300, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Central Icon Motif
+    ctx.save();
+    ctx.shadowColor = accentColor;
+    ctx.shadowBlur = 30;
+    const symbols = ['📖', '✨', '💡', '⚖️', '🧠', '⚙️', '🌟', '🚀', '🔮', '🎯', '🏛️', '🔥'];
+    const symbol = isCover ? '📖' : symbols[(scene.scene_number || 1) % symbols.length];
+    
+    ctx.font = `bold ${Math.round(width * 0.12)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(symbol, cenX, cenY);
+    ctx.restore();
+
+    // 4. Fine Art Border Frame & Corner Accents
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(40, 40, width - 80, height - 80);
+
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 5;
+    const clen = 40;
+    ctx.beginPath(); ctx.moveTo(40, 40 + clen); ctx.lineTo(40, 40); ctx.lineTo(40 + clen, 40); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(width - 40 - clen, 40); ctx.lineTo(width - 40, 40); ctx.lineTo(width - 40, 40 + clen); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(40, height - 40 - clen); ctx.lineTo(40, height - 40); ctx.lineTo(40 + clen, height - 40); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(width - 40 - clen, height - 40); ctx.lineTo(width - 40, height - 40); ctx.lineTo(width - 40, height - 40 - clen); ctx.stroke();
+    ctx.restore();
+
+    return cvs.toDataURL('image/png');
+}
+
+window.generateProceduralBookArt = generateProceduralBookArt;
+
 function drawBookReelCanvas() {
     const canvas = document.getElementById('book-reel-canvas');
     if (!canvas) return;
@@ -8665,6 +8776,15 @@ function drawBookReelCanvas() {
             bookReelState.loadedImagesMap[currIdx] = img;
             drawBookReelCanvas();
         };
+        img.onerror = () => {
+            // Fallback to procedural artwork if network/429 fails
+            const procImg = new Image();
+            procImg.onload = () => {
+                bookReelState.loadedImagesMap[currIdx] = procImg;
+                drawBookReelCanvas();
+            };
+            procImg.src = generateProceduralBookArt(scene, w, h);
+        };
         img.src = scene.image_url;
     }
 
@@ -8682,22 +8802,12 @@ function drawBookReelCanvas() {
         // Draw Full-Bleed 9:16 AI Artwork Image
         ctx.drawImage(imgObj, 0, 0, w, h);
     } else {
-        // High-Quality Fallback Background Gradient while AI image loads
-        const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-        bgGrad.addColorStop(0, scene.bgColor || '#0f172a');
-        bgGrad.addColorStop(1, '#020617');
-        ctx.fillStyle = bgGrad;
-        ctx.fillRect(0, 0, w, h);
-
-        // Subtle geometric loading indicator
-        ctx.save();
-        ctx.globalAlpha = 0.15;
-        ctx.strokeStyle = scene.accentColor || '#6366f1';
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.arc(w / 2, h / 2, 220, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
+        // Instant Guaranteed Procedural Fine Art Masterpiece
+        const procDataUrl = generateProceduralBookArt(scene, w, h);
+        const procImg = new Image();
+        procImg.src = procDataUrl;
+        bookReelState.loadedImagesMap[currIdx] = procImg;
+        ctx.drawImage(procImg, 0, 0, w, h);
     }
     ctx.restore();
 
@@ -8902,15 +9012,7 @@ function renderBookStoryboardGrid() {
 
             <!-- 9:16 Aspect Frame Container -->
             <div class="aspect-[9/16]" style="position:relative;width:100%;aspect-ratio:9/16;background:${sc.bgColor || '#0f172a'};border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;">
-                ${sc.image_url ? `
-                    <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy" onerror="this.onerror=null; this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
-                ` : ''}
-                <div style="display:${sc.image_url ? 'none' : 'flex'};flex-direction:column;align-items:center;justify-content:center;padding:12px;text-align:center;">
-                    <div style="width:40px;height:40px;border-radius:50%;background:${sc.accentColor || '#6366f1'};display:flex;align-items:center;justify-content:center;margin-bottom:8px;box-shadow:0 4px 12px ${sc.accentColor || '#6366f1'}66;">
-                        <span style="font-size:18px;">${sc.isCover ? '📖' : '🎨'}</span>
-                    </div>
-                    <div style="font-size:11px;font-weight:700;color:#fff;text-align:center;line-height:1.3;max-height:48px;overflow:hidden;padding:0 8px;">${sc.title}</div>
-                </div>
+                <img src="${sc.image_url}" alt="${sc.title}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" loading="lazy" onerror="this.onerror=null; this.src=generateProceduralBookArt(bookReelState.scenes[${idx}], 540, 960);">
             </div>
 
             <div style="font-size:11px;color:var(--color-fg-muted);line-height:1.3;max-height:34px;overflow:hidden;">
