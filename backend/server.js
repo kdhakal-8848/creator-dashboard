@@ -1161,6 +1161,25 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
         let postId = null;
         let insertedPost = null;
 
+        if (parsed && Array.isArray(parsed.questions)) {
+            const handle = brand_context?.handle || '@growuploksewa';
+            const mcqSlides = parsed.questions.map((q, idx) => ({
+                title: `Q${idx + 1}. ${q.question || ''}`,
+                content: Array.isArray(q.options) 
+                    ? `${q.options.join('\n')}\n\n✅ Correct: ${q.correct_option || ''}\n💡 ${q.explanation || ''}` 
+                    : (q.explanation || ''),
+                header: handle,
+                is_cta: false
+            }));
+            mcqSlides.push({
+                title: 'Follow for More! 🔥',
+                content: `Read caption for full breakdown ↓\n\nFollow ${handle} for daily prep & insights.`,
+                header: handle,
+                is_cta: true
+            });
+            parsed.slides = mcqSlides;
+        }
+
         try {
             const { data: insertData, error: insertError } = await supabase
                 .from('posts')

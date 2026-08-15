@@ -1341,6 +1341,17 @@
                         <button id="trigger-book-reel-generate" class="btn-primary full-width" style="padding: 12px; border-radius: 10px; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; cursor: pointer; color: #fff; box-shadow: 0 4px 16px rgba(99,102,241,0.4);">
                             <i data-feather="sparkles" style="width: 18px; height: 18px;"></i> Generate Story & Assets
                         </button>
+                        
+                        <!-- Real-Time Generation Progress Container -->
+                        <div id="book-reel-progress-box" style="display: none; margin-top: 14px; padding: 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span id="book-reel-progress-text" style="font-size: 11px; font-weight: 700; color: #818cf8;">Initializing generation...</span>
+                                <span id="book-reel-progress-pct" style="font-size: 11px; font-weight: 800; color: #34d399; font-family: monospace;">0%</span>
+                            </div>
+                            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                <div id="book-reel-progress-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
                         <p id="book-reel-feedback" style="margin-top: 10px; font-size: 12px; display: none; color: #f87171; text-align: center;"></p>
 
                         <!-- Pre-set Demo Book Quick Fill Pills -->
