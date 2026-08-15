@@ -9071,6 +9071,7 @@ async function generateClientSideGeminiScript(titleToUse, targetDuration = 45, c
     const k1 = ['AIzaSyCLna', '9QBBWPbqs3', 'ICC2qyFsxZg', 'AT_-LrdI'].join('');
     const k2 = ['AQ.Ab8RN6LDP', 'QE2PeiNCdE1Xp', '_uWo8YNcNwDEHv', 'jHOaXD9XO6QmmQ'].join('');
     const keys = [k1, k2];
+    const models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
 
     const dur = parseInt(targetDuration) || 45;
     const targetSceneCount = dur === 30 ? 9 : (dur === 60 ? 18 : (dur === 90 ? 26 : (dur === 120 ? 35 : 13)));
@@ -9108,22 +9109,23 @@ Return JSON ONLY matching this EXACT schema:
 }`;
 
     let lastError = null;
-    for (const key of keys) {
-        try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: systemPrompt }] }],
-                    generationConfig: { responseMimeType: 'application/json' }
-                })
-            });
+    for (const model of models) {
+        for (const key of keys) {
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: systemPrompt }] }],
+                        generationConfig: { responseMimeType: 'application/json' }
+                    })
+                });
 
-            if (!res.ok) {
-                const errText = await res.text();
-                console.warn(`[Gemini Client API] Key tag ...${key.slice(-4)} failed with status ${res.status}: ${errText.substring(0, 100)}`);
-                continue;
-            }
+                if (!res.ok) {
+                    const errText = await res.text();
+                    console.warn(`[Gemini Client API] Model ${model} | Key ...${key.slice(-4)} failed (${res.status}): ${errText.substring(0, 100)}`);
+                    continue;
+                }
 
             const json = await res.json();
             const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -9196,6 +9198,7 @@ Return JSON ONLY matching this EXACT schema:
         } catch (e) {
             lastError = e;
             console.warn("Client Gemini REST call failed:", e.message);
+        }
         }
     }
 
