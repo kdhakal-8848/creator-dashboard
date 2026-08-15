@@ -102,6 +102,7 @@
                 <li><a href="#" data-target="canvas-view"><i data-feather="layout"></i> Design Studio</a></li>
                 <li><a href="#" data-target="video-view"><i data-feather="video"></i> Video Content</a></li>
                 <li><a href="#" data-target="mcq-video-view"><i data-feather="help-circle"></i> MCQ Videos</a></li>
+                <li><a href="#" data-target="iq-video-view"><i data-feather="cpu"></i> IQ Lab</a></li>
                 <li><a href="#" data-target="video-brief-view"><i data-feather="book-open"></i> Video Brief Lab</a></li>
                 <li><a href="#" data-target="book-reel-view"><i data-feather="book"></i> Book Storyteller</a></li>
                 <li><a href="#" data-target="branding-view"><i data-feather="star"></i> Brand Identity</a></li>
@@ -1106,6 +1107,213 @@
 
                             <!-- Fast Section Jump Buttons -->
                             <div id="mcq-section-pills" style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- IQ Question Video Creator & Reel Studio -->
+            <!-- ============================================================ -->
+            <div id="iq-video-view" class="view">
+                <div class="view-header" style="margin-bottom: 20px;">
+                    <div>
+                        <h2 style="font-size: 22px; font-weight: 700; color: var(--color-fg-default); display: flex; align-items: center; gap: 10px;">
+                            <i data-feather="cpu" style="width: 24px; height: 24px; color: #a855f7;"></i> IQ Question Video Creator & Reel Studio
+                        </h2>
+                        <p style="color: var(--color-fg-muted); font-size: 14px; margin-top: 4px;">Generate animated IQ question reels with voice narration, pause-and-solve prompts, visual diagrams, step-by-step solutions, and CTAs.</p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start;">
+                    <!-- Left Control Panel -->
+                    <div style="background: var(--color-bg-subtle, #161b22); border: 1px solid var(--color-border-default, rgba(255,255,255,0.1)); border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+                        <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i data-feather="sparkles" style="width: 18px; height: 18px; color: #a855f7;"></i> IQ AI Generator
+                        </h3>
+
+                        <div class="form-group" style="margin-bottom: 14px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Topic or IQ Category</label>
+                            <input type="text" id="iq-topic" placeholder="e.g. Loksewa IQ - Pattern Matching & Matrix" class="full-width" value="Loksewa IQ - Pattern Matching & Matrix Reasoning" style="padding: 10px; border-radius: 8px;">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+                            <div>
+                                <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Difficulty</label>
+                                <select id="iq-difficulty" class="full-width" style="padding: 8px; border-radius: 8px;">
+                                    <option value="Medium">Medium</option>
+                                    <option value="Easy">Easy</option>
+                                    <option value="Hard">Hard</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Language</label>
+                                <select id="iq-language" class="full-width" style="padding: 8px; border-radius: 8px;">
+                                    <option value="Nepali">Nepali</option>
+                                    <option value="English">English</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+                            <div>
+                                <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Questions Count</label>
+                                <select id="iq-count" class="full-width" style="padding: 8px; border-radius: 8px;">
+                                    <option value="1">1 Question</option>
+                                    <option value="3" selected>3 Questions</option>
+                                    <option value="5">5 Questions</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Target Brand</label>
+                                <select id="iq-brand" class="full-width" style="padding: 8px; border-radius: 8px;"></select>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--color-fg-muted);">Reel Visual Theme</label>
+                            <select id="iq-theme" class="full-width" style="padding: 10px; border-radius: 8px; font-weight: 600; background: var(--color-bg-primary, #0d1117); color: var(--color-fg-default, #c9d1d9); border: 1px solid var(--color-border-default, rgba(255,255,255,0.15));">
+                                <option value="loksewa_official" selected>🇳🇵 Official Nepal Loksewa (Crimson, Navy & Gold)</option>
+                                <option value="midnight">🔮 Midnight Neon (Purple & Cyan Glow)</option>
+                                <option value="emerald">👑 Loksewa Royal Emerald & Gold</option>
+                                <option value="cyber">⚡ Electric Cyber Cyan</option>
+                                <option value="sunset">🌅 Sunset Crimson & Coral</option>
+                                <option value="minimal">🏛️ Classic Dark Glass</option>
+                            </select>
+                        </div>
+
+                        <button id="trigger-iq-generate" class="btn-primary full-width" style="padding: 12px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; cursor: pointer;">
+                            <i data-feather="cpu" style="width: 16px; height: 16px;"></i> Generate IQ Video Deck
+                        </button>
+                        <p id="iq-feedback" style="margin-top: 8px; font-size: 13px; display: none; color: #f87171;"></p>
+
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--color-border-default, rgba(255,255,255,0.1));">
+
+                        <!-- Question Navigator & Live Editor -->
+                        <div id="iq-editor-panel" style="margin-top: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h4 style="font-size: 14px; font-weight: 600;">Question Selector</h4>
+                                <select id="iq-select-question" style="padding: 4px 8px; border-radius: 6px; font-size: 12px;"></select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; color: var(--color-fg-muted);">Question Text</label>
+                                <textarea id="iq-edit-question" rows="2" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;"></textarea>
+                            </div>
+
+                            <!-- Question Image / Diagram Upload -->
+                            <div class="form-group" style="margin-bottom: 12px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15);">
+                                <label style="font-size: 11px; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+                                    <i data-feather="image" style="width: 14px; height: 14px;"></i> Question Image / Diagram (Optional)
+                                </label>
+                                <input type="file" id="iq-edit-qimage-file" accept="image/*" class="full-width" style="font-size: 11px; margin-top: 4px;">
+                                <input type="text" id="iq-edit-qimage-url" placeholder="Or paste image URL (https://...)" class="full-width" style="font-size: 11px; padding: 5px; border-radius: 4px; margin-top: 6px;">
+                                <div id="iq-qimage-preview-container" style="display: none; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <img id="iq-edit-qimage-preview" src="" alt="Question Diagram" style="max-height: 50px; max-width: 120px; object-fit: contain; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);">
+                                    <button type="button" id="iq-remove-qimage-btn" style="padding: 2px 8px; border-radius: 4px; font-size: 10px; background: #ef4444; color: #fff; border: none; cursor: pointer;">Remove Image</button>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+                                <div>
+                                    <label style="font-size: 11px; color: var(--color-fg-muted);">Option A</label>
+                                    <input type="text" id="iq-edit-opt0" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 11px; color: var(--color-fg-muted);">Option B</label>
+                                    <input type="text" id="iq-edit-opt1" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 11px; color: var(--color-fg-muted);">Option C</label>
+                                    <input type="text" id="iq-edit-opt2" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 11px; color: var(--color-fg-muted);">Option D</label>
+                                    <input type="text" id="iq-edit-opt3" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;">
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; color: var(--color-fg-muted);">Correct Option</label>
+                                <select id="iq-edit-correct" class="full-width" style="padding: 6px; border-radius: 6px; font-size: 12px;">
+                                    <option value="0">A</option>
+                                    <option value="1">B</option>
+                                    <option value="2">C</option>
+                                    <option value="3">D</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; color: #f59e0b; font-weight: 600;">Pause Prompt Voiceover Text</label>
+                                <textarea id="iq-edit-pause-prompt" rows="2" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;" placeholder="e.g. भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!"></textarea>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; color: var(--color-fg-muted);">Step-by-Step Explanation</label>
+                                <textarea id="iq-edit-explanation" rows="2" class="full-width" style="font-size: 12px; padding: 6px; border-radius: 6px;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Studio Stage / Canvas Player -->
+                    <div style="background: var(--color-bg-subtle, #161b22); border: 1px solid var(--color-border-default, rgba(255,255,255,0.1)); border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center;">
+                        
+                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 16px;">
+                            <h3 style="font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                <i data-feather="video" style="width: 18px; height: 18px; color: #a855f7;"></i> Live IQ Video Canvas Stage
+                            </h3>
+                            <div style="font-size: 12px; padding: 4px 10px; background: rgba(168,85,247,0.1); color: #c084fc; border-radius: 20px; font-weight: 600;">
+                                9:16 Shorts / Reels Format
+                            </div>
+                        </div>
+
+                        <!-- Canvas Stage Container -->
+                        <div style="position: relative; width: 340px; height: 604px; background: #000; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.15);">
+                            <canvas id="iq-canvas" width="1080" height="1920" style="width: 100%; height: 100%; display: block; object-fit: contain;"></canvas>
+                            
+                            <!-- Voice Narration Progress Modal Overlay -->
+                            <div id="iq-progress-container" style="display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px); z-index: 20; padding: 24px; box-sizing: border-box; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                                <div style="width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; box-shadow: 0 0 24px rgba(168, 85, 247, 0.5);">
+                                    <i data-feather="mic" style="width: 26px; height: 26px; color: #fff;"></i>
+                                </div>
+                                <div id="iq-progress-text" style="color: #f8fafc; font-weight: 700; font-size: 13px; margin-bottom: 14px; line-height: 1.4;">🎙️ Generating HD Voice Narration... 0%</div>
+                                <div style="width: 100%; max-width: 260px; height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; margin: 0 auto;">
+                                    <div id="iq-progress-bar-inner" style="width: 0%; height: 100%; background: linear-gradient(90deg, #a855f7, #38bdf8); transition: width 0.2s ease-out;"></div>
+                                </div>
+                                <div style="color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 12px;">Synthesis in progress. Reel playback will start instantly when complete.</div>
+                            </div>
+                        </div>
+
+                        <!-- Player Transport Controls -->
+                        <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; width: 100%; max-width: 480px;">
+                            <button id="iq-play-btn" class="btn-primary" style="padding: 10px 20px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; background: #22c55e; border: none; cursor: pointer;">
+                                <i data-feather="play" style="width: 16px; height: 16px;"></i> Play Video Preview
+                            </button>
+
+                            <button id="iq-stop-btn" class="btn-secondary" style="padding: 10px 16px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <i data-feather="square" style="width: 16px; height: 16px;"></i> Stop
+                            </button>
+
+                            <button id="iq-export-btn" class="btn-primary" style="padding: 10px 20px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; cursor: pointer;">
+                                <i data-feather="download" style="width: 16px; height: 16px;"></i> Export Video (.mp4)
+                            </button>
+                        </div>
+
+                        <!-- Interactive Timeline Scrubber & Section Jump Controls -->
+                        <div style="margin-top: 14px; width: 100%; max-width: 480px; background: rgba(15, 23, 42, 0.75); padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(10px); box-sizing: border-box;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--color-fg-muted); margin-bottom: 8px;">
+                                <span id="iq-phase-label" style="font-weight: 600; color: #c084fc;">Ready to Play</span>
+                                <span id="iq-time-label" style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.5); padding: 3px 8px; border-radius: 6px; color: #f8fafc;">00:00 / 00:00</span>
+                            </div>
+                            
+                            <!-- Interactive Timeline Scrubber Slider -->
+                            <div style="position: relative; display: flex; align-items: center; margin-bottom: 10px;">
+                                <input type="range" id="iq-timeline-slider" min="0" max="100" value="0" step="0.1" style="width: 100%; accent-color: #a855f7; cursor: pointer; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none;">
+                            </div>
+
+                            <!-- Fast Section Jump Buttons -->
+                            <div id="iq-section-pills" style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center;">
                             </div>
                         </div>
                     </div>

@@ -1215,6 +1215,176 @@ OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
     }
 });
 
+// ============================================================
+// POST /generate-iq — IQ Question Video Lab Generator Endpoint
+// ============================================================
+app.post('/generate-iq', async (req, res) => {
+    try {
+        const { topic, question_count, difficulty, language, brand_id, brand_context } = req.body;
+        const iqTopic = topic || "Loksewa IQ - Pattern Matching, Series & Matrix Reasoning";
+        const count = parseInt(question_count) || 3;
+        const level = difficulty || "Medium";
+        const targetLanguage = language || "Nepali";
+        const brandCtx = getBrandContextBlock(brand_context);
+
+        const dedupKey = getDedupKey(req, `iq_${iqTopic}_${count}_${level}_${targetLanguage}`);
+        const existing = await getExistingGeneration(dedupKey);
+        if (existing) return res.json(existing);
+
+        let resolveInflight;
+        const inflightPromise = new Promise(resolve => { resolveInflight = resolve; });
+        setExistingGeneration(dedupKey, null, inflightPromise);
+
+        console.log(`[/generate-iq] "${iqTopic}", ${count} questions, Level: ${level}, Lang: ${targetLanguage}`);
+
+        const prompt = `You are an expert educational content engine for Loksewa and Competitive Exams.${brandCtx}
+
+Create a set of ${count} high-converting IQ (Intelligence Quotient) Questions for video reels (Verbal, Non-Verbal, Pattern/Matrix, Numerical).
+Topic: "${iqTopic}"
+Difficulty Level: ${level}
+Language: ${targetLanguage}
+
+CRITICAL RULES:
+- Generate EXACTLY ${count} questions.
+- Each question MUST have EXACTLY 4 options (labeled A., B., C., D.).
+- The question text must be a crisp, engaging IQ puzzle prompt (10-30 words).
+- Specify the 0-based index of the correct option (0 for A, 1 for B, 2 for C, 3 for D).
+- Provide a pause_prompt field asking the viewer to pause the video and solve (e.g. in ${targetLanguage}: "भिडियो रोकेर प्रश्न हल गर्नुहोस्! Resume to check your answer!").
+- Provide a rich, step-by-step logic explanation (explanation field) (40-80 words) showing how the pattern or mathematical formula works.
+- Include optional image_url or image_description if it represents a visual matrix/pattern (or null if purely text-based).
+- All text MUST be written in ${targetLanguage}.
+
+OUTPUT FORMAT: Valid JSON only. No markdown wrappers.
+
+{
+  "topic": "${iqTopic}",
+  "language": "${targetLanguage}",
+  "questions": [
+    {
+      "id": 1,
+      "question": "IQ puzzle question text here?",
+      "options": [
+        "A. Option 1",
+        "B. Option 2",
+        "C. Option 3",
+        "D. Option 4"
+      ],
+      "correct_index": 1,
+      "correct_option": "B. Option 2",
+      "pause_prompt": "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्! Play to check!",
+      "explanation": "Step-by-step logic breakdown explaining the formula, sequence rule, or pattern relationship.",
+      "image_url": null
+    }
+  ]
+}`;
+
+        const aiRes = await generateAIContent(prompt, { jsonMode: true });
+        let rawText = aiRes.response.text();
+        rawText = cleanJsonString(rawText);
+        rawText = rawText.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+        rawText = rawText.replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
+
+        let parsed;
+        try {
+            parsed = JSON.parse(rawText);
+        } catch (pe) {
+            console.error("JSON parse error in /generate-iq:", pe.message, "Raw:", rawText.substring(0, 200));
+            try {
+                const sanitized = rawText
+                    .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+                    .replace(/,\s*}/g, '}')
+                    .replace(/,\s*\]/g, ']');
+                parsed = JSON.parse(sanitized);
+            } catch(e2) {
+                console.error("JSON repair failed for IQ, building safe fallback object:", e2.message);
+                parsed = {
+                    topic: iqTopic,
+                    language: targetLanguage,
+                    questions: [
+                        {
+                            id: 1,
+                            question: targetLanguage === 'Nepali' 
+                                ? 'क्रमको खाली ठाउँमा के हुन्छ? २, ६, १२, २०, ३०, ?' 
+                                : 'What comes next in the sequence? 2, 6, 12, 20, 30, ?',
+                            options: [
+                                "A. 38",
+                                "B. 42",
+                                "C. 40",
+                                "D. 44"
+                            ],
+                            correct_index: 1,
+                            correct_option: "B. 42",
+                            pause_prompt: targetLanguage === 'Nepali' 
+                                ? "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!" 
+                                : "Pause the video now to solve!",
+                            explanation: targetLanguage === 'Nepali' 
+                                ? "नियम: +4, +6, +8, +10, +12। ३० + १२ = ४२।" 
+                                : "Pattern rule: +4, +6, +8, +10, +12. 30 + 12 = 42.",
+                            image_url: null
+                        }
+                    ]
+                };
+            }
+        }
+
+        const cleanBrandId = sanitizeBrandId(brand_id);
+        let postId = null;
+        let insertedPost = null;
+
+        if (parsed && Array.isArray(parsed.questions)) {
+            const handle = brand_context?.handle || '@growuploksewa';
+            const iqSlides = parsed.questions.map((q, idx) => ({
+                title: `IQ Q${idx + 1}. ${q.question || ''}`,
+                content: Array.isArray(q.options) 
+                    ? `${q.options.join('\n')}\n\n⏸️ ${q.pause_prompt || 'Pause video to solve!'}\n✅ Correct: ${q.correct_option || ''}\n💡 ${q.explanation || ''}` 
+                    : (q.explanation || ''),
+                header: handle,
+                is_cta: false
+            }));
+            iqSlides.push({
+                title: 'Follow for Daily IQ Prep! 🧠',
+                content: `Read caption for full solution breakdown ↓\n\nFollow ${handle} for daily Loksewa IQ & GK.`,
+                header: handle,
+                is_cta: true
+            });
+            parsed.slides = iqSlides;
+        }
+
+        try {
+            const { data: insertData, error: insertError } = await supabase
+                .from('posts')
+                .insert([{
+                    topic: `[IQ Video] ${iqTopic.substring(0, 50)}`,
+                    text: JSON.stringify(parsed),
+                    status: 'Draft',
+                    brand_id: cleanBrandId
+                }])
+                .select();
+
+            if (insertData && insertData[0]) {
+                postId = insertData[0].id;
+                insertedPost = insertData[0];
+            }
+            if (insertError) console.error("Supabase insert error for IQ:", insertError.message);
+        } catch (e) { console.error("Insert exception in IQ:", e.message); }
+
+        const resObj = {
+            success: true,
+            iq_data: parsed,
+            post_id: postId,
+            post: insertedPost
+        };
+
+        if (resolveInflight) resolveInflight(resObj);
+        setExistingGeneration(dedupKey, resObj);
+        res.json(resObj);
+
+    } catch (err) {
+        console.error("IQ Lab error:", err);
+        res.status(500).json({ error: "Internal server error: " + err.message });
+    }
+});
+
 function pcmToWav(pcmBuffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16) {
     const header = Buffer.alloc(44);
     const dataSize = pcmBuffer.length;

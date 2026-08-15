@@ -504,7 +504,7 @@ async function fetchBrands() {
 }
 
 function populateBrandSelectors() {
-    const selectors = ['brand-selector', 'manual-brand', 'queue-brand-filter', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector', 'mcq-brand'];
+    const selectors = ['brand-selector', 'manual-brand', 'queue-brand-filter', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector', 'mcq-brand', 'iq-brand'];
     selectors.forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
@@ -516,7 +516,7 @@ function populateBrandSelectors() {
         allBrands.forEach(b => {
             const opt = document.createElement('option'); opt.value = b.id; opt.innerText = b.name; sel.appendChild(opt);
         });
-        if (['brand-selector', 'manual-brand', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector', 'mcq-brand'].includes(id)) {
+        if (['brand-selector', 'manual-brand', 'news-brand', 'facts-brand', 'psych-brand-select', 'canvas-brand-selector', 'mcq-brand', 'iq-brand'].includes(id)) {
             sel.value = activeBrandId || (allBrands[0] ? allBrands[0].id : '');
         } else if (currentVal) {
             sel.value = currentVal;
@@ -581,6 +581,9 @@ function switchView(targetViewId, linkElement = null) {
     if (targetViewId === 'psych-view') initPsychLab();
     if (targetViewId === 'mcq-video-view') {
         try { initMCQVideoStudio(); } catch (err) { console.error("initMCQVideoStudio error:", err); }
+    }
+    if (targetViewId === 'iq-video-view') {
+        try { initIQVideoStudio(); } catch (err) { console.error("initIQVideoStudio error:", err); }
     }
     if (targetViewId === 'video-brief-view') {
         try { initVideoBriefStudio(); } catch (err) { console.error("initVideoBriefStudio error:", err); }
@@ -7296,6 +7299,1443 @@ window.stopMCQSequence = stopMCQSequence;
 window.jumpMCQToSection = jumpMCQToSection;
 window.seekMCQToTime = seekMCQToTime;
 window.buildMCQTimelineMap = buildMCQTimelineMap;
+
+// ============================================================
+// 11. IQ VIDEO CREATOR & ANIMATED REEL STUDIO
+// ============================================================
+let iqStudioInitialized = false;
+let iqState = {
+    questions: [
+        {
+            id: 1,
+            question: "क्रमको खाली ठाउँमा के हुन्छ? २, ६, १२, २०, ३०, ?",
+            options: ["A. 38", "B. 42", "C. 40", "D. 44"],
+            correct_index: 1,
+            correct_option: "B. 42",
+            pause_prompt: "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!",
+            explanation: "नियम (Pattern Rule): +4, +6, +8, +10, +12। ३० मा १२ जोड्दा ४२ हुन्छ।",
+            image_url: null
+        },
+        {
+            id: 2,
+            question: "यदि MAT = 34 भए, PAT = कति होला?",
+            options: ["A. 37", "B. 39", "C. 41", "D. 43"],
+            correct_index: 0,
+            correct_option: "A. 37",
+            pause_prompt: "भिडियो रोकेर समाधान खोज्नुहोस्!",
+            explanation: "Alphabet values: M(13) + A(1) + T(20) = 34। P(16) + A(1) + T(20) = 37।",
+            image_url: null
+        },
+        {
+            id: 3,
+            question: "चित्र म्याट्रिक्सको खाली ठाउँ (?) मा कुन विकल्प हुन्छ?",
+            options: ["A. 14", "B. 16", "C. 18", "D. 21"],
+            correct_index: 3,
+            correct_option: "D. 21",
+            pause_prompt: "भिडियो Pause गरेर प्रश्न हल गर्नुहोस्!",
+            explanation: "रो १ (Row 1): (4 × 2) + 1 = 9, (9 × 2) + 2 = 20। रो ३ (Row 3): (10 × 2) + 1 = 21।",
+            image_url: null
+        }
+    ],
+    currentIndex: 0,
+    phase: 'IDLE', // 'IDLE', 'QUESTION', 'OPTIONS', 'PAUSE_PROMPT', 'EXPLANATION', 'OUTRO'
+    qCharCount: 0,
+    optCharCounts: [0, 0, 0, 0],
+    pauseCharCount: 0,
+    expCharCount: 0,
+    outroCharCount: 0,
+    isPlaying: false,
+    isExporting: false,
+    isPreloadingAudio: false,
+    speechId: 0,
+    animFrameId: null,
+    stepTimer: null,
+    typewriterInterval: null,
+    audioCache: {},
+    imageCache: {}
+};
+
+window.iqState = iqState;
+
+function getIQExplanationText(qData) {
+    if (!qData) return '';
+    let correctStr = qData.correct_option || '';
+    if ((!correctStr || correctStr.length <= 3) && qData.options && qData.correct_index !== undefined && qData.options[qData.correct_index]) {
+        correctStr = qData.options[qData.correct_index];
+    }
+    const exp = qData.explanation || '';
+    return `सही उत्तर: ${correctStr}। ${exp}`;
+}
+
+function loadIQCanvasImage(url) {
+    if (!url) return null;
+    if (iqState.imageCache[url]) return iqState.imageCache[url];
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+    img.onload = () => { drawIQCanvas(); };
+    iqState.imageCache[url] = img;
+    return img;
+}
+
+function buildIQTimelineMap() {
+    const map = [];
+    let currentTime = 0;
+
+    if (!iqState.questions || iqState.questions.length === 0) return { map: [], totalTime: 0 };
+
+    iqState.questions.forEach((q, idx) => {
+        // Question phase
+        const qText = q.question || '';
+        const qBuf = iqState.audioCache[qText];
+        const qDur = qBuf ? qBuf.duration : Math.max(3, qText.length * 0.08);
+        map.push({
+            qIndex: idx,
+            phase: 'QUESTION',
+            label: `IQ Q${idx + 1} Question`,
+            pillLabel: `Q${idx + 1}`,
+            startTime: currentTime,
+            duration: qDur
+        });
+        currentTime += qDur;
+
+        // Options phase
+        let optDurSum = 0;
+        if (q.options) {
+            q.options.forEach(opt => {
+                const optBuf = iqState.audioCache[opt];
+                optDurSum += (optBuf ? optBuf.duration : Math.max(1.5, opt.length * 0.08)) + 0.25;
+            });
+        }
+        map.push({
+            qIndex: idx,
+            phase: 'OPTIONS',
+            label: `IQ Q${idx + 1} Options`,
+            pillLabel: `Q${idx + 1} Opts`,
+            startTime: currentTime,
+            duration: optDurSum
+        });
+        currentTime += optDurSum;
+
+        // Pause Prompt phase
+        const pauseText = q.pause_prompt || "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!";
+        const pauseBuf = iqState.audioCache[pauseText];
+        const pauseDur = pauseBuf ? pauseBuf.duration + 0.5 : 3.5;
+        map.push({
+            qIndex: idx,
+            phase: 'PAUSE_PROMPT',
+            label: `IQ Q${idx + 1} Pause Prompt ⏸️`,
+            pillLabel: `Q${idx + 1} Pause ⏸️`,
+            startTime: currentTime,
+            duration: pauseDur
+        });
+        currentTime += pauseDur;
+
+        // Explanation phase
+        const expText = getIQExplanationText(q);
+        const expBuf = iqState.audioCache[expText];
+        const expDur = (expBuf ? expBuf.duration : Math.max(5, expText.length * 0.08)) + 1.5;
+        map.push({
+            qIndex: idx,
+            phase: 'EXPLANATION',
+            label: `IQ Q${idx + 1} Explanation 💡`,
+            pillLabel: `Q${idx + 1} Exp 💡`,
+            startTime: currentTime,
+            duration: expDur
+        });
+        currentTime += expDur;
+    });
+
+    // Outro phase
+    const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
+    const outroBuf = iqState.audioCache[outroText];
+    const outroDur = outroBuf ? outroBuf.duration : 8.0;
+    map.push({
+        qIndex: iqState.questions.length - 1,
+        phase: 'OUTRO',
+        label: `Outro`,
+        pillLabel: `Outro`,
+        startTime: currentTime,
+        duration: outroDur
+    });
+    currentTime += outroDur;
+
+    return { map, totalTime: currentTime };
+}
+
+function updateIQSectionPills() {
+    const container = document.getElementById('iq-section-pills');
+    if (!container) return;
+
+    const { map } = buildIQTimelineMap();
+    container.innerHTML = '';
+
+    map.forEach(seg => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isActive = (seg.qIndex === iqState.currentIndex && seg.phase === iqState.phase) || (seg.phase === 'OUTRO' && iqState.phase === 'OUTRO');
+
+        btn.style.cssText = `
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid ${isActive ? '#a855f7' : 'rgba(255,255,255,0.15)'};
+            background: ${isActive ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'rgba(255,255,255,0.06)'};
+            color: ${isActive ? '#ffffff' : 'rgba(255,255,255,0.7)'};
+            transition: all 0.15s ease;
+        `;
+        btn.innerText = seg.pillLabel;
+
+        btn.onclick = () => {
+            jumpIQToSection(seg.qIndex, seg.phase);
+        };
+        container.appendChild(btn);
+    });
+}
+
+function jumpIQToSection(qIndex, phase) {
+    iqState.isExporting = false;
+    stopIQSequence(true);
+
+    iqState.currentIndex = qIndex;
+    iqState.phase = phase;
+
+    const qData = iqState.questions[qIndex] || iqState.questions[0];
+    const lang = document.getElementById('iq-language')?.value || 'Nepali';
+
+    if (phase === 'QUESTION') {
+        iqState.qCharCount = qData.question ? qData.question.length : 0;
+        iqState.optCharCounts = [0, 0, 0, 0];
+        iqState.pauseCharCount = 0;
+        iqState.expCharCount = 0;
+    } else if (phase === 'OPTIONS') {
+        iqState.qCharCount = qData.question ? qData.question.length : 0;
+        iqState.optCharCounts = qData.options ? qData.options.map(o => o ? o.length : 0) : [0, 0, 0, 0];
+        iqState.pauseCharCount = 0;
+        iqState.expCharCount = 0;
+    } else if (phase === 'PAUSE_PROMPT') {
+        iqState.qCharCount = qData.question ? qData.question.length : 0;
+        iqState.optCharCounts = qData.options ? qData.options.map(o => o ? o.length : 0) : [0, 0, 0, 0];
+        iqState.pauseCharCount = qData.pause_prompt ? qData.pause_prompt.length : 0;
+        iqState.expCharCount = 0;
+    } else if (phase === 'EXPLANATION') {
+        iqState.expCharCount = qData.explanation ? qData.explanation.length : 0;
+    } else if (phase === 'OUTRO') {
+        iqState.outroCharCount = 93;
+    }
+
+    updateIQEditorFields();
+    updateIQSectionPills();
+    drawIQCanvas();
+
+    iqState.isPlaying = true;
+    if (phase === 'QUESTION') {
+        startIQSequence();
+    } else if (phase === 'OPTIONS') {
+        startIQSequence();
+    } else if (phase === 'PAUSE_PROMPT') {
+        startIQPausePrompt(lang, qData);
+    } else if (phase === 'EXPLANATION') {
+        revealIQAnswer(lang, qData);
+    } else if (phase === 'OUTRO') {
+        startIQOutro(lang);
+    }
+}
+
+function seekIQToTime(targetSec) {
+    const { map } = buildIQTimelineMap();
+    if (map.length === 0) return;
+
+    let foundSeg = map[0];
+    for (let i = 0; i < map.length; i++) {
+        const seg = map[i];
+        if (targetSec >= seg.startTime && targetSec <= seg.startTime + seg.duration) {
+            foundSeg = seg;
+            break;
+        }
+    }
+
+    jumpIQToSection(foundSeg.qIndex, foundSeg.phase);
+}
+
+function updateIQTimelineProgress() {
+    const { map, totalTime } = buildIQTimelineMap();
+    if (totalTime <= 0) return;
+
+    let elapsedSec = 0;
+    for (let i = 0; i < map.length; i++) {
+        const seg = map[i];
+        if (seg.qIndex === iqState.currentIndex && seg.phase === iqState.phase) {
+            elapsedSec = seg.startTime;
+            break;
+        } else if (seg.phase === 'OUTRO' && iqState.phase === 'OUTRO') {
+            elapsedSec = seg.startTime;
+            break;
+        }
+    }
+
+    const pct = Math.min(100, Math.max(0, (elapsedSec / totalTime) * 100));
+    const sliderEl = document.getElementById('iq-timeline-slider');
+    const timeLabel = document.getElementById('iq-time-label');
+
+    if (sliderEl && !sliderEl.matches(':active')) {
+        sliderEl.value = pct;
+    }
+    if (timeLabel) {
+        timeLabel.innerText = `${formatMMSS(elapsedSec)} / ${formatMMSS(totalTime)}`;
+    }
+
+    if (iqState.isExporting) {
+        const exportBtn = document.getElementById('iq-export-btn');
+        if (exportBtn) {
+            exportBtn.innerHTML = `<i data-feather="loader" class="spin" style="width:16px;height:16px;"></i> Exporting IQ Video... (${Math.round(pct)}%)`;
+        }
+    }
+
+    updateIQSectionPills();
+}
+
+async function preloadIQAudioDeck(lang) {
+    iqState.isPreloadingAudio = true;
+    const texts = [];
+    if (!iqState.questions || iqState.questions.length === 0) {
+        iqState.isPreloadingAudio = false;
+        return;
+    }
+
+    iqState.questions.forEach(q => {
+        if (q.question) texts.push(q.question);
+        if (q.options) q.options.forEach(o => { if (o) texts.push(o); });
+        if (q.pause_prompt) texts.push(q.pause_prompt);
+        if (q.explanation) texts.push(getIQExplanationText(q));
+    });
+    texts.push("लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!");
+
+    const total = texts.length;
+    let completed = 0;
+    const bar = document.getElementById('iq-progress-bar-inner');
+    const label = document.getElementById('iq-progress-text');
+    const container = document.getElementById('iq-progress-container');
+
+    if (container) container.style.display = 'flex';
+    if (bar) bar.style.width = `0%`;
+    if (label) label.innerText = `🎙️ Synthesizing IQ Voice Narration (0%)...`;
+
+    for (let i = 0; i < texts.length; i++) {
+        await fetchAudioBuffer(texts[i], lang);
+        completed++;
+        const pct = Math.min(100, Math.round((completed / total) * 100));
+        if (bar) bar.style.width = `${pct}%`;
+        if (label) label.innerText = `🎙️ Generating HD Voice Narration... ${completed} / ${total} (${pct}%)`;
+        if (i < texts.length - 1) {
+            await new Promise(r => setTimeout(r, 150));
+        }
+    }
+
+    iqState.isPreloadingAudio = false;
+    if (container) setTimeout(() => { container.style.display = 'none'; }, 800);
+    updateIQSectionPills();
+    updateIQTimelineProgress();
+}
+
+function drawIQCanvas() {
+    const canvas = document.getElementById('iq-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = 1080;
+    const height = 1920;
+
+    const qData = iqState.questions[iqState.currentIndex] || iqState.questions[0];
+    const brandId = document.getElementById('iq-brand')?.value;
+    const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
+    const brandName = activeBrand?.name || 'GROWUP LOKSEWA';
+    const brandHandle = activeBrand?.handle || '@growuploksewa';
+    const brandLogoUrl = activeBrand?.logoUrl || activeBrand?.logo_url || activeBrand?.logo || activeBrand?.avatar;
+    const brandHeaderAssetUrl = activeBrand?.headerAssetUrl || activeBrand?.header_asset_url;
+    const brandDisplayUrl = brandHeaderAssetUrl || brandLogoUrl;
+
+    if (brandDisplayUrl) {
+        preloadMCQBrandLogo(brandDisplayUrl);
+    }
+
+    const themeKey = document.getElementById('iq-theme')?.value || 'loksewa_official';
+    const themes = {
+        loksewa_official: {
+            bgGrad: ['#0d1b3e', '#0d47a1', '#071230'],
+            glow: 'rgba(168, 85, 247, 0.35)',
+            pillBg: 'rgba(255, 255, 255, 0.95)',
+            pillBorder: 'rgba(168, 85, 247, 0.8)',
+            pillText: '#6366f1',
+            qBoxBg: 'rgba(255, 255, 255, 0.95)',
+            qBoxBorder: 'rgba(168, 85, 247, 0.7)',
+            qAccent: '#a855f7',
+            qLabel: '#6366f1',
+            qTextColor: '#1a1a2e',
+            optCardBg: 'rgba(255, 255, 255, 0.92)',
+            optCardBorder: 'rgba(99, 102, 241, 0.4)',
+            optTextColor: '#1a1a2e',
+            badgeBg: '#a855f7',
+            badgeText: '#ffffff',
+            cdStroke: '#f59e0b',
+            cdText: '#fbbf24'
+        },
+        midnight: {
+            bgGrad: ['#0b0f19', '#1e1b4b', '#090d16'],
+            glow: 'rgba(147, 51, 234, 0.3)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(255, 255, 255, 0.18)',
+            pillText: '#a855f7',
+            qBoxBg: 'rgba(30, 41, 59, 0.88)',
+            qBoxBorder: 'rgba(168, 85, 247, 0.5)',
+            qAccent: '#a855f7',
+            qLabel: '#c084fc',
+            optCardBg: 'rgba(30, 41, 59, 0.75)',
+            optCardBorder: 'rgba(255, 255, 255, 0.18)',
+            badgeBg: '#6366f1',
+            badgeText: '#ffffff',
+            cdStroke: '#f59e0b',
+            cdText: '#fbbf24'
+        },
+        emerald: {
+            bgGrad: ['#022c22', '#065f46', '#022c22'],
+            glow: 'rgba(16, 185, 129, 0.3)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(250, 204, 21, 0.3)',
+            pillText: '#fbbf24',
+            qBoxBg: 'rgba(6, 78, 59, 0.85)',
+            qBoxBorder: 'rgba(250, 204, 21, 0.5)',
+            qAccent: '#fbbf24',
+            qLabel: '#fef08a',
+            optCardBg: 'rgba(6, 78, 59, 0.7)',
+            optCardBorder: 'rgba(255, 255, 255, 0.18)',
+            badgeBg: '#f59e0b',
+            badgeText: '#0f172a',
+            cdStroke: '#fbbf24',
+            cdText: '#fef08a'
+        },
+        cyber: {
+            bgGrad: ['#0f172a', '#1e293b', '#090d16'],
+            glow: 'rgba(6, 182, 212, 0.35)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(6, 182, 212, 0.3)',
+            pillText: '#38bdf8',
+            qBoxBg: 'rgba(15, 23, 42, 0.9)',
+            qBoxBorder: 'rgba(6, 182, 212, 0.6)',
+            qAccent: '#06b6d4',
+            qLabel: '#38bdf8',
+            optCardBg: 'rgba(30, 41, 59, 0.8)',
+            optCardBorder: 'rgba(6, 182, 212, 0.3)',
+            badgeBg: '#0891b2',
+            badgeText: '#ffffff',
+            cdStroke: '#38bdf8',
+            cdText: '#7dd3fc'
+        },
+        sunset: {
+            bgGrad: ['#27005d', '#711db0', '#1c0042'],
+            glow: 'rgba(255, 107, 107, 0.35)',
+            pillBg: 'rgba(255, 255, 255, 0.08)',
+            pillBorder: 'rgba(255, 107, 107, 0.3)',
+            pillText: '#ff6b6b',
+            qBoxBg: 'rgba(40, 10, 60, 0.88)',
+            qBoxBorder: 'rgba(255, 107, 107, 0.5)',
+            qAccent: '#ff6b6b',
+            qLabel: '#ffa502',
+            optCardBg: 'rgba(40, 10, 60, 0.75)',
+            optCardBorder: 'rgba(255, 255, 255, 0.18)',
+            badgeBg: '#e84118',
+            badgeText: '#ffffff',
+            cdStroke: '#ffa502',
+            cdText: '#fed330'
+        },
+        minimal: {
+            bgGrad: ['#18181b', '#27272a', '#09090b'],
+            glow: 'rgba(255, 255, 255, 0.15)',
+            pillBg: 'rgba(255, 255, 255, 0.1)',
+            pillBorder: 'rgba(255, 255, 255, 0.25)',
+            pillText: '#ffffff',
+            qBoxBg: 'rgba(39, 39, 42, 0.9)',
+            qBoxBorder: 'rgba(228, 228, 231, 0.5)',
+            qAccent: '#ffffff',
+            qLabel: '#e4e4e7',
+            optCardBg: 'rgba(39, 39, 42, 0.75)',
+            optCardBorder: 'rgba(255, 255, 255, 0.2)',
+            badgeBg: '#52525b',
+            badgeText: '#ffffff',
+            cdStroke: '#e4e4e7',
+            cdText: '#ffffff'
+        }
+    };
+    const t = themes[themeKey] || themes.loksewa_official;
+
+    // 1. Background Gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, t.bgGrad[0]);
+    bgGrad.addColorStop(0.5, t.bgGrad[1]);
+    bgGrad.addColorStop(1, t.bgGrad[2]);
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Radial Glow behind Question
+    const radGlow = ctx.createRadialGradient(width / 2, 400, 50, width / 2, 400, 600);
+    radGlow.addColorStop(0, t.glow);
+    radGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = radGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Top Header — Brand Asset Banner or Brand Pill (Safe Zone Y: 260)
+    const hasHeaderAsset = mcqBrandLogoImg && mcqBrandLogoImg.complete && brandHeaderAssetUrl;
+    const hasLogo = mcqBrandLogoImg && mcqBrandLogoImg.complete && !brandHeaderAssetUrl;
+
+    if (hasHeaderAsset) {
+        ctx.save();
+        const imgW = mcqBrandLogoImg.naturalWidth || mcqBrandLogoImg.width;
+        const imgH = mcqBrandLogoImg.naturalHeight || mcqBrandLogoImg.height;
+        let bannerMaxW = 900;
+        let bannerMaxH = 110;
+        const hStyle = currentBranding?.headerAssetStyle;
+        if (hStyle && hStyle.scaleX) {
+            bannerMaxH = Math.min(200, Math.round(110 * Math.max(0.5, hStyle.scaleX)));
+            bannerMaxW = Math.min(960, Math.round(900 * Math.max(0.5, hStyle.scaleX)));
+        }
+        const scale = Math.min(bannerMaxW / imgW, bannerMaxH / imgH);
+        const drawW = imgW * scale;
+        const drawH = imgH * scale;
+        const bannerX = (width - drawW) / 2;
+        const bannerY = 260;
+
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 16;
+        ctx.drawImage(mcqBrandLogoImg, bannerX, bannerY, drawW, drawH);
+        ctx.shadowBlur = 0;
+
+        ctx.font = 'bold 28px "Inter", sans-serif';
+        ctx.fillStyle = t.pillText || '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`🧠 LOKSEWA IQ • Q${iqState.currentIndex + 1}/${iqState.questions.length}`, width / 2, bannerY + drawH + 22);
+        ctx.restore();
+    } else {
+        ctx.save();
+        ctx.fillStyle = t.pillBg;
+        ctx.strokeStyle = t.pillBorder;
+        ctx.lineWidth = 2;
+        const headerW = 820; const headerH = 80; const headerX = (width - headerW) / 2; const headerY = 260;
+        ctx.beginPath();
+        ctx.roundRect(headerX, headerY, headerW, headerH, 40);
+        ctx.fill();
+        ctx.stroke();
+
+        if (hasLogo) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(headerX + 44, headerY + headerH / 2, 24, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(mcqBrandLogoImg, headerX + 20, headerY + (headerH - 48) / 2, 48, 48);
+            ctx.restore();
+        }
+
+        ctx.font = 'bold 30px "Inter", sans-serif';
+        ctx.fillStyle = t.pillText;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const logoOffset = hasLogo ? 22 : 0;
+        ctx.fillText(`${brandName.toUpperCase()} • IQ Q${iqState.currentIndex + 1}/${iqState.questions.length}`, (width / 2) + logoOffset, headerY + headerH / 2);
+        ctx.restore();
+    }
+
+    const qBoxW = 900; const qBoxX = (width - qBoxW) / 2;
+
+    // --- PHASE BRANCHING FOR CANVAS RENDERING ---
+    if (iqState.phase === 'EXPLANATION' || iqState.phase === 'ANSWER') {
+        // ============================================================
+        // DEDICATED SCREEN 1: STEP-BY-STEP SOLUTION EXPLANATION SCREEN
+        // ============================================================
+
+        // 1. Correct Answer Banner Card (Height 140px, Y=410)
+        const ansCardY = 410; const ansCardH = 140;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, ansCardY, qBoxW, ansCardH, 20);
+        const greenGrad = ctx.createLinearGradient(qBoxX, ansCardY, qBoxX + qBoxW, ansCardY + ansCardH);
+        greenGrad.addColorStop(0, '#15803d');
+        greenGrad.addColorStop(1, '#22c55e');
+        ctx.fillStyle = greenGrad;
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 28;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = 'bold 26px "Inter", sans-serif';
+        ctx.fillStyle = '#dcfce7';
+        ctx.textAlign = 'left';
+        ctx.fillText('✓ सही उत्तर / CORRECT ANSWER:', qBoxX + 40, ansCardY + 40);
+
+        ctx.font = 'bold 40px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(qData ? qData.correct_option : '', qBoxX + 40, ansCardY + 96);
+        ctx.restore();
+
+        // 2. Step-by-Step Logic Solution Main Container (Height 900px, Y=560)
+        const expBoxY = 560; const expBoxH = 900;
+        ctx.save();
+        ctx.fillStyle = t.qTextColor ? 'rgba(255, 255, 255, 0.97)' : 'rgba(15, 23, 42, 0.96)';
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = 'rgba(168, 85, 247, 0.3)';
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, expBoxY, qBoxW, expBoxH, 24);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#a855f7';
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, expBoxY, qBoxW, 12, [24, 24, 0, 0]);
+        ctx.fill();
+
+        ctx.font = 'bold 32px "Inter", sans-serif';
+        ctx.fillStyle = '#9333ea';
+        ctx.textAlign = 'left';
+        ctx.fillText('💡 समाधान विधि / STEP-BY-STEP SOLUTION:', qBoxX + 40, expBoxY + 58);
+
+        ctx.strokeStyle = t.qTextColor ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(qBoxX + 35, expBoxY + 90);
+        ctx.lineTo(qBoxX + qBoxW - 35, expBoxY + 90);
+        ctx.stroke();
+
+        const visibleExpText = qData && qData.explanation ? qData.explanation.substring(0, iqState.expCharCount) : '';
+        ctx.font = '600 40px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor ? '#1e293b' : '#f8fafc';
+        const expLines = wrapCanvasText(ctx, visibleExpText, qBoxW - 80);
+        let expLineY = expBoxY + 155;
+        expLines.forEach(line => {
+            ctx.fillText(line, qBoxX + 40, expLineY);
+            expLineY += 58;
+        });
+        ctx.restore();
+
+    } else if (iqState.phase === 'OUTRO') {
+        // ============================================================
+        // DEDICATED SCREEN 2: OUTRO CALL-TO-ACTION CLIP SCREEN
+        // ============================================================
+        const outroY = 410; const outroH = 1060;
+        ctx.save();
+        ctx.fillStyle = t.qTextColor ? 'rgba(255, 255, 255, 0.97)' : 'rgba(15, 23, 42, 0.96)';
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 5;
+        ctx.shadowColor = '#6366f1';
+        ctx.shadowBlur = 35;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, outroY, qBoxW, outroH, 28);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#a855f7';
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, outroY, qBoxW, 14, [28, 28, 0, 0]);
+        ctx.fill();
+
+        const pillW = 480; const pillH = 65; const pillX = (width - pillW) / 2; const pillY = outroY + 40;
+        ctx.fillStyle = '#6366f1';
+        ctx.beginPath();
+        ctx.roundRect(pillX, pillY, pillW, pillH, 32);
+        ctx.fill();
+
+        ctx.font = 'bold 32px "Inter", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        const outroBadgeText = brandName ? brandName.toUpperCase() : 'GEARUP LOKSEWA';
+        ctx.fillText(`🧠 ${outroBadgeText} IQ 🧠`, width / 2, pillY + pillH / 2);
+
+        ctx.font = 'bold 44px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor ? '#6366f1' : '#a855f7';
+        ctx.textAlign = 'center';
+        ctx.fillText('दैनिक IQ तयारीका लागि फलो गर्नुहोला!', width / 2, outroY + 160);
+
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(qBoxX + 50, outroY + 195);
+        ctx.lineTo(qBoxX + qBoxW - 50, outroY + 195);
+        ctx.stroke();
+
+        const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
+        const outroCharCount = (iqState.isPlaying && typeof iqState.outroCharCount === 'number' && iqState.outroCharCount > 0)
+            ? iqState.outroCharCount
+            : outroText.length;
+        const visibleOutroText = outroText.substring(0, outroCharCount);
+        ctx.font = '700 42px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor ? '#1e293b' : '#f8fafc';
+        ctx.textAlign = 'left';
+        const outroLines = wrapCanvasText(ctx, visibleOutroText, qBoxW - 80);
+        let outroLineY = outroY + 270;
+        outroLines.forEach(line => {
+            ctx.fillText(line, qBoxX + 40, outroLineY);
+            outroLineY += 66;
+        });
+
+        const ctaY = outroY + outroH - 260;
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.08)';
+        ctx.strokeStyle = 'rgba(99, 102, 241, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX + 30, ctaY, qBoxW - 60, 210, 20);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = 'bold 36px "Inter", sans-serif';
+        ctx.fillStyle = '#a855f7';
+        ctx.textAlign = 'center';
+        ctx.fillText(brandHandle, width / 2, ctaY + 55);
+
+        const badgeW = 210; const badgeH = 60; const badgeGap = 20;
+        const totalBadgesW = badgeW * 3 + badgeGap * 2;
+        let startBadgeX = (width - totalBadgesW) / 2;
+        const badgeY = ctaY + 110;
+
+        const ctaBadges = [
+            { text: '👍 LIKE', bg: '#6366f1', color: '#ffffff' },
+            { text: '🔄 SHARE', bg: '#a855f7', color: '#ffffff' },
+            { text: '🔔 FOLLOW', bg: '#f59e0b', color: '#0f172a' }
+        ];
+
+        ctaBadges.forEach(b => {
+            ctx.fillStyle = b.bg;
+            ctx.beginPath();
+            ctx.roundRect(startBadgeX, badgeY, badgeW, badgeH, 18);
+            ctx.fill();
+
+            ctx.font = 'bold 28px "Inter", sans-serif';
+            ctx.fillStyle = b.color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(b.text, startBadgeX + badgeW / 2, badgeY + badgeH / 2);
+
+            startBadgeX += badgeW + badgeGap;
+        });
+
+        ctx.restore();
+
+    } else {
+        // ============================================================
+        // STANDARD SCREEN: QUESTION & OPTIONS (WITH OPTIONAL DIAGRAM IMAGE)
+        // ============================================================
+
+        const hasQuestionImg = qData && qData.image_url;
+        const loadedQImg = hasQuestionImg ? loadIQCanvasImage(qData.image_url) : null;
+
+        // 3. Question Card Container (Height ~320px if no image, or 450px if image present)
+        ctx.save();
+        const qBoxH = hasQuestionImg ? 450 : 320;
+        const qBoxY = 410;
+        ctx.fillStyle = t.qBoxBg;
+        ctx.strokeStyle = t.qBoxBorder;
+        ctx.lineWidth = 4;
+        ctx.shadowColor = t.qAccent;
+        ctx.shadowBlur = 24;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, qBoxY, qBoxW, qBoxH, 24);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = t.qAccent;
+        ctx.beginPath();
+        ctx.roundRect(qBoxX, qBoxY, qBoxW, 12, [24, 24, 0, 0]);
+        ctx.fill();
+
+        ctx.font = 'bold 28px "Inter", sans-serif';
+        ctx.fillStyle = t.qLabel;
+        ctx.textAlign = 'left';
+        ctx.fillText('🧠 IQ QUESTION / प्रश्न:', qBoxX + 35, qBoxY + 48);
+
+        const visibleQText = qData ? qData.question.substring(0, iqState.qCharCount) : '';
+        ctx.font = '700 44px "Mukta", "Inter", sans-serif';
+        ctx.fillStyle = t.qTextColor || '#ffffff';
+        const qLines = wrapCanvasText(ctx, visibleQText, qBoxW - 70);
+        let qLineY = qBoxY + 105;
+        qLines.forEach(line => {
+            ctx.fillText(line, qBoxX + 35, qLineY);
+            qLineY += 56;
+        });
+
+        // Draw Question Image/Diagram if available!
+        if (hasQuestionImg && loadedQImg && loadedQImg.complete && loadedQImg.naturalWidth > 0) {
+            ctx.save();
+            const imgMaxW = qBoxW - 80;
+            const imgMaxH = 180;
+            const imgW = loadedQImg.naturalWidth;
+            const imgH = loadedQImg.naturalHeight;
+            const scale = Math.min(imgMaxW / imgW, imgMaxH / imgH);
+            const drawW = imgW * scale;
+            const drawH = imgH * scale;
+            const drawX = (width - drawW) / 2;
+            const drawY = qBoxY + qBoxH - drawH - 20;
+
+            ctx.beginPath();
+            ctx.roundRect(drawX - 10, drawY - 10, drawW + 20, drawH + 20, 14);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.strokeStyle = t.qBoxBorder;
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.drawImage(loadedQImg, drawX, drawY, drawW, drawH);
+            ctx.restore();
+        }
+        ctx.restore();
+
+        // 4. Options List (4 Cards, Height 125px each)
+        const optYStart = qBoxY + qBoxH + 20;
+        const optCardH = 125;
+        const optGap = 15;
+
+        if (qData && qData.options) {
+            qData.options.forEach((optText, idx) => {
+                const optY = optYStart + idx * (optCardH + optGap);
+                const isCorrect = idx === qData.correct_index;
+                const isAnswerPhase = iqState.phase === 'ANSWER';
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(qBoxX, optY, qBoxW, optCardH, 20);
+
+                if (isAnswerPhase && isCorrect) {
+                    const greenGrad = ctx.createLinearGradient(qBoxX, optY, qBoxX + qBoxW, optY + optCardH);
+                    greenGrad.addColorStop(0, '#15803d');
+                    greenGrad.addColorStop(1, '#22c55e');
+                    ctx.fillStyle = greenGrad;
+                    ctx.strokeStyle = '#4ade80';
+                    ctx.lineWidth = 5;
+                    ctx.shadowColor = '#22c55e';
+                    ctx.shadowBlur = 35;
+                } else if (isAnswerPhase && !isCorrect) {
+                    ctx.fillStyle = t.optTextColor ? 'rgba(230, 230, 235, 0.7)' : 'rgba(15, 23, 42, 0.4)';
+                    ctx.strokeStyle = t.optTextColor ? 'rgba(200, 200, 210, 0.3)' : 'rgba(255, 255, 255, 0.05)';
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.fillStyle = t.optCardBg;
+                    ctx.strokeStyle = t.optCardBorder;
+                    ctx.lineWidth = 3;
+                }
+                ctx.fill();
+                ctx.stroke();
+
+                const badgeX = qBoxX + 46;
+                const badgeY = optY + optCardH / 2;
+                const badgeR = 30;
+                ctx.beginPath();
+                ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+                ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(200,200,210,0.4)' : 'rgba(255,255,255,0.1)') : t.badgeBg);
+                ctx.fill();
+
+                ctx.font = 'bold 34px "Inter", sans-serif';
+                ctx.fillStyle = isAnswerPhase && isCorrect ? '#15803d' : t.badgeText;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const letter = String.fromCharCode(65 + idx);
+                ctx.fillText(letter, badgeX, badgeY + 2);
+
+                const charCount = iqState.optCharCounts[idx] || 0;
+                const visibleOptText = optText.substring(0, charCount);
+                ctx.font = '600 38px "Mukta", "Inter", sans-serif';
+                ctx.fillStyle = isAnswerPhase && isCorrect ? '#ffffff' : (isAnswerPhase ? (t.optTextColor ? 'rgba(100,100,120,0.5)' : 'rgba(255,255,255,0.4)') : (t.optTextColor || '#f8fafc'));
+                ctx.textAlign = 'left';
+                ctx.fillText(visibleOptText, qBoxX + 100, badgeY);
+
+                if (isAnswerPhase && isCorrect) {
+                    ctx.font = 'bold 44px "Inter", sans-serif';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('✓', qBoxX + qBoxW - 35, badgeY);
+                }
+                ctx.restore();
+            });
+        }
+
+        // ============================================================
+        // 5. PHASE 2: PAUSE VIDEO PROMPT OVERLAY SCREEN
+        // ============================================================
+        if (iqState.phase === 'PAUSE_PROMPT') {
+            const pauseCardW = 860;
+            const pauseCardH = 340;
+            const pauseCardX = (width - pauseCardW) / 2;
+            const pauseCardY = 740;
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = '#f59e0b';
+            ctx.shadowBlur = 40;
+            ctx.beginPath();
+            ctx.roundRect(pauseCardX, pauseCardY, pauseCardW, pauseCardH, 28);
+            ctx.fill();
+            ctx.stroke();
+
+            // Pulsing Pause Circle Badge
+            const circleR = 48;
+            const circleX = width / 2;
+            const circleY = pauseCardY + 75;
+            ctx.beginPath();
+            ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
+            ctx.fillStyle = '#f59e0b';
+            ctx.fill();
+
+            // Pause Bars Icon ⏸️
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(circleX - 16, circleY - 20, 10, 40);
+            ctx.fillRect(circleX + 6, circleY - 20, 10, 40);
+
+            // Bold Header Text
+            ctx.font = 'bold 44px "Inter", sans-serif';
+            ctx.fillStyle = '#fbbf24';
+            ctx.textAlign = 'center';
+            ctx.fillText('⏸️ PAUSE VIDEO NOW', width / 2, pauseCardY + 175);
+
+            // Voiceover prompt text in Nepali
+            const pausePromptText = qData?.pause_prompt || "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!";
+            ctx.font = '700 38px "Mukta", "Inter", sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(pausePromptText, width / 2, pauseCardY + 235);
+
+            // Subtext prompt
+            ctx.font = '600 28px "Inter", sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText('Play video when ready to check answer! ▶️', width / 2, pauseCardY + 295);
+
+            ctx.restore();
+        }
+    }
+}
+
+function updateIQEditorFields() {
+    const qData = iqState.questions[iqState.currentIndex];
+    if (!qData) return;
+
+    const selectEl = document.getElementById('iq-select-question');
+    if (selectEl) {
+        selectEl.innerHTML = '';
+        iqState.questions.forEach((q, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.innerText = `Q${idx + 1}: ${q.question.substring(0, 30)}...`;
+            if (idx === iqState.currentIndex) opt.selected = true;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    const qInput = document.getElementById('iq-edit-question');
+    if (qInput) qInput.value = qData.question || '';
+
+    // Question Image Input & Preview
+    const qImgUrlInput = document.getElementById('iq-edit-qimage-url');
+    const qImgPreviewContainer = document.getElementById('iq-qimage-preview-container');
+    const qImgPreview = document.getElementById('iq-edit-qimage-preview');
+
+    if (qImgUrlInput) qImgUrlInput.value = qData.image_url || '';
+    if (qData.image_url && qImgPreview && qImgPreviewContainer) {
+        qImgPreview.src = qData.image_url;
+        qImgPreviewContainer.style.display = 'flex';
+    } else if (qImgPreviewContainer) {
+        qImgPreviewContainer.style.display = 'none';
+    }
+
+    if (qData.options) {
+        [0, 1, 2, 3].forEach(i => {
+            const optIn = document.getElementById(`iq-edit-opt${i}`);
+            if (optIn) optIn.value = qData.options[i] || '';
+        });
+    }
+
+    const corrSel = document.getElementById('iq-edit-correct');
+    if (corrSel) corrSel.value = qData.correct_index !== undefined ? qData.correct_index : 0;
+
+    const pauseInput = document.getElementById('iq-edit-pause-prompt');
+    if (pauseInput) pauseInput.value = qData.pause_prompt || 'भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!';
+
+    const expInput = document.getElementById('iq-edit-explanation');
+    if (expInput) expInput.value = qData.explanation || '';
+}
+
+async function startIQSequence(isExportingRun = false) {
+    if (!isExportingRun) {
+        iqState.isExporting = false;
+        stopIQSequence(false);
+    } else {
+        stopIQSequence(true);
+    }
+    const lang = document.getElementById('iq-language')?.value || 'Nepali';
+
+    if (iqState.isPreloadingAudio) {
+        await preloadIQAudioDeck(lang);
+    }
+
+    iqState.isPlaying = true;
+    iqState.phase = 'QUESTION';
+    iqState.qCharCount = 0;
+    iqState.optCharCounts = [0, 0, 0, 0];
+    iqState.pauseCharCount = 0;
+    iqState.expCharCount = 0;
+    iqState.outroCharCount = 0;
+
+    const qData = iqState.questions[iqState.currentIndex] || iqState.questions[0];
+
+    const phaseLabel = document.getElementById('iq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = `Phase 1: Question ${iqState.currentIndex + 1}/${iqState.questions.length} Typewriter & Voiceover`;
+
+    function renderLoop() {
+        if (iqState.isPlaying || iqState.isExporting) {
+            drawIQCanvas();
+            updateIQTimelineProgress();
+            iqState.animFrameId = requestAnimationFrame(renderLoop);
+        }
+    }
+    iqState.animFrameId = requestAnimationFrame(renderLoop);
+
+    speakMCQText(qData.question, lang, () => {
+        if (!iqState.isPlaying) return;
+        iqState.phase = 'OPTIONS';
+        iqState.qCharCount = qData.question.length;
+        if (phaseLabel) phaseLabel.innerText = `Phase 2: Question ${iqState.currentIndex + 1} Options Display`;
+
+        let optIdx = 0;
+        function animateNextOption() {
+            if (!iqState.isPlaying) return;
+            if (optIdx < 4) {
+                const text = qData.options[optIdx] || '';
+                const currentOptIdx = optIdx;
+                speakMCQText(text, lang, () => {
+                    iqState.optCharCounts[currentOptIdx] = text.length;
+                    optIdx++;
+                    setTimeout(animateNextOption, 250);
+                }, (charCount) => {
+                    iqState.optCharCounts[currentOptIdx] = charCount;
+                    drawIQCanvas();
+                });
+            } else {
+                startIQPausePrompt(lang, qData);
+            }
+        }
+        animateNextOption();
+    }, (charCount) => {
+        iqState.qCharCount = charCount;
+        drawIQCanvas();
+    });
+}
+
+function startIQPausePrompt(lang, qData) {
+    if (!iqState.isPlaying) return;
+    iqState.phase = 'PAUSE_PROMPT';
+
+    const phaseLabel = document.getElementById('iq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = `Phase 3: Pause Video Prompt ⏸️`;
+
+    playMCQBeep(900, 300);
+
+    const pauseText = qData.pause_prompt || "भिडियो Pause गरेर उत्तर पत्ता लगाउनुहोस्!";
+    speakMCQText(pauseText, lang, () => {
+        if (!iqState.isPlaying) return;
+        revealIQAnswer(lang, qData);
+    }, (charCount) => {
+        iqState.pauseCharCount = charCount;
+        drawIQCanvas();
+    });
+}
+
+function revealIQAnswer(lang, qData) {
+    if (!iqState.isPlaying) return;
+    iqState.phase = 'EXPLANATION';
+    iqState.expCharCount = 0;
+
+    const phaseLabel = document.getElementById('iq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = `Phase 4: Q${iqState.currentIndex + 1} Detailed Solution Screen 💡`;
+
+    playMCQBeep(1200, 400);
+
+    const speakText = getIQExplanationText(qData);
+    let correctStr = qData.correct_option || '';
+    if ((!correctStr || correctStr.length <= 3) && qData.options && qData.correct_index !== undefined && qData.options[qData.correct_index]) {
+        correctStr = qData.options[qData.correct_index];
+    }
+    const prefix = `सही उत्तर: ${correctStr}। `;
+    const prefixLen = prefix.length;
+
+    speakMCQText(speakText, lang, () => {
+        iqState.expCharCount = qData.explanation ? qData.explanation.length : 0;
+
+        const nextIdx = iqState.currentIndex + 1;
+        const totalQuestions = iqState.questions.length;
+
+        setTimeout(() => {
+            if (!iqState.isPlaying) return;
+
+            if (nextIdx < totalQuestions) {
+                if (phaseLabel) phaseLabel.innerText = `Moving to Question ${nextIdx + 1}/${totalQuestions}...`;
+                iqState.currentIndex = nextIdx;
+                updateIQEditorFields();
+                playMCQBeep(600, 150);
+                startIQSequence();
+            } else {
+                startIQOutro(lang);
+            }
+        }, 1500);
+    }, (charCount) => {
+        iqState.expCharCount = charCount;
+        drawIQCanvas();
+    }, prefixLen);
+}
+
+function startIQOutro(lang) {
+    if (!iqState.isPlaying) return;
+    iqState.phase = 'OUTRO';
+    iqState.outroCharCount = 0;
+
+    const phaseLabel = document.getElementById('iq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "Phase 5: Outro Call-To-Action Clip";
+
+    playMCQBeep(1000, 300);
+
+    const outroText = "लोकसेवा तयारी तथा नयाँ जानकारीका लागि हाम्रो पानालाई लाइक, सेयर र फलो गर्न नबिर्सिनुहोला! धन्यवाद!";
+
+    speakMCQText(outroText, lang, () => {
+        iqState.outroCharCount = outroText.length;
+        if (phaseLabel) phaseLabel.innerText = "✅ IQ Reel Playback Complete!";
+
+        if (iqState.isExporting && iqState.mediaRecorder) {
+            setTimeout(() => {
+                try { iqState.mediaRecorder.stop(); } catch(e){}
+            }, 1500);
+        }
+    }, (charCount) => {
+        iqState.outroCharCount = charCount;
+        drawIQCanvas();
+    });
+}
+
+function stopIQSequence(keepRecorder = false) {
+    iqState.isPlaying = false;
+    if (iqState.typewriterInterval) {
+        clearInterval(iqState.typewriterInterval);
+        iqState.typewriterInterval = null;
+    }
+    if (currentAudioEl) {
+        try { currentAudioEl.pause(); } catch(e){}
+        currentAudioEl = null;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (iqState.animFrameId) cancelAnimationFrame(iqState.animFrameId);
+
+    if (!keepRecorder && iqState.mediaRecorder && iqState.mediaRecorder.state !== 'inactive') {
+        try { iqState.mediaRecorder.stop(); } catch(e){}
+    }
+    if (!keepRecorder) iqState.isExporting = false;
+
+    const phaseLabel = document.getElementById('iq-phase-label');
+    if (phaseLabel && !iqState.isExporting) phaseLabel.innerText = "Stopped";
+    drawIQCanvas();
+}
+
+async function exportIQVideo() {
+    const canvas = document.getElementById('iq-canvas');
+    if (!canvas) return;
+
+    const exportBtn = document.getElementById('iq-export-btn');
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = `<i data-feather="loader" class="spin"></i> Exporting IQ Video...`;
+    }
+
+    const phaseLabel = document.getElementById('iq-phase-label');
+    if (phaseLabel) phaseLabel.innerText = "🎙️ Pre-loading HD Voice narration & preparing Reel...";
+
+    stopIQSequence();
+    const lang = document.getElementById('iq-language')?.value || 'Nepali';
+
+    await preloadIQAudioDeck(lang);
+
+    iqState.isExporting = true;
+    iqState.isPlaying = true;
+    iqState.recordedChunks = [];
+    iqState.currentIndex = 0;
+
+    const canvasStream = canvas.captureStream(30);
+    const destNode = getMCQAudioDestination();
+
+    const tracks = [...canvasStream.getVideoTracks()];
+    if (destNode && destNode.stream.getAudioTracks().length > 0) {
+        tracks.push(...destNode.stream.getAudioTracks());
+    }
+
+    const combinedStream = new MediaStream(tracks);
+
+    let mimeType = 'video/webm;codecs=vp9,opus';
+    let fileExt = 'webm';
+
+    if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
+        mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
+        fileExt = 'mp4';
+    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+        fileExt = 'mp4';
+    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+        mimeType = 'video/webm;codecs=vp9,opus';
+        fileExt = 'webm';
+    } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        mimeType = 'video/webm';
+        fileExt = 'webm';
+    }
+
+    try {
+        const recorder = new MediaRecorder(combinedStream, {
+            mimeType,
+            videoBitsPerSecond: 4500000
+        });
+        iqState.mediaRecorder = recorder;
+
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+                iqState.recordedChunks.push(e.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(iqState.recordedChunks, { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `Loksewa_IQ_Reel_${Date.now()}.${fileExt}`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+
+            iqState.isExporting = false;
+            stopIQSequence();
+
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = `<i data-feather="download" style="width:16px;height:16px;"></i> Export Video (.mp4)`;
+            }
+            if (phaseLabel) phaseLabel.innerText = "✅ Video Exported Successfully!";
+        };
+
+        recorder.start(100);
+        startIQSequence(true);
+
+    } catch (e) {
+        console.error("IQ Export mediaRecorder error:", e);
+        alert("Video export error: " + e.message);
+        iqState.isExporting = false;
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = `<i data-feather="download" style="width:16px;height:16px;"></i> Export Video (.mp4)`;
+        }
+    }
+}
+
+function initIQVideoStudio() {
+    populateBrandSelectors();
+    updateIQEditorFields();
+    drawIQCanvas();
+    updateIQSectionPills();
+
+    if (iqStudioInitialized) return;
+    iqStudioInitialized = true;
+
+    // AI IQ Generator Trigger
+    document.getElementById('trigger-iq-generate')?.addEventListener('click', async () => {
+        const topic = document.getElementById('iq-topic')?.value || 'Loksewa IQ';
+        const difficulty = document.getElementById('iq-difficulty')?.value || 'Medium';
+        const language = document.getElementById('iq-language')?.value || 'Nepali';
+        const questionCount = document.getElementById('iq-count')?.value || '3';
+        const brandId = document.getElementById('iq-brand')?.value;
+        const feedback = document.getElementById('iq-feedback');
+        const btn = document.getElementById('trigger-iq-generate');
+
+        if (btn) btn.disabled = true;
+        if (feedback) { feedback.style.display = 'block'; feedback.style.color = '#38bdf8'; feedback.innerText = 'Generating IQ Deck with AI...'; }
+
+        try {
+            const activeBrand = (typeof allBrands !== 'undefined' && Array.isArray(allBrands)) ? allBrands.find(b => b.id === brandId) : (typeof currentBranding !== 'undefined' ? currentBranding : null);
+            const response = await fetch(`${API_URL}/generate-iq`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic,
+                    difficulty,
+                    language,
+                    question_count: questionCount,
+                    brand_id: brandId,
+                    brand_context: getBrandContext(activeBrand)
+                })
+            });
+
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const rawText = await response.text();
+                console.error("IQ endpoint returned non-JSON:", rawText.substring(0, 200));
+                throw new Error('Server returned non-JSON response. The backend may still be deploying — please try again in 1-2 minutes.');
+            }
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to generate IQ questions');
+
+            if (data.iq_data && data.iq_data.questions && data.iq_data.questions.length > 0) {
+                iqState.questions = data.iq_data.questions;
+                iqState.currentIndex = 0;
+                updateIQEditorFields();
+                stopIQSequence();
+                drawIQCanvas();
+                if (feedback) { feedback.style.color = '#4ade80'; feedback.innerText = `Successfully generated ${data.iq_data.questions.length} IQ questions! Pre-loading voice narration...`; }
+                await preloadIQAudioDeck(language);
+            } else {
+                throw new Error('Invalid IQ schema returned');
+            }
+        } catch (err) {
+            console.error("IQ Generate Error:", err);
+            if (feedback) { feedback.style.color = '#f87171'; feedback.innerText = 'Error: ' + err.message; }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+
+    // Player Transport Listeners
+    document.getElementById('iq-play-btn')?.addEventListener('click', () => {
+        startIQSequence();
+    });
+
+    document.getElementById('iq-stop-btn')?.addEventListener('click', () => {
+        stopIQSequence();
+    });
+
+    document.getElementById('iq-export-btn')?.addEventListener('click', () => {
+        exportIQVideo();
+    });
+
+    // Timeline Scrubber Input Listener
+    document.getElementById('iq-timeline-slider')?.addEventListener('input', (e) => {
+        const pct = parseFloat(e.target.value) || 0;
+        const { totalTime } = buildIQTimelineMap();
+        const targetSec = (pct / 100) * totalTime;
+        seekIQToTime(targetSec);
+    });
+
+    // Question Selector Dropdown Change
+    document.getElementById('iq-select-question')?.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.value) || 0;
+        iqState.currentIndex = idx;
+        updateIQEditorFields();
+        stopIQSequence();
+        drawIQCanvas();
+    });
+
+    // Live Editor Sync Handlers
+    document.getElementById('iq-edit-question')?.addEventListener('input', (e) => {
+        if (iqState.questions[iqState.currentIndex]) {
+            iqState.questions[iqState.currentIndex].question = e.target.value;
+            drawIQCanvas();
+        }
+    });
+
+    // Question Image URL & File Upload Sync
+    const qImgUrlInput = document.getElementById('iq-edit-qimage-url');
+    const qImgFileInput = document.getElementById('iq-edit-qimage-file');
+    const qImgRemoveBtn = document.getElementById('iq-remove-qimage-btn');
+
+    qImgUrlInput?.addEventListener('input', (e) => {
+        const url = e.target.value.trim();
+        if (iqState.questions[iqState.currentIndex]) {
+            iqState.questions[iqState.currentIndex].image_url = url || null;
+            updateIQEditorFields();
+            drawIQCanvas();
+        }
+    });
+
+    qImgFileInput?.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file && iqState.questions[iqState.currentIndex]) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const dataUrl = evt.target.result;
+                iqState.questions[iqState.currentIndex].image_url = dataUrl;
+                updateIQEditorFields();
+                drawIQCanvas();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    qImgRemoveBtn?.addEventListener('click', () => {
+        if (iqState.questions[iqState.currentIndex]) {
+            iqState.questions[iqState.currentIndex].image_url = null;
+            if (qImgFileInput) qImgFileInput.value = '';
+            updateIQEditorFields();
+            drawIQCanvas();
+        }
+    });
+
+    [0, 1, 2, 3].forEach(i => {
+        document.getElementById(`iq-edit-opt${i}`)?.addEventListener('input', (e) => {
+            if (iqState.questions[iqState.currentIndex]?.options) {
+                iqState.questions[iqState.currentIndex].options[i] = e.target.value;
+                drawIQCanvas();
+            }
+        });
+    });
+
+    document.getElementById('iq-edit-correct')?.addEventListener('change', (e) => {
+        if (iqState.questions[iqState.currentIndex]) {
+            const idx = parseInt(e.target.value) || 0;
+            iqState.questions[iqState.currentIndex].correct_index = idx;
+            const letter = String.fromCharCode(65 + idx);
+            const text = iqState.questions[iqState.currentIndex].options[idx] || '';
+            iqState.questions[iqState.currentIndex].correct_option = `${letter}. ${text}`;
+            drawIQCanvas();
+        }
+    });
+
+    document.getElementById('iq-edit-pause-prompt')?.addEventListener('input', (e) => {
+        if (iqState.questions[iqState.currentIndex]) {
+            iqState.questions[iqState.currentIndex].pause_prompt = e.target.value;
+            drawIQCanvas();
+        }
+    });
+
+    document.getElementById('iq-edit-explanation')?.addEventListener('input', (e) => {
+        if (iqState.questions[iqState.currentIndex]) {
+            iqState.questions[iqState.currentIndex].explanation = e.target.value;
+            drawIQCanvas();
+        }
+    });
+
+    document.getElementById('iq-brand')?.addEventListener('change', () => {
+        drawIQCanvas();
+    });
+
+    document.getElementById('iq-theme')?.addEventListener('change', () => {
+        drawIQCanvas();
+    });
+}
+
+window.iqState = iqState;
+window.preloadIQAudioDeck = preloadIQAudioDeck;
+window.exportIQVideo = exportIQVideo;
+window.startIQSequence = startIQSequence;
+window.stopIQSequence = stopIQSequence;
+window.jumpIQToSection = jumpIQToSection;
+window.seekIQToTime = seekIQToTime;
+window.buildIQTimelineMap = buildIQTimelineMap;
+window.initIQVideoStudio = initIQVideoStudio;
+window.drawIQCanvas = drawIQCanvas;
 
 // ============================================================
 // 12. VIDEO BRIEF LAB (Book / Novel 2-Min Audio-Visual Summarizer)
